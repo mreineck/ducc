@@ -91,7 +91,7 @@ uint32_t morton2block2D_32 (uint32_t v)
 std::array<uint32_t,2> morton2coord2D_32 (uint32_t v)
   {
   using I=uint32_t;
-  I raw1 = v&0x55555555u, raw2 = (v>>1)&0x55555555u;
+  I raw1 = v&0x55555555U, raw2 = (v>>1)&0x55555555U;
   raw1|=raw1>>15;
   raw2|=raw2>>15;
   return {I(ctab[raw1&0xff]) | I(ctab[(raw1>>8)&0xff]<<4),
@@ -140,21 +140,21 @@ std::array<uint64_t,2> morton2coord2D_64 (uint64_t v)
 
 uint64_t spread_bits_2D_64 (uint64_t v)
   {
-  v&=0xffffffffu;
-  v = (v|(v<<16)) & 0x0000ffff0000ffffu;
-  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffu;
-  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fu;
-  v = (v|(v<< 2)) & 0x3333333333333333u;
-  v = (v|(v<< 1)) & 0x5555555555555555u;
+  v&=0xffffffffU;
+  v = (v|(v<<16)) & 0x0000ffff0000ffffU;
+  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffU;
+  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fU;
+  v = (v|(v<< 2)) & 0x3333333333333333U;
+  v = (v|(v<< 1)) & 0x5555555555555555U;
   return v;
   }
 uint32_t spread_bits_2D_32 (uint32_t v)
   {
-  v&=0xffffu;
-  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffu;
-  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fu;
-  v = (v|(v<< 2)) & 0x3333333333333333u;
-  v = (v|(v<< 1)) & 0x5555555555555555u;
+  v&=0xffffU;
+  v = (v|(v<< 8)) & 0x00ff00ff00ff00ffU;
+  v = (v|(v<< 4)) & 0x0f0f0f0f0f0f0f0fU;
+  v = (v|(v<< 2)) & 0x3333333333333333U;
+  v = (v|(v<< 1)) & 0x5555555555555555U;
   return v;
   }
 
@@ -162,22 +162,22 @@ namespace {
 
 inline uint64_t compress_bits_2D_64 (uint64_t v)
   {
-  v&=0x5555555555555555u;
-  v = (v|(v>> 1)) & 0x3333333333333333u;
-  v = (v|(v>> 2)) & 0x0f0f0f0f0f0f0f0fu;
-  v = (v|(v>> 4)) & 0x00ff00ff00ff00ffu;
-  v = (v|(v>> 8)) & 0x0000ffff0000ffffu;
-  v = (v|(v>>16)) & 0x00000000ffffffffu;
+  v&=0x5555555555555555U;
+  v = (v|(v>> 1)) & 0x3333333333333333U;
+  v = (v|(v>> 2)) & 0x0f0f0f0f0f0f0f0fU;
+  v = (v|(v>> 4)) & 0x00ff00ff00ff00ffU;
+  v = (v|(v>> 8)) & 0x0000ffff0000ffffU;
+  v = (v|(v>>16)) & 0x00000000ffffffffU;
   return v;
   }
 #if 0  // currently not needed
 inline uint32_t compress_bits_2D_32 (uint32_t v)
   {
-  v&=0x55555555u;
-  v = (v|(v>> 1)) & 0x33333333u;
-  v = (v|(v>> 2)) & 0x0f0f0f0fu;
-  v = (v|(v>> 4)) & 0x00ff00ffu;
-  v = (v|(v>> 8)) & 0x0000ffffu;
+  v&=0x55555555U;
+  v = (v|(v>> 1)) & 0x33333333U;
+  v = (v|(v>> 2)) & 0x0f0f0f0fU;
+  v = (v|(v>> 4)) & 0x00ff00ffU;
+  v = (v|(v>> 8)) & 0x0000ffffU;
   return v;
   }
 #endif
@@ -185,11 +185,11 @@ inline uint32_t compress_bits_2D_32 (uint32_t v)
 }  // unnamed namespace
 
 uint32_t block2morton2D_32 (uint32_t v)
-  { uint64_t t=spread_bits_2D_64(v); return (t | (t>>31)) & 0xffffffffu; }
+  { uint64_t t=spread_bits_2D_64(v); return (t | (t>>31)) & 0xffffffffU; }
 uint32_t coord2morton2D_32 (std::array<uint32_t,2> xy)
   {
   uint64_t t=spread_bits_2D_64((xy[0]&0xffff)|(xy[1]<<16));
-  return (t | (t>>31)) & 0xffffffffu;
+  return (t | (t>>31)) & 0xffffffffU;
   }
 uint32_t morton2block2D_32 (uint32_t v)
   { uint64_t t=v; t|=t<<31; t=compress_bits_2D_64(t); return t; }
@@ -215,35 +215,35 @@ namespace {
 inline uint32_t spread_bits_3D_32 (uint32_t v)
   {
   v&=0x3ff;
-  v = (v|(v<< 8)|(v<<16)) & 0x0f00f00fu;
-  v = (v|(v<< 4)) & 0xc30c30c3u;
-  v = (v|(v<< 2)) & 0x49249249u;
+  v = (v|(v<< 8)|(v<<16)) & 0x0f00f00fU;
+  v = (v|(v<< 4)) & 0xc30c30c3U;
+  v = (v|(v<< 2)) & 0x49249249U;
   return v;
   }
 inline uint32_t compress_bits_3D_32 (uint32_t v)
   {
-  v&=0x9249249u;
-  v = (v|(v>> 2)) & 0xc30c30c3u;
-  v = (v|(v>> 4)) & 0x0f00f00fu;
-  v = (v|(v>> 8)|(v>>16)) & 0x3ffu;
+  v&=0x9249249U;
+  v = (v|(v>> 2)) & 0xc30c30c3U;
+  v = (v|(v>> 4)) & 0x0f00f00fU;
+  v = (v|(v>> 8)|(v>>16)) & 0x3ffU;
   return v;
   }
 inline uint64_t spread_bits_3D_64 (uint64_t v)
   {
   v&=0x1fffff;
-  v = (v|(v<<16)|(v<<32)) & 0x00ff0000ff0000ffu;
-  v = (v|(v<< 8)) & 0xf00f00f00f00f00fu;
-  v = (v|(v<< 4)) & 0x30c30c30c30c30c3u;
-  v = (v|(v<< 2)) & 0x9249249249249249u;
+  v = (v|(v<<16)|(v<<32)) & 0x00ff0000ff0000ffU;
+  v = (v|(v<< 8)) & 0xf00f00f00f00f00fU;
+  v = (v|(v<< 4)) & 0x30c30c30c30c30c3U;
+  v = (v|(v<< 2)) & 0x9249249249249249U;
   return v;
   }
 inline uint64_t compress_bits_3D_64 (uint64_t v)
   {
-  v&=0x1249249249249249u;
-  v=(v|(v>> 2)) & 0x30c30c30c30c30c3u;
-  v=(v|(v>> 4)) & 0xf00f00f00f00f00fu;
-  v=(v|(v>> 8)) & 0x00ff0000ff0000ffu;
-  v=(v|(v>>16)|(v>>32)) & 0x1fffffu;
+  v&=0x1249249249249249U;
+  v=(v|(v>> 2)) & 0x30c30c30c30c30c3U;
+  v=(v|(v>> 4)) & 0xf00f00f00f00f00fU;
+  v=(v|(v>> 8)) & 0x00ff0000ff0000ffU;
+  v=(v|(v>>16)|(v>>32)) & 0x1fffffU;
   return v;
   }
 
@@ -305,13 +305,13 @@ std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
 
 namespace {
 
-static constexpr const uint8_t m2p2D_1[4][4] = {
+constexpr const uint8_t m2p2D_1[4][4] = {
 { 4, 1,11, 2},{ 0,15, 5, 6},{10, 9, 3,12},{14, 7,13, 8}};
 
-static constexpr const uint8_t p2m2D_1[4][4] = {
+constexpr const uint8_t p2m2D_1[4][4] = {
 { 4, 1, 3,10},{ 0, 6, 7,13},{15, 9, 8, 2},{11,14,12, 5}};
 
-static constexpr const uint8_t m2p2D_3[4][64] = {
+constexpr const uint8_t m2p2D_3[4][64] = {
 { 64,  1,131,  2,206, 79,205,140,
    4,199, 69, 70,  8,203, 73, 74,
   16,211, 81, 82, 84, 21,151, 22,
@@ -345,7 +345,7 @@ static constexpr const uint8_t m2p2D_3[4][64] = {
  138,137, 11,200,134,133,  7,196,
   76, 13,143, 14,194, 67,193,128}
 };
-static constexpr const uint8_t p2m2D_3[4][64] = {
+constexpr const uint8_t p2m2D_3[4][64] = {
 { 64,  1,  3,130,  8, 74, 75,201,
   12, 78, 79,205,135,198,196, 69,
   16, 82, 83,209, 84, 21, 23,150,
@@ -380,7 +380,7 @@ static constexpr const uint8_t p2m2D_3[4][64] = {
   28, 94, 95,221,151,214,212, 85}
 };
 
-static constexpr const uint8_t m2p3D_1[24][8]={
+constexpr const uint8_t m2p3D_1[24][8]={
 {144,119, 97,110, 43, 44, 98,109},
 { 36, 35,101,106,127,152,102,105},
 { 96, 27,135, 28,161,162,182,181},
@@ -406,7 +406,7 @@ static constexpr const uint8_t m2p3D_1[24][8]={
 {172,171, 95, 80, 21, 58, 22, 57},
 { 50, 29, 49, 30,163,164, 88, 87}};
 
-static constexpr const uint8_t p2m3D_1[24][8]={
+constexpr const uint8_t p2m3D_1[24][8]={
 {144, 98,102, 44, 45,111,107,113},
 {157,111,107, 33, 32, 98,102,124},
 { 96,164,165, 25, 27,183,182,130},
@@ -432,7 +432,7 @@ static constexpr const uint8_t p2m3D_1[24][8]={
 { 83, 63, 61,169,168, 20, 22, 90},
 { 94, 50, 48,164,165, 25, 27, 87}};
 
-static constexpr const uint16_t m2p3D_2[24][64]={
+constexpr const uint16_t m2p3D_2[24][64]={
 {   0, 577, 263, 710,1219, 578,1220, 709,
   574,  63, 697, 312, 573,1020, 698,1019,
   136,1099,   9,  10, 399,1100,  78,  77,
@@ -627,7 +627,7 @@ static constexpr const uint16_t m2p3D_2[24][64]={
   954, 635, 953,1464,1277, 636,1278,1535}
 };
 
-static constexpr const uint16_t p2m3D_2[24][64]={
+constexpr const uint16_t p2m3D_2[24][64]={
 {   0, 577, 581,1220,1222, 711, 707, 258,
   144,  18,  19,1105,1109,  87,  86, 404,
   176,  50,  51,1137,1141, 119, 118, 436,
@@ -836,11 +836,11 @@ template<unsigned rbits, typename T> inline T morton2peano2D_sub(unsigned rot,
     return morton2peano2D_sub<rbits-1>(tab>>2, (res<<2)|(tab&0x3), v<<2);
     }
   if constexpr (rbits==3)
-    return (res<<6)|(m2p2D_3[rot][v>>(nbits-6)]&0x3fu);
+    return (res<<6)|(m2p2D_3[rot][v>>(nbits-6)]&0x3fU);
   if constexpr (rbits>3)
     {
     unsigned tab=m2p2D_3[rot][v>>(nbits-6)];
-    return morton2peano2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
+    return morton2peano2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fU), v<<6);
     }
   }
 template<unsigned rbits, typename T> inline T peano2morton2D_sub(unsigned rot,
@@ -857,11 +857,11 @@ template<unsigned rbits, typename T> inline T peano2morton2D_sub(unsigned rot,
     return peano2morton2D_sub<rbits-1>(tab>>2, (res<<2)|(tab&0x3), v<<2);
     }
   if constexpr (rbits==3)
-    return (res<<6)|(p2m2D_3[rot][v>>(nbits-6)]&0x3fu);
+    return (res<<6)|(p2m2D_3[rot][v>>(nbits-6)]&0x3fU);
   if constexpr (rbits>3)
     {
     unsigned tab=p2m2D_3[rot][v>>(nbits-6)];
-    return peano2morton2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
+    return peano2morton2D_sub<rbits-3>(tab>>6, (res<<6)|(tab&0x3fU), v<<6);
     }
   }
 
@@ -874,11 +874,11 @@ template<unsigned rbits, typename T> inline T morton2peano3D_sub(unsigned rot,
   if constexpr (rbits==1)
     return (res<<3)|(m2p3D_1[rot][v>>(nbits-3)]&0x7);
   if constexpr (rbits==2)
-    return (res<<6)|(m2p3D_2[rot][v>>(nbits-6)]&0x3fu);
+    return (res<<6)|(m2p3D_2[rot][v>>(nbits-6)]&0x3fU);
   if constexpr (rbits>2)
     {
     unsigned tab=m2p3D_2[rot][v>>(nbits-6)];
-    return morton2peano3D_sub<rbits-2>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
+    return morton2peano3D_sub<rbits-2>(tab>>6, (res<<6)|(tab&0x3fU), v<<6);
     }
   }
 template<unsigned rbits, typename T> inline T peano2morton3D_sub(unsigned rot,
@@ -890,11 +890,11 @@ template<unsigned rbits, typename T> inline T peano2morton3D_sub(unsigned rot,
   if constexpr (rbits==1)
     return (res<<3)|(p2m3D_1[rot][v>>(nbits-3)]&0x7);
   if constexpr (rbits==2)
-    return (res<<6)|(p2m3D_2[rot][v>>(nbits-6)]&0x3fu);
+    return (res<<6)|(p2m3D_2[rot][v>>(nbits-6)]&0x3fU);
   if constexpr (rbits>2)
     {
     unsigned tab=p2m3D_2[rot][v>>(nbits-6)];
-    return peano2morton3D_sub<rbits-2>(tab>>6, (res<<6)|(tab&0x3fu), v<<6);
+    return peano2morton3D_sub<rbits-2>(tab>>6, (res<<6)|(tab&0x3fU), v<<6);
     }
   }
 
