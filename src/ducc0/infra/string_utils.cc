@@ -144,7 +144,7 @@ template<typename T> T stringToData (const string &x)
     {
     string rest;
     strstrm >> rest;
-    ok = rest.length()==0;
+    ok = rest.empty();
     }
   MR_assert(ok, "could not convert '", x, "' to desired data type.");
   return value;
@@ -244,7 +244,7 @@ vector<string> parse_words_from_file (const string &filename)
     string word;
     inp>>word;
     word=trim(word);
-    if (word!="") words.push_back(word);
+    if (word.empty()) words.push_back(word);
     }
   return words;
   }

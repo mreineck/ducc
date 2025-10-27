@@ -354,9 +354,21 @@ class fmav_info
       std::iota(axpos.begin(), axpos.end(), firstaxis);
       return extend_and_broadcast(new_shape, axpos);
       }
-    fmav_info transpose() const
+    fmav_info transpose(const shape_t &axes) const
       {
-      return fmav_info({shp.crend(), shp.crbegin()}, {str.crbegin(), str.crend()});
+      MR_assert(axes.size()==ndim(), "bad axes length");
+      shape_t shp2(ndim());
+      stride_t str2(ndim());
+      shape_t control(ndim(),0);
+      for (size_t i=0; i<ndim(); ++i)
+        {
+        MR_assert(axes[i]<ndim(), "invalid axis number");
+        MR_assert(control[axes[i]]==0, "repeated axis");
+        control[axes[i]] = 1;
+        shp2[i] = shp[axes[i]];
+        str2[i] = str[axes[i]];
+        }
+      return fmav_info(shp2, str2);
       }
   protected:
     auto subdata(const vector<slice> &slices) const
@@ -526,14 +538,19 @@ template<size_t ndim> class mav_info
       swap(shp[ax0], shp[ax1]);
       swap(str[ax0], str[ax1]);
       }
-    mav_info transpose() const
+    mav_info transpose(const shape_t &axes) const
       {
       shape_t shp2;
       stride_t str2;
+      shape_t control;
+      for (auto &c:control) c=0;
       for (size_t i=0; i<ndim; ++i)
         {
-        shp2[i] = shp[ndim-1-i];
-        str2[i] = str[ndim-1-i];
+        MR_assert(axes[i]<ndim, "invalid axis number");
+        MR_assert(control[axes[i]]==0, "repeated axis");
+        control[axes[i]] = 1;
+        shp2[i] = shp[axes[i]];
+        str2[i] = str[axes[i]];
         }
       return mav_info(shp2, str2);
       }
@@ -669,9 +686,10 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       {
       return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
-    cfmav transpose() const
+    cfmav transpose(const shape_t &axes) const
       {
-      return cfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      return cfmav(static_cast<const tinfo *>(this)->transpose(axes),
+                   *static_cast<const tbuf *>(this));
       }
   };
 
@@ -802,9 +820,10 @@ template<typename T> class vfmav: public cfmav<T>
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
-    vfmav transpose() const
+    vfmav transpose(const shape_t &axes) const
       {
-      return vfmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      return vfmav(static_cast<const tinfo *>(this)->transpose(axes),
+                  *static_cast<const tbuf *>(this));
       }
   };
 
@@ -902,9 +921,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nshp.fill(0);
       return cmav(static_cast<T *>(nullptr), nshp);
       }
-    cmav transpose() const
+    cmav transpose(const shape_t &axes) const
       {
-      return cmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      return cmav(static_cast<const tinfo *>(this)->transpose(axes),
+                 *static_cast<const tbuf *>(this));
       }
     cmav<T, ndim+1> prepend_1() const
       {
@@ -1025,9 +1045,10 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
-    vmav transpose() const
+    vmav transpose(const shape_t &axes) const
       {
-      return vmav(static_cast<const tinfo *>(this)->transpose(), *static_cast<const tbuf *>(this));
+      return vmav(static_cast<const tinfo *>(this)->transpose(axes),
+                 *static_cast<const tbuf *>(this));
       }
     vmav<T, ndim+1> prepend_1() const
       {
