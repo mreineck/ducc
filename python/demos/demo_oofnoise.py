@@ -34,7 +34,7 @@ for i in np.arange(nps):
     noise = gen.filterGaussian(inp)
 
     ps = np.abs(np.fft.fft(noise))**2 / nsamp
-    
+
     power = power + ps
 
 ps = power/nps

@@ -19,12 +19,12 @@ def tri2full(tri, lmax):
         res[:,:,l1,l1:] = lfac[l1:] * tri[:,:, startidx+l1:startidx+lmax+1]
         res[:,:,l1:,l1] = (2*l1+1) * tri[:,:, startidx+l1:startidx+lmax+1]
     return res
-    
+
 
 # This routine is more complicated than mcm00_ducc, since a few multiplication
 # steps are carried out in Python in pspy, and since the array indices are
 # a bit different. Overall this should not have noticeable impact on performance
-# at higher lmax. 
+# at higher lmax.
 def mcm00_pspy(spec, lmax):
     nspec = spec.shape[0]
     lrange_spec = np.arange(spec.shape[1])
@@ -87,7 +87,7 @@ def mcm02_pure_ducc(spec, lmax):
 # lmax up to which the MCM will be computed
 lmax=1000
 # number of spectra to process simultaneously
-    
+
 nspec=10
 
 print()
