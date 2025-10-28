@@ -79,7 +79,7 @@ tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
 
 // The next three functions are modified versions of the FastGL code
 // by Ignace Bogaert. The code is available at
-// https://sourceforge.net/projects/fastgausslegendrequadrature/ 
+// https://sourceforge.net/projects/fastgausslegendrequadrature/
 // A paper describing the algorithms is available at
 // https://epubs.siam.org/doi/pdf/10.1137/140954969
 

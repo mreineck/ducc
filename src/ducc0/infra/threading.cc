@@ -144,7 +144,7 @@ size_t ducc0_default_num_threads()
     }();
   return num_threads_;
   }
- 
+
 static thread_local bool in_parallel_region = false;
 int pin_info()
   {
@@ -484,7 +484,7 @@ class Distribution
     std::atomic<size_t> cur_dynamic_;
     size_t chunksize_;
     double fact_max_;
-    struct alignas(64) spaced_size_t { size_t v; }; 
+    struct alignas(64) spaced_size_t { size_t v; };
     std::vector<spaced_size_t> nextstart;
     enum SchedMode { SINGLE, STATIC, DYNAMIC, GUIDED };
     SchedMode mode;

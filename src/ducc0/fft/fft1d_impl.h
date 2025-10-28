@@ -1649,7 +1649,7 @@ MR_fail("must not get here");
     virtual size_t footprint() const
       {
       size_t res = myroots->footprint();
-      for (const auto &p: passes) res += p->footprint(); 
+      for (const auto &p: passes) res += p->footprint();
       return res;
       }
 
@@ -2895,7 +2895,7 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     virtual size_t footprint() const
       {
       size_t res = wa.size()*sizeof(Tfs);
-      for (const auto &p: passes) res += p->footprint(); 
+      for (const auto &p: passes) res += p->footprint();
       return res;
       }
 

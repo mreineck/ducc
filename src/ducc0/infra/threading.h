@@ -294,7 +294,7 @@ template<typename T> class Worklist
       cv.notify_one();
       }
   };
-  
+
 /// Execute \a func on work items in \a items over \a nthreads threads.
 /** While processing a work item, \a func may submit further items to the list
  *  of work items. For this purpose, \a func must take a const T &

@@ -486,7 +486,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               auto * DUCC0_RESTRICT ku = &kubuf[k*hlp.nvec];
               hlp.prep_for_index(index[k]);
               auto v(points(coord_idx[ix+k]));
-  
+
               Tacc vr(v.real()), vi(v.imag());
               for (size_t cu=0; cu<hlp.nvec; ++cu)
                 {
@@ -515,7 +515,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             auto * DUCC0_RESTRICT ku = &kubuf[0];
             tkrn.eval1(Tacc(supp-1-2*frac[0][0]), &ku[0]);
             hlp.prep_for_index(index[0]);
-  
+
             Tacc vr(v.real()), vi(v.imag());
             for (size_t cu=0; cu<hlp.nvec; ++cu)
               {
@@ -1189,7 +1189,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
-          
+
           auto i0old = i0;
           parent->template getpix<Tcoord>(in, frac, i0);
           auto x0 = -frac[0]*2+(supp-1);

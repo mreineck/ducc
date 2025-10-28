@@ -25,7 +25,7 @@
  */
 
 /*! \file healpix_tables.h
- * 
+ *
  *  \copyright Copyright (C) 2011-2020 Max-Planck-Society
  *  \author Martin Reinecke
  */

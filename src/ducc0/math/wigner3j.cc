@@ -118,14 +118,14 @@ void wigner3j_00_internal (double l2, double l3, double l1min,
     Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
       iofs[m] = double(2*m);
-  
+
     for (; i+int(2*vlen)<ncoef; i+=int(2*vlen))
       {
       auto l1 = l1min+i+1+iofs,
            l1sq = l1*l1,
            l1p1 = l1+1,
            l1p1sq = l1p1*l1p1;
-  
+
       const auto tmp1 = sqrt(((l1sq-l2ml3sq)*(pre1-l1sq))
                                /((l1p1sq-l2ml3sq)*(pre1-l1p1sq)));
 
@@ -219,9 +219,9 @@ template<size_t bufsize> void wigner3j_internal_block
     c1 = (l1>1.000001) ? (2.*l1-1.)*(pre2-(l1sq-l1)*m3mm2)/((l1-1.)*newfac)
                        : -(2.*l1-1.)*l1*(m3mm2)/newfac;
     res(i) = res(i-1)*c1;
-  
+
     oldfac=newfac;
-  
+
     sumfor += (2.*l1+1.)*res(i)*res(i);
     if (abs(res(i))>=srhuge)
       {
@@ -308,7 +308,7 @@ bailout_fwd:
 
     for (size_t m=0; m<bufsize; ++m)
       l1ladder.s[m] = -int(m);
-  
+
     while(true)
       {
       // prepare buffers
@@ -321,7 +321,7 @@ bailout_fwd:
         c1v.v[m] = (2.*l1p1v+1.)*(pre2-(l1p1sq+l1p1v)*m3mm2) * tmp1;
         c2v.v[m] = l1p1v*tmp1;
         }
-  
+
       int ilim = max(nstep2, i-int(bufsize));
       int vidx=0;
       while(i>ilim)
@@ -330,7 +330,7 @@ bailout_fwd:
         const double l1 = l1min+i;
         res(i) = res(i+1)*c1v.s[vidx] - res(i+2)*c2v.s[vidx]*oldfac;
         oldfac=newfacv.s[vidx];
-  
+
         sumbac += (2.*l1+1.)*res(i)*res(i);
         if (abs(res(i))>=srhuge)
           {
@@ -616,7 +616,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   for (size_t k=0; k<vlen; ++k)
     {
     bool last_coeff_should_be_negative = (nearest_int(abs(l2[k]-l3[k]+m2+m3))&1);
-    bool last_coeff_is_negative = (abs(ratio[k])<1.) && (ratio[k]<0); 
+    bool last_coeff_is_negative = (abs(ratio[k])<1.) && (ratio[k]<0);
     if (last_coeff_should_be_negative != last_coeff_is_negative)
       cnorm[k] = -cnorm[k];
     }
@@ -784,15 +784,15 @@ void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &re
     Tv sumx = 0;
     for (size_t m=0; m<vlen; ++m)
       lofs[m] = double(2*m);
-  
+
     for (; i+int(vlen)<ncoef2; i+=int(vlen))
       {
       auto l1 = double(l1min+2*i+1)+lofs;
       auto l1sq = l1*l1;
-  
+
       auto l1p1 = l1+1;
       auto l1p1sq = l1p1*l1p1;
-  
+
       const auto tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
                        /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
 
@@ -873,7 +873,7 @@ template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_si
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
-  wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, res);  
+  wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, res);
   }
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   {

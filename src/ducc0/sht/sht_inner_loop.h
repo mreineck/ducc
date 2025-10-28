@@ -798,19 +798,19 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
         d.p1pi[i] += agi1*d.l2p[i];
         d.p1mr[i] += acr1*d.l2p[i];
         d.p1mi[i] += aci1*d.l2p[i];
-  
+
         d.p1pr[i] += aci2*d.l1p[i];
         d.p1pi[i] -= acr2*d.l1p[i];
         d.p1mr[i] -= agi2*d.l1p[i];
         d.p1mi[i] += agr2*d.l1p[i];
         d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
-  
+
         d.l1p[i] = (d.cth[i]*fx30 - fx31)*d.l2p[i] - d.l1p[i];
         d.p1pr[i] += agr3*d.l2p[i];
         d.p1pi[i] += agi3*d.l2p[i];
         d.p1mr[i] += acr3*d.l2p[i];
         d.p1mi[i] += aci3*d.l2p[i];
-  
+
         d.p1pr[i] += aci4*d.l1p[i];
         d.p1pi[i] -= acr4*d.l1p[i];
         d.p1mr[i] -= agi4*d.l1p[i];
@@ -868,19 +868,19 @@ DUCC0_NOINLINE static void alm2map_spin_kernel(sxdata_v & DUCC0_RESTRICT d,
         d.p2pi[i] += acr1*d.l2m[i];
         d.p2mr[i] += agi1*d.l2m[i];
         d.p2mi[i] -= agr1*d.l2m[i];
-  
+
         d.p2pr[i] += agr2*d.l1m[i];
         d.p2pi[i] += agi2*d.l1m[i];
         d.p2mr[i] += acr2*d.l1m[i];
         d.p2mi[i] += aci2*d.l1m[i];
         d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-  
+
         d.l1m[i] = (d.cth[i]*fx30 + fx31)*d.l2m[i] - d.l1m[i];
         d.p2pr[i] -= aci3*d.l2m[i];
         d.p2pi[i] += acr3*d.l2m[i];
         d.p2mr[i] += agi3*d.l2m[i];
         d.p2mi[i] -= agr3*d.l2m[i];
-  
+
         d.p2pr[i] += agr4*d.l1m[i];
         d.p2pi[i] += agi4*d.l1m[i];
         d.p2mr[i] += acr4*d.l1m[i];
@@ -1056,7 +1056,7 @@ DUCC0_NOINLINE static void calc_map2alm_spin (dcmplx * DUCC0_RESTRICT alm,
     full_ieee &= all_of(d.scp[i]>=0) &&
                  all_of(d.scm[i]>=0);
     }
- 
+
   while((!full_ieee) && (l<lstop))
     {
     Tv fx10=fx[l+1].a,fx11=fx[l+1].b;
@@ -1130,7 +1130,7 @@ DUCC0_NOINLINE static void alm2map_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRIC
         d.p1mr[i] -= ai2*d.l1p[i];
         d.p1mi[i] += ar2*d.l1p[i];
         d.l2p[i] = (d.cth[i]*fx20 - fx21)*d.l1p[i] - d.l2p[i];
-  
+
         d.l1p[i] = (d.cth[i]*fx30 - fx31)*d.l2p[i] - d.l1p[i];
         d.p1pr[i] += ar3*d.l2p[i];
         d.p1pi[i] += ai3*d.l2p[i];
@@ -1178,7 +1178,7 @@ DUCC0_NOINLINE static void alm2map_spin_gradonly_kernel(sxdata_v & DUCC0_RESTRIC
         d.p2pr[i] += ar2*d.l1m[i];
         d.p2pi[i] += ai2*d.l1m[i];
         d.l2m[i] = (d.cth[i]*fx20 + fx21)*d.l1m[i] - d.l2m[i];
-  
+
         d.l1m[i] = (d.cth[i]*fx30 + fx31)*d.l2m[i] - d.l1m[i];
         d.p2mr[i] += ai3*d.l2m[i];
         d.p2mi[i] -= ar3*d.l2m[i];
