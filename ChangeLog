@@ -1,3 +1,10 @@
+0.40.0:
+- misc:
+  - bug fix in OofaNoise: the parameters "f_min" and "f_knee" were
+    internally flipped. This is now fixed, and the constructor is now
+    keyword-only, to avoid silent change in behaviour.
+
+
 0.39.1:
 - general:
   - Workaround for compilation problems on Alpine Linux

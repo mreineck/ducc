@@ -18,13 +18,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 sigma = 1e-1
-f_min=1e-4
+f_min=1e-3
 f_knee=1e-1
 f_samp=10.
-slope=-1.7
+slope=1.7
 nsamp = 1000000
 
-gen = ducc0.misc.OofaNoise(sigma, f_min, f_knee, f_samp, slope)
+gen = ducc0.misc.OofaNoise(sigmawhite=sigma, f_min=f_min, f_knee=f_knee, f_samp=f_samp, slope=slope)
 
 power = np.zeros(nsamp)
 nps = int(300)

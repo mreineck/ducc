@@ -742,6 +742,9 @@ class oofafilter
   public:
     oofafilter (double alpha, double fmin, double fknee, double fsample)
       {
+      MR_assert(fknee>fmin, "f_knee must be greater than f_min");
+      MR_assert((alpha>=0)&&(alpha<=2), "slope must be between 0 and 2");
+
       double lw0 = log10(twopi*fmin), lw1 = log10(twopi*fknee);
 
       int Nproc = max(1,int(2*(lw1-lw0)));
@@ -804,7 +807,7 @@ class Py_OofaNoise
   public:
     Py_OofaNoise(double sigmawhite, double f_knee, double f_min,
       double f_samp, double slope)
-      : gen(sigmawhite, f_min, f_knee, f_samp, slope) {}
+      : gen(sigmawhite, f_knee, f_min, f_samp, slope) {}
 
     NpArr filterGaussian(const CNpArr &rnd_)
       {
@@ -1890,7 +1893,7 @@ void add_misc(py::module_ &msup)
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
-      "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
+      py::kw_only(), "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
 
