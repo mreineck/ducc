@@ -740,20 +740,21 @@ class oofafilter
     vector<oof2filter> filter;
 
   public:
-    oofafilter (double alpha, double fmin, double fknee, double fsample)
+    oofafilter (double slope, double fmin, double fknee, double fsample)
       {
+      // NOTE: slope corresponds to -alpha!
       MR_assert(fknee>fmin, "f_knee must be greater than f_min");
-      MR_assert((alpha>=0)&&(alpha<=2), "slope must be between 0 and 2");
+      MR_assert((slope>=-2)&&(slope<=0), "slope must be between -2 and 0");
 
       double lw0 = log10(twopi*fmin), lw1 = log10(twopi*fknee);
 
       int Nproc = max(1,int(2*(lw1-lw0)));
       double dp = (lw1-lw0)/Nproc;
-      double p0 = lw0 + dp*0.5*(1+0.5*alpha);
+      double p0 = lw0 + dp*0.5*(1+0.5*slope);
       for (int i=0; i<Nproc; ++i)
         {
         double p_i = p0+i*dp;
-        double z_i = p_i - 0.5*dp*alpha;
+        double z_i = p_i - 0.5*dp*slope;
 
         filter.push_back
           (oof2filter(pow(10.,p_i)/twopi,pow(10.,z_i)/twopi,fsample));
@@ -848,8 +849,8 @@ f_min : float
 f_samp : float
     sampling frequency in Hz at which the noise samples should be generated.
 slope : float
-    the slope of the spectrum between f_min and f_knee. Must be in [0; 2];
-    the resulting noise will have a spectrum proportional to 1/f**slope between
+    the slope of the spectrum between f_min and f_knee. Must be in [-2; 0];
+    the resulting noise will have a spectrum proportional to f**slope between
     f_min and f_knee.
 )""";
 

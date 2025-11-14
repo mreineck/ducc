@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2021 Max-Planck-Society
+# Copyright(C) 2021-2025 Max-Planck-Society
 
 import ducc0
 import numpy as np
@@ -21,7 +21,7 @@ sigma = 1e-1
 f_min=1e-3
 f_knee=1e-1
 f_samp=10.
-slope=1.7
+slope=-1.7
 nsamp = 1000000
 
 gen = ducc0.misc.OofaNoise(sigmawhite=sigma, f_min=f_min, f_knee=f_knee, f_samp=f_samp, slope=slope)
@@ -44,6 +44,7 @@ freqs = np.fft.fftfreq(noise.size, time_step)
 ps_theory = sigma**2 * ((freqs**2+f_knee**2)/(freqs**2+f_min**2))**(-slope/2)
 
 plt.title('Noise spectrum averaged over '+str(nps)+' realizations')
+plt.xlabel("freq/[Hz]")
 plt.loglog(freqs[:ps.size//2],ps[:ps.size//2],color='red')
 plt.loglog(freqs[:ps.size//2],ps_theory[:ps.size//2],color='black')
 plt.show()
