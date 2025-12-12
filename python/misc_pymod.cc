@@ -740,17 +740,21 @@ class oofafilter
     vector<oof2filter> filter;
 
   public:
-    oofafilter (double alpha, double fmin, double fknee, double fsample)
+    oofafilter (double slope, double fmin, double fknee, double fsample)
       {
+      // NOTE: slope corresponds to -alpha!
+      MR_assert(fknee>fmin, "f_knee must be greater than f_min");
+      MR_assert((slope>=-2)&&(slope<=0), "slope must be between -2 and 0");
+
       double lw0 = log10(twopi*fmin), lw1 = log10(twopi*fknee);
 
       int Nproc = max(1,int(2*(lw1-lw0)));
       double dp = (lw1-lw0)/Nproc;
-      double p0 = lw0 + dp*0.5*(1+0.5*alpha);
+      double p0 = lw0 + dp*0.5*(1+0.5*slope);
       for (int i=0; i<Nproc; ++i)
         {
         double p_i = p0+i*dp;
-        double z_i = p_i - 0.5*dp*alpha;
+        double z_i = p_i - 0.5*dp*slope;
 
         filter.push_back
           (oof2filter(pow(10.,p_i)/twopi,pow(10.,z_i)/twopi,fsample));
@@ -804,7 +808,7 @@ class Py_OofaNoise
   public:
     Py_OofaNoise(double sigmawhite, double f_knee, double f_min,
       double f_samp, double slope)
-      : gen(sigmawhite, f_min, f_knee, f_samp, slope) {}
+      : gen(sigmawhite, f_knee, f_min, f_samp, slope) {}
 
     NpArr filterGaussian(const CNpArr &rnd_)
       {
@@ -845,8 +849,8 @@ f_min : float
 f_samp : float
     sampling frequency in Hz at which the noise samples should be generated.
 slope : float
-    the slope of the spectrum between f_min and f_knee. Must be in [0; 2];
-    the resulting noise will have a spectrum proportional to 1/f**slope between
+    the slope of the spectrum between f_min and f_knee. Must be in [-2; 0];
+    the resulting noise will have a spectrum proportional to f**slope between
     f_min and f_knee.
 )""";
 
@@ -1890,7 +1894,7 @@ void add_misc(py::module_ &msup)
 
   py::class_<Py_OofaNoise> (m, "OofaNoise", Py_OofaNoise_DS/*, py::module_local()*/)
     .def(py::init<double, double, double, double, double>(), Py_OofaNoise_init_DS,
-      "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
+      py::kw_only(), "sigmawhite"_a, "f_knee"_a, "f_min"_a, "f_samp"_a, "slope"_a)
     .def ("filterGaussian", &Py_OofaNoise::filterGaussian,
       Py_OofaNoise_filterGaussian_DS, "rnd"_a);
 
