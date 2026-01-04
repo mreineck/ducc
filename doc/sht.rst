@@ -12,18 +12,19 @@ Instead, ``ducc0`` defines a ``synthesis`` operator (corresponding to ``alm2map`
 1.  **Synthesis**  (:math:`a_{\ell m} \rightarrow` map): This is effectively a **pixelization** process. It takes a continuous signal defined by spherical harmonic coefficients and samples it onto a discrete grid. This operation is a direct linear projection and well defined for any band limit and distribution of pixels over the sphere. Let's denote this as :math:`\mathbf{S}`.
 2.  **Adjoint synthesis** (map :math:`\rightarrow a_{\ell m}` ): The transpose operator :math:`\mathbf{S}^\dagger` that maps pixels in real space to spherical harmonics. This operator is **not** the inverse :math:`\mathbf{S}^{-1}`, and in contrast to the inverse has the essential advantage of always being well defined (see below). While not immediately helpful to most end users, this operator is an essential building block for many higher-level (often iterative) algorithms, including approximate map analysis.
 3.  **(Pseudo-)Analysis** (map :math:`\rightarrow a_{\ell m}` ): These functions are an **attempt** to explain map values on a given pixelization scheme by a set of :math:`a_{\ell m}` coefficients as closely as possible.
-In strong contrast to the synthesis operation, analysis will not be exact in almost all situations, for a series of very different reasons:
 
-- In most real-world scenarios the map contains more pixels than there are degrees of freedom in the corresponding :math:`a_{\ell m}` set.
-  Consequently :math:`\mathbf{S}` is not square, making inversion impossible by definition.
-- However, for a number of pixelization schemes there exist quadrature rules which in this case (more pixels than harmonic degrees of freedom) at least allow exact recovery of harmonic coefficients from a map that was created by a preceding synthesis operation.
+    In strong contrast to the synthesis operation, analysis will not be exact in almost all situations, for a series of very different reasons:
 
-  In other words, ``analysis(synthesis(a_lm)) == a_lm`` will hold in all cases, while the opposite direction ``synthesis(analysis(map))`` will generally **not** be the same as ``map``.
+    - In most real-world scenarios the map contains more pixels than there are degrees of freedom in the corresponding :math:`a_{\ell m}` set. Consequently, :math:`\mathbf{S}` is not square, making inversion impossible by definition.
 
-  In yet other words, for some pixelizations, ``analysis`` can be made to work as the "left-inverse" of ``synthesis``, but definitely not as the general inverse.
+    - However, for a number of pixelization schemes there exist quadrature rules which in this case (more pixels than harmonic degrees of freedom) at least allow exact recovery of harmonic coefficients from a map that was created by a preceding synthesis operation.
 
-  ``Ducc`` functions carrying out this kind of operation will contain ``analysis`` in their name, without the ``pseudo``.
-- For other pixelizations (HEALPix is a prominent example), not even the left-inverse property can be guaranteed, and the analysis process will be performed by an iterative solver which aims to find a set of ``a_lm`` whose synthesis is as close as possible to the given map in a least-squares sense. Functions performing this task will contain ``pseudo_analysis`` in their name.
+      In other words, ``analysis(synthesis(a_lm)) == a_lm`` will hold in all cases, while the opposite direction ``synthesis(analysis(map))`` will generally **not** be the same as ``map``.
+
+      In yet other words, for some pixelizations, ``analysis`` can be made to work as the "left-inverse" of ``synthesis``, but definitely not as the general inverse.
+
+      ``Ducc`` functions carrying out this kind of operation will contain ``analysis`` in their name, without the ``pseudo``.
+    - For other pixelizations (HEALPix is a prominent example), not even the left-inverse property can be guaranteed, and the analysis process will be performed by an iterative solver which aims to find a set of ``a_lm`` whose synthesis is as close as possible to the given map in a least-squares sense. Functions performing this task will contain ``pseudo_analysis`` in their name.
 
 
 Typical workflows
