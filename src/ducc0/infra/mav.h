@@ -1,7 +1,7 @@
 /*! \file ducc0/infra/mav.h
  *  Classes for dealing with multidimensional arrays
  *
- *  \copyright Copyright (C) 2019-2025 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2026 Max-Planck-Society
  *  \author Martin Reinecke
  *  */
 
@@ -753,7 +753,6 @@ template<typename T> class vfmav: public cfmav<T>
       cmembuf<T>::assign(other);
       }
 
-    using cfmav<T>::operator();
     template<typename... Ns> T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     T &operator()(const shape_t &ns) const
