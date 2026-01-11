@@ -1585,6 +1585,90 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 
 )""";
 
+template<int maxop, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new(const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__)
+  {
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  MR_assert(optype.size()==nspec, "bad optype size");
+  size_t nmat=0;
+  for (auto op: optype)
+    nmat += (op<4) ? 1 : 2;
+  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,3>(mat__, {nmat, lmax+1, lmax+1});
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_spin0and2_new<maxop, Tout>(spec, lmax, mat, optype, nthreads);
+  }
+  return mat_;
+  }
+NpArr Py_coupling_matrix_spin0and2_new
+  (const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__,
+  bool singleprec)
+  {
+  if (mat__)
+    singleprec = isPyarr<float>(mat__.value()); // override
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(optype.size()==nspec, "bad optype size");
+  int maxop=0;
+  for (auto op: optype)
+    {
+    MR_assert((op>=0) && (op<5), "bad optype entry");
+    maxop = max(op, maxop);
+    }
+#define DUCC0_COUPLING_MACRO(mxop) \
+  if (maxop==mxop) \
+    return singleprec ? \
+      Py2_coupling_matrix_spin0and2_new<mxop,float>(spec_, lmax, optype, nthreads, mat__) : \
+      Py2_coupling_matrix_spin0and2_new<mxop,double>(spec_, lmax, optype, nthreads, mat__);
+  DUCC0_COUPLING_MACRO(0)  // plain spin-0
+  DUCC0_COUPLING_MACRO(1)  // 02/20 -> 02/20
+  DUCC0_COUPLING_MACRO(2)  // 22 -> ++
+  DUCC0_COUPLING_MACRO(3)  // 22 -> --
+  DUCC0_COUPLING_MACRO(4)  // 22 -> ++,--
+#undef DUCC0_COUPLING_MACRO
+  MR_fail("should not get here");
+  }
+constexpr const char *Py_coupling_matrix_spin0and2_new_DS = R"""(
+This is similar to pspy's calc_coupling_spin0and2() method, with the following
+differences:
+
+- the l values in the output matrix go from 0 to lmax (inclusive) instead of
+  2 to lmax (exclusive)
+- the input power spectra are multiplied by (2*l+1)/(4*pi)
+- the computation can be carried out for several power spectra
+  at the same time.
+- it is possible to specify for every input spectrum which type it is
+  and which output should be computed from it
+
+Parameters
+----------
+spec : numpy.ndarray((nspec, lmax_spec+1), dtype=np.float64)
+    the input spectra
+lmax : int
+    the maximum l moment included in the output matrices
+    In principle, this requires the input spectra to be provided with an
+    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
+    assumed to be zero.
+optype : tuple of int, length nspec
+    operation type to carry out for every input spectrum
+        | 0: spectrum is of type 00, append a 00 coupling matrix to the output
+        | 1: spectrum is of type 02 or 20, append a 02 or 20 (which is the same) coupling matrix to the output
+        | 2: spectrum is of type 22, append a ++ coupling matrix to the output
+        | 3: spectrum is of type 22, append a -- coupling matrix to the output
+        | 4: spectrum is of type 22, append a ++ and a -- coupling matrix to the output
+nthreads : int
+    the number of threads to use for the calculations.
+res : numpy.ndarray((nmat, lmax+1, lmax+1), dtype=np.float32 or np.float64)
+    Optional array to store the output into.
+singleprec : bool
+    determines the acccuracy of the output if `res` is not provided
+
+Returns
+-------
+numpy.ndarray((nmat, 1max+1, lmax+1), dtype=np.float32 or np.float64)
+    The coupling matrices. Identical to `res`, if it was provided
+)""";
 
 static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
@@ -1916,6 +2000,8 @@ void add_misc(py::module_ &msup)
     "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
     "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+  m2.def("coupling_matrix_spin0and2_new", Py_coupling_matrix_spin0and2_new, Py_coupling_matrix_spin0and2_new_DS,
+    "spec"_a, "lmax"_a, "optype"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
