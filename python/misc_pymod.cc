@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2020-2025 Max-Planck-Society
+ *  Copyright (C) 2020-2026 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -1585,7 +1585,7 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 
 )""";
 
-template<int maxop, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new(const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__)
+template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new(const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__)
   {
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
@@ -1597,7 +1597,7 @@ template<int maxop, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_ne
   auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,3>(mat__, {nmat, lmax+1, lmax+1});
   {
   py::gil_scoped_release release;
-  coupling_matrix_spin0and2_new<maxop, Tout>(spec, lmax, mat, optype, nthreads);
+  coupling_matrix_spin0and2_new<opmask, Tout>(spec, lmax, mat, optype, nthreads);
   }
   return mat_;
   }
@@ -1610,22 +1610,32 @@ NpArr Py_coupling_matrix_spin0and2_new
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
   MR_assert(optype.size()==nspec, "bad optype size");
-  int maxop=0;
+  size_t opmask=0;
   for (auto op: optype)
     {
     MR_assert((op>=0) && (op<5), "bad optype entry");
-    maxop = max(op, maxop);
+    opmask |= (op==4) ? 12 : (size_t(1)<<op);
     }
-#define DUCC0_COUPLING_MACRO(mxop) \
-  if (maxop==mxop) \
+#define DUCC0_COUPLING_MACRO(mask) \
+  if (opmask==mask) \
     return singleprec ? \
-      Py2_coupling_matrix_spin0and2_new<mxop,float>(spec_, lmax, optype, nthreads, mat__) : \
-      Py2_coupling_matrix_spin0and2_new<mxop,double>(spec_, lmax, optype, nthreads, mat__);
-  DUCC0_COUPLING_MACRO(0)  // plain spin-0
-  DUCC0_COUPLING_MACRO(1)  // 02/20 -> 02/20
-  DUCC0_COUPLING_MACRO(2)  // 22 -> ++
-  DUCC0_COUPLING_MACRO(3)  // 22 -> --
-  DUCC0_COUPLING_MACRO(4)  // 22 -> ++,--
+      Py2_coupling_matrix_spin0and2_new<mask,float>(spec_, lmax, optype, nthreads, mat__) : \
+      Py2_coupling_matrix_spin0and2_new<mask,double>(spec_, lmax, optype, nthreads, mat__);
+  DUCC0_COUPLING_MACRO(1)
+  DUCC0_COUPLING_MACRO(2)
+  DUCC0_COUPLING_MACRO(3)
+  DUCC0_COUPLING_MACRO(4)
+  DUCC0_COUPLING_MACRO(5)
+  DUCC0_COUPLING_MACRO(6)
+  DUCC0_COUPLING_MACRO(7)
+  DUCC0_COUPLING_MACRO(8)
+  DUCC0_COUPLING_MACRO(9)
+  DUCC0_COUPLING_MACRO(10)
+  DUCC0_COUPLING_MACRO(11)
+  DUCC0_COUPLING_MACRO(12)
+  DUCC0_COUPLING_MACRO(13)
+  DUCC0_COUPLING_MACRO(14)
+  DUCC0_COUPLING_MACRO(15)
 #undef DUCC0_COUPLING_MACRO
   MR_fail("should not get here");
   }

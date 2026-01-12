@@ -21,7 +21,7 @@
  */
 
 /*
- *  Copyright (C) 2023-2025 Max-Planck-Society
+ *  Copyright (C) 2023-2026 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
@@ -182,6 +182,177 @@ template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spe
             for (size_t k=0; k<vlen; ++k)
               if (el2+k<=lmax)
                 mat(ispec, idx_out+k) = Tout(0);
+        }
+      }
+    });
+  }
+
+template<typename Tout> void coupling_matrix_spin0_square(const cmav<double,2> &spec,
+  size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
+  {
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
+  MR_assert(mat.shape(0)==nspec, "number of spectra and matrices mismatch");
+  MR_assert(mat.shape(1)==lmax+1, "bad number of matrix rows");
+  MR_assert(mat.shape(2)==lmax+1, "bad number of matrix columns");
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, PAGE_IN(nthreads)));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = 0.;
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vmav<Tsimd,1> resfullv({lmax+1});
+    vmav<Tsimd,1> val_({nspec});
+    Tsimd * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=double(k);
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+      for (int el2=el1; el2<=int(lmax); el2+=vlen)
+        {
+        int el3min = el2-el1;
+        if (el3min<=int(lmax_spec))
+          {
+          wigner3j_00_vec_squared_compact(Tsimd(el1), Tsimd(el2)+lofs,
+            subarray<1>(resfullv, {{size_t(0), size_t(el1+1)}}));
+          const Tsimd * DUCC0_RESTRICT res = resfullv.data();
+
+          // FIXME: use generic lambdas in C++20
+          if (nspec==1)
+            {
+            Tsimd val=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              val += res[i2]*Tsimd(&spec2(0,el3), element_aligned_tag());
+              }
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                {
+                mat(0, el1, el2+k) = Tout(val[k]);
+                mat(0, el2+k, el1) = Tout(val[k]);
+                }
+            }
+          else if (nspec==2)
+            {
+            constexpr size_t nspec=2;
+            array<Tsimd,nspec> val;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  {
+                  mat(ispec, el1, el2+k) = Tout(val[ispec][k]);
+                  mat(ispec, el2+k, el1) = Tout(val[ispec][k]);
+                  }
+            }
+          else if (nspec==3)
+            {
+            constexpr size_t nspec=3;
+            array<Tsimd,nspec> val;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  {
+                  mat(ispec, el1, el2+k) = Tout(val[ispec][k]);
+                  mat(ispec, el2+k, el1) = Tout(val[ispec][k]);
+                  }
+            }
+          else if (nspec==4)
+            {
+            constexpr size_t nspec=4;
+            array<Tsimd,nspec> val;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  {
+                  mat(ispec, el1, el2+k) = Tout(val[ispec][k]);
+                  mat(ispec, el2+k, el1) = Tout(val[ispec][k]);
+                  }
+            }
+          else if (nspec<=50)
+            {
+            array<Tsimd,50> val;
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  {
+                  mat(ispec, el1, el2+k) = Tout(val[ispec][k]);
+                  mat(ispec, el2+k, el1) = Tout(val[ispec][k]);
+                  }
+            }
+          else
+            {
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              val[ispec]=0;
+            int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+            for (int i=0, i2=0; i<=max_i; i+=2, ++i2)
+              {
+              int el3 = el3min+i;
+              for (size_t ispec=0; ispec<nspec; ++ispec)
+                val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+              }
+            for (size_t ispec=0; ispec<nspec; ++ispec)
+              for (size_t k=0; k<vlen; ++k)
+                if (el2+k<=lmax)
+                  {
+                  mat(ispec, el1, el2+k) = Tout(val[ispec][k]);
+                  mat(ispec, el2+k, el1) = Tout(val[ispec][k]);
+                  }
+            }
+          }
+        else
+          for (size_t ispec=0; ispec<nspec; ++ispec)
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
+                {
+                mat(ispec, el1, el2+k) = Tout(0);
+                mat(ispec, el2+k, el1) = Tout(0);
+                }
         }
       }
     });
@@ -419,40 +590,42 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
     });
   }
 
-template<int maxop, typename Tout> void coupling_matrix_spin0and2_new(
+template<size_t opmask, typename Tout> void coupling_matrix_spin0and2_new(
   const cmav<double,2> &spec, size_t lmax, const vmav<Tout,3> &mat, const vector<int> &optype, size_t nthreads)
   {
-return;
-#if 0
+  if constexpr ((opmask&14)==0)
+    return coupling_matrix_spin0_square(spec, lmax, mat, nthreads);
+
   size_t nspec=spec.shape(0);
-  MR_assert(spec.shape(1)==ncomp_spec, "spec.shape[1] must be .", ncomp_spec);
-  MR_assert(spec.shape(2)>=1, "lmax_spec is too small.");
-  MR_assert(mat.shape(0)==nspec, "number of spectra and matrices mismatch");
-  MR_assert(mat.shape(1)==ncomp_mat, "bad number of matrix components");
-  MR_assert(mat.shape(2)==((lmax+1)*(lmax+2))/2, "bad number of matrix entries");
-  auto lmax_spec = spec.shape(2)-1;
+  MR_assert(optype.size()==nspec, "incorrect optype size");
+  MR_assert(spec.shape(1)>=1, "lmax_spec is too small.");
+  size_t nmat=0;
+  for (auto op: optype)
+    {
+    MR_assert((op>=0) && (op<5), "bad optype entry");
+    nmat += (op<4) ? 1 : 2;
+    }
+  MR_assert(mat.shape(0)==nmat, "incorrect number of output matrices");
+  MR_assert(mat.shape(1)==lmax+1, "bad number of output matrix rows");
+  MR_assert(mat.shape(2)==lmax+1, "bad number of output matrix columns");
+  auto lmax_spec = spec.shape(1)-1;
   using Tsimd = native_simd<double>;
   constexpr size_t vlen = Tsimd::size();
   auto lmax_spec_used = min(2*lmax, lmax_spec);
-  auto spec2(vmav<double,3>::build_noncritical
-    ({nspec, ncomp_spec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
+  auto spec2(vmav<double,2>::build_noncritical
+    ({nspec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
-    for (size_t j=0; j<ncomp_spec; ++j)
-      for (size_t i=0; i<nspec; ++i)
-        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
-  for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
-    for (size_t j=0; j<ncomp_spec; ++j)
-      for (size_t i=0; i<nspec; ++i)
-        spec2(i,j,l) = 0.;
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = 0.;
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
-// FIXME: these two lines are necessary for Visual C++, no idea why
-    constexpr size_t ncomp_mat = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
-    constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
 // res arrays are one larger to make loops simpler below
     vmav<Tsimd,2> wig({2, 2*lmax+1+1});
-    vmav<array<Tsimd,ncomp_mat>,1> val_({nspec});
-    array<Tsimd,ncomp_mat> * DUCC0_RESTRICT val = val_.data();
+//    vmav<array<Tsimd,2>,1> val_({nspec});
+//    array<Tsimd,2> * DUCC0_RESTRICT val = val_.data();
     Tsimd lofs;
     for (size_t k=0; k<vlen; ++k)
       lofs[k]=double(k);
@@ -462,17 +635,15 @@ return;
         {
         int el3min = el2-el1;
         int el3max = el2+el1;
-        size_t idx_out = el1*(lmax+1) - (el1*(el1+1))/2 + el2;
         if (el3min<=int(lmax_spec))
           {
           auto tmp=subarray<2>(wig,{{},{size_t(el3min), size_t(el3max+2)}});
-          // only compute 00 wigners if necessary
-          if constexpr ((im00>=0) || (im02>=0) || (im20>=0))
+          if constexpr(opmask&3)
             flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, 0, 0,
               Tsimd(el3min)+lofs, subarray<1>(tmp, {{0}, {}}));
-          // we always need those if we arrive here
-          flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
-            Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
+          if constexpr(opmask&14)
+            flexible_wigner3j_vec(Tsimd(el1), Tsimd(el2)+lofs, -2, 2,
+              Tsimd(el3min)+lofs, subarray<1>(tmp, {{1}, {}}));
           const Tsimd * DUCC0_RESTRICT wp0 = &wig(0,0);
           const Tsimd * DUCC0_RESTRICT wp1 = &wig(1,0);
           int maxidx = min(el3max, int(lmax_spec));
@@ -480,146 +651,46 @@ return;
           // FIXME: use generic lambdas in C++20
           if (nspec==1)
             {
-            array<Tsimd,ncomp_mat> val;
-            for (size_t j=0; j<ncomp_mat; ++j)
+            array<Tsimd,4> val;
+            for (size_t j=0; j<4; ++j)
               val[j]=0;
             for (int el3=el3min; el3<=maxidx; el3+=2)
               {
               const Tsimd w0=wp0[el3], w1=wp1[el3];
               const Tsimd w00=w0*w0, w01=w0*w1, w11=w1*w1;
               const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
-              array<Tsimd, ncomp_spec> sp;
-              for (size_t i=0; i<ncomp_spec; ++i)
-                sp[i] = Tsimd(&spec2(0,i,el3), element_aligned_tag());
-              if constexpr (im00>=0)
-                val[im00] += w00*sp[is00];
-              if constexpr (im02>=0)
-                val[im02] += w01*sp[is02];
-              if constexpr (im20>=0)
-                val[im20] += w01*sp[is20];
-              if constexpr (impp>=0)
-                val[impp] += w11*sp[is22];
-              if constexpr (immm>=0)
-                val[immm] += w11p1*Tsimd(&spec2(0,is22,el3+1), element_aligned_tag());
+              Tsimd sp = Tsimd(&spec2(0,el3), element_aligned_tag());
+              if constexpr (opmask&1)
+                val[0] += w00*sp;
+              if constexpr (opmask&2)
+                val[1] += w01*sp;
+              if constexpr (opmask&20)
+                val[2] += w11*sp;
+              if constexpr (opmask&24)
+                val[3] += w11p1*Tsimd(&spec2(0,el3+1), element_aligned_tag());
               }
-            for (size_t j=0; j<ncomp_mat; ++j)
-              for (size_t k=0; k<vlen; ++k)
-                if (el2+k<=lmax)
-                  mat(0, j, idx_out+k) = Tout(val[j][k]);
-            }
-          else if (nspec==2)
-            {
-            constexpr size_t nspec=2;
-            array<array<Tsimd,ncomp_mat>,nspec> val;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                val[ispec][j]=0;
-            for (int el3=el3min; el3<=maxidx; el3+=2)
-              {
-              const Tsimd w0=wp0[el3], w1=wp1[el3];
-              const Tsimd w00=w0*w0, w01=w0*w1, w11=w1*w1;
-              const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
-              for (size_t ispec=0; ispec<nspec; ++ispec)
+            auto op = optype[0];
+            for (size_t k=0; k<vlen; ++k)
+              if (el2+k<=lmax)
                 {
-                array<Tsimd, ncomp_spec> sp;
-                for (size_t i=0; i<ncomp_spec; ++i)
-                  sp[i] = Tsimd(&spec2(ispec,i,el3), element_aligned_tag());
-                if constexpr (im00>=0)
-                  val[ispec][im00] += w00*sp[is00];
-                if constexpr (im02>=0)
-                  val[ispec][im02] += w01*sp[is02];
-                if constexpr (im20>=0)
-                  val[ispec][im20] += w01*sp[is20];
-                if constexpr (impp>=0)
-                  val[ispec][impp] += w11*sp[is22];
-                if constexpr (immm>=0)
-                  val[ispec][immm] += w11p1*Tsimd(&spec2(ispec,is22,el3+1), element_aligned_tag());
+                if (op==4)
+                  {
+                  mat(0, el1, el2+k) = Tout(val[2][k]);
+                  mat(0, el2+k, el1) = Tout(val[2][k]);
+                  mat(1, el1, el2+k) = Tout(val[3][k]);
+                  mat(1, el2+k, el1) = Tout(val[3][k]);
+                  }
+                else
+                  {
+                  mat(0, el1, el2+k) = Tout(val[op][k]);
+                  mat(0, el2+k, el1) = Tout(val[op][k]);
+                  }
                 }
-              }
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                for (size_t k=0; k<vlen; ++k)
-                  if (el2+k<=lmax)
-                    mat(ispec, j, idx_out+k) = Tout(val[ispec][j][k]);
-            }
-          else if (nspec<=50)
-            {
-            array<array<Tsimd,ncomp_mat>,50> val;
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                val[ispec][j]=0;
-            for (int el3=el3min; el3<=maxidx; el3+=2)
-              {
-              const Tsimd w0=wp0[el3], w1=wp1[el3];
-              const Tsimd w00=w0*w0, w01=w0*w1, w11=w1*w1;
-              const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
-              for (size_t ispec=0; ispec<nspec; ++ispec)
-                {
-                array<Tsimd, ncomp_spec> sp;
-                for (size_t i=0; i<ncomp_spec; ++i)
-                  sp[i] = Tsimd(&spec2(ispec,i,el3), element_aligned_tag());
-                if constexpr (im00>=0)
-                  val[ispec][im00] += w00*sp[is00];
-                if constexpr (im02>=0)
-                  val[ispec][im02] += w01*sp[is02];
-                if constexpr (im20>=0)
-                  val[ispec][im20] += w01*sp[is20];
-                if constexpr (impp>=0)
-                  val[ispec][impp] += w11*sp[is22];
-                if constexpr (immm>=0)
-                  val[ispec][immm] += w11p1*Tsimd(&spec2(ispec,is22,el3+1), element_aligned_tag());
-                }
-              }
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                for (size_t k=0; k<vlen; ++k)
-                  if (el2+k<=lmax)
-                    mat(ispec, j, idx_out+k) = Tout(val[ispec][j][k]);
-            }
-          else
-            {
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                val[ispec][j]=0;
-            for (int el3=el3min; el3<=maxidx; el3+=2)
-              {
-              const Tsimd w0=wp0[el3], w1=wp1[el3];
-              const Tsimd w00=w0*w0, w01=w0*w1, w11=w1*w1;
-              const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
-              for (size_t ispec=0; ispec<nspec; ++ispec)
-                {
-                array<Tsimd, ncomp_spec> sp;
-                for (size_t i=0; i<ncomp_spec; ++i)
-                  sp[i] = Tsimd(&spec2(ispec,i,el3), element_aligned_tag());
-                if constexpr (im00>=0)
-                  val[ispec][im00] += w00*sp[is00];
-                if constexpr (im02>=0)
-                  val[ispec][im02] += w01*sp[is02];
-                if constexpr (im20>=0)
-                  val[ispec][im20] += w01*sp[is20];
-                if constexpr (impp>=0)
-                  val[ispec][impp] += w11*sp[is22];
-                if constexpr (immm>=0)
-                  val[ispec][immm] += w11p1*Tsimd(&spec2(ispec,is22,el3+1), element_aligned_tag());
-                }
-              }
-            for (size_t ispec=0; ispec<nspec; ++ispec)
-              for (size_t j=0; j<ncomp_mat; ++j)
-                for (size_t k=0; k<vlen; ++k)
-                  if (el2+k<=lmax)
-                    mat(ispec, j, idx_out+k) = Tout(val[ispec][j][k]);
             }
           }
-        else
-          for (size_t ispec=0; ispec<nspec; ++ispec)
-            for (size_t j=0; j<ncomp_mat; ++j)
-              for (size_t k=0; k<vlen; ++k)
-                if (el2+k<=lmax)
-                  mat(ispec, j, idx_out+k) = Tout(0);
         }
       }
     });
-#endif
   }
 
 template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3> &spec,
