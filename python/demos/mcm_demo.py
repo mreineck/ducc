@@ -8,7 +8,7 @@ import os
 os.environ["OMP_NUM_THREADS"]=str(nthreads)
 
 # This must happen after setting OMP_NUM_THREADS!
-from pspy.mcm_fortran.mcm_fortran import mcm_compute as mcm_fortran
+from pspy._mcm_fortran import mcm_compute as mcm_fortran
 import ducc0
 
 def tri2full(tri, lmax):
@@ -18,6 +18,13 @@ def tri2full(tri, lmax):
         startidx = l1*(lmax+1) - (l1*(l1+1))//2
         res[:,:,l1,l1:] = lfac[l1:] * tri[:,:, startidx+l1:startidx+lmax+1]
         res[:,:,l1:,l1] = (2*l1+1) * tri[:,:, startidx+l1:startidx+lmax+1]
+    return res
+def tri2full_nofac(tri, lmax):
+    res = np.zeros((tri.shape[0], tri.shape[1], lmax+1, lmax+1))
+    for l1 in range(lmax+1):
+        startidx = l1*(lmax+1) - (l1*(l1+1))//2
+        res[:,:,l1,l1:] = tri[:,:, startidx+l1:startidx+lmax+1]
+        res[:,:,l1:,l1] = tri[:,:, startidx+l1:startidx+lmax+1]
     return res
 
 
@@ -70,9 +77,22 @@ def mcm00_ducc_tri(spec, lmax):
     ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec.reshape((spec.shape[0],1,spec.shape[1])), lmax, (0,0,0,0), (0,-1,-1,-1,-1), nthreads=nthreads, res=out)
     return out
 
+def mcm00_ducc_square(spec, lmax):
+    out= np.empty((spec.shape[0],lmax+1,lmax+1),dtype=np.float32)
+    ducc0.misc.experimental.coupling_matrix_spin0and2_new(spec, lmax, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out)
+    return out
+
 def mcm02_ducc_tri(spec, lmax):
     out= np.empty((spec.shape[0],5,((lmax+1)*(lmax+2))//2),dtype=np.float32)
     ducc0.misc.experimental.coupling_matrix_spin0and2_tri(spec[:,:,:], lmax, (0,1,2,3), (0,1,2,3,4), nthreads=nthreads, res=out)
+    return out
+
+def mcm02_ducc_square(spec, lmax):
+    nspec = spec.shape[0]
+    out= np.empty((nspec*5,lmax+1,lmax+1),dtype=np.float32)
+    spec = spec.reshape((nspec*4, spec.shape[2]))
+    optype = (0,1,1,4)*nspec
+    ducc0.misc.experimental.coupling_matrix_spin0and2_new(spec, lmax, optype, nthreads=nthreads, res=out)
     return out
 
 def mcmpm_ducc_tri(spec, lmax):
@@ -109,8 +129,13 @@ t0=time()
 ducc = mcm00_ducc_tri(spec[:,0,:], lmax)
 print(f"ducc time (single precision): {time()-t0}s")
 
+t0=time()
+duccsq = mcm00_ducc_square(spec[:,0,:], lmax)
+print(f"ducc square time (single precision): {time()-t0}s")
+
 # compare the results
 print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,2:,2:],tri2full(ducc, lmax)[:,0,2:,2:])}")
+print(f"L2 error between ducc tri and square solutions: {ducc0.misc.l2error(duccsq,tri2full_nofac(ducc, lmax)[:,0,:,:])}")
 
 print()
 print("Spin 0and2 case:")
@@ -123,8 +148,13 @@ t0=time()
 ducc = mcm02_ducc_tri(spec, lmax)
 print(f"ducc triangular time (single precision): {time()-t0}s")
 
+t0=time()
+duccsq = mcm02_ducc_square(spec, lmax)
+print(f"ducc square time (single precision): {time()-t0}s")
+
 # compare the results
 print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,:,2:,2:],tri2full(ducc, lmax)[:,:,2:,2:])}")
+print(f"L2 error between ducc tri and square solutions: {ducc0.misc.l2error(duccsq,tri2full_nofac(ducc, lmax).reshape(duccsq.shape))}")
 
 t0=time()
 duccpm = mcmpm_ducc_tri(spec, lmax)
