@@ -1470,7 +1470,7 @@ nthreads : int
 res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     Optional array to store the output into.
 singleprec : bool
-    determines the acccuracy of the output if `res` is not provided
+    determines the accuracy of the output if `res` is not provided
 
 Returns
 -------
@@ -1565,7 +1565,7 @@ nthreads : int
 res : numpy.ndarray((nspec, 1<=x<=5, ((lmax+1)*(lmax+2))/2), dtype=np.float32 or np.float64)
     Optional array to store the output into.
 singleprec : bool
-    determines the acccuracy of the output if `res` is not provided
+    determines the accuracy of the output if `res` is not provided
 
 Returns
 -------
@@ -1672,7 +1672,7 @@ nthreads : int
 res : numpy.ndarray((nmat, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     Optional array to store the output into.
 singleprec : bool
-    determines the acccuracy of the output if `res` is not provided
+    determines the accuracy of the output if `res` is not provided
 
 Returns
 -------
