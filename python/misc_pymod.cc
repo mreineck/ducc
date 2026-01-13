@@ -1585,7 +1585,9 @@ The currently supported combinations of `spec_index` and `mat_index` are:
 
 )""";
 
-template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new(const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__)
+template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new
+  (const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads,
+   const OptNpArr &mat__, int l_exact, int l_toeplitz, int dl_band)
   {
   auto spec = to_cmav<double,2>(spec_);
   auto nspec = spec.shape(0);
@@ -1597,13 +1599,14 @@ template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and
   auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,3>(mat__, {nmat, lmax+1, lmax+1});
   {
   py::gil_scoped_release release;
-  coupling_matrix_spin0and2_new<opmask, Tout>(spec, lmax, mat, optype, nthreads);
+  coupling_matrix_spin0and2_new<opmask, Tout>(spec, lmax, mat, optype,
+    l_exact, l_toeplitz, dl_band, nthreads);
   }
   return mat_;
   }
 NpArr Py_coupling_matrix_spin0and2_new
-  (const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads, const OptNpArr &mat__,
-  bool singleprec)
+  (const CNpArr &spec_, size_t lmax, const vector<int> &optype, size_t nthreads,
+   const OptNpArr &mat__, bool singleprec, int l_exact, int l_toeplitz, int dl_band)
   {
   if (mat__)
     singleprec = isPyarr<float>(mat__.value()); // override
@@ -1619,8 +1622,8 @@ NpArr Py_coupling_matrix_spin0and2_new
 #define DUCC0_COUPLING_MACRO(mask) \
   if (opmask==mask) \
     return singleprec ? \
-      Py2_coupling_matrix_spin0and2_new<mask,float>(spec_, lmax, optype, nthreads, mat__) : \
-      Py2_coupling_matrix_spin0and2_new<mask,double>(spec_, lmax, optype, nthreads, mat__);
+      Py2_coupling_matrix_spin0and2_new<mask,float>(spec_, lmax, optype, nthreads, mat__, l_exact, l_toeplitz, dl_band) : \
+      Py2_coupling_matrix_spin0and2_new<mask,double>(spec_, lmax, optype, nthreads, mat__, l_exact, l_toeplitz, dl_band);
   DUCC0_COUPLING_MACRO(1)
   DUCC0_COUPLING_MACRO(2)
   DUCC0_COUPLING_MACRO(3)
@@ -1673,6 +1676,14 @@ res : numpy.ndarray((nmat, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     Optional array to store the output into.
 singleprec : bool
     determines the accuracy of the output if `res` is not provided
+l_exact : int
+    corresponding to l_exact in Louis et al. 2020.
+    If negative, the full matrices are computed accurately.
+l_toeplitz : int
+    corresponding to l_toeplitz in Louis et al. 2020. Ignored if l_exact<0.
+dl_band : int
+    corresponding to delta_l_band in Louis et al. 2020. Ignored if l_exact<0.
+
 
 Returns
 -------
@@ -2011,7 +2022,8 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
     "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_spin0and2_new", Py_coupling_matrix_spin0and2_new, Py_coupling_matrix_spin0and2_new_DS,
-    "spec"_a, "lmax"_a, "optype"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+    "spec"_a, "lmax"_a, "optype"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false, "l_exact"_a=-1,
+    "l_toeplitz"_a=-1, "dl_band"_a=-1);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);

@@ -187,8 +187,19 @@ template<typename Tout> void coupling_matrix_spin0_tri(const cmav<double,2> &spe
     });
   }
 
+static bool neededForToeplitz(int l1, int l2, int l_exact, int l_toeplitz, int dl_band)
+  {
+  if (l_exact<0) return true;  // we want everything
+  if (l1<l2) swap(l1,l2);
+  if (l2<=l_exact) return true;
+  if (l2==l_toeplitz) return true;
+  if ((l2<l_toeplitz) && (l1-l2<=dl_band)) return true;
+  if (l1==l2) return true;
+  return false;
+  }
+
 template<typename Tout> void coupling_matrix_spin0_square(const cmav<double,2> &spec,
-  size_t lmax, const vmav<Tout,3> &mat, size_t nthreads)
+  size_t lmax, const vmav<Tout,3> &mat, int l_exact, int l_toeplitz, int dl_band, size_t nthreads)
   {
   size_t nspec=spec.shape(0);
   MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
@@ -218,6 +229,12 @@ template<typename Tout> void coupling_matrix_spin0_square(const cmav<double,2> &
       {
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
         {
+        bool necessary=false;
+        for (size_t i=0; i<vlen; ++i)
+          if (neededForToeplitz(el1, el2+i, l_exact, l_toeplitz, dl_band))
+            necessary=true;
+        if (!necessary) continue;
+
         int el3min = el2-el1;
         if (el3min<=int(lmax_spec))
           {
@@ -591,10 +608,13 @@ template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, i
   }
 
 template<size_t opmask, typename Tout> void coupling_matrix_spin0and2_new(
-  const cmav<double,2> &spec, size_t lmax, const vmav<Tout,3> &mat, const vector<int> &optype, size_t nthreads)
+  const cmav<double,2> &spec, size_t lmax, const vmav<Tout,3> &mat,
+  const vector<int> &optype, int l_exact, int l_toeplitz, int dl_band,
+  size_t nthreads)
   {
   if constexpr ((opmask&14)==0)
-    return coupling_matrix_spin0_square(spec, lmax, mat, nthreads);
+    return coupling_matrix_spin0_square(spec, lmax, mat,
+      l_exact, l_toeplitz, dl_band, nthreads);
 
   size_t nspec=spec.shape(0);
   MR_assert(optype.size()==nspec, "incorrect optype size");
@@ -633,6 +653,12 @@ template<size_t opmask, typename Tout> void coupling_matrix_spin0and2_new(
       {
       for (int el2=el1; el2<=int(lmax); el2+=vlen)
         {
+        bool necessary=false;
+        for (size_t i=0; i<vlen; ++i)
+          if (neededForToeplitz(el1, el2+i, l_exact, l_toeplitz, dl_band))
+            necessary=true;
+        if (!necessary) continue;
+
         int el3min = el2-el1;
         int el3max = el2+el1;
         if (el3min<=int(lmax_spec))
