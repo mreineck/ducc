@@ -198,6 +198,43 @@ static bool neededForToeplitz(int l1, int l2, int l_exact, int l_toeplitz, int d
   return false;
   }
 
+template<typename T> static void toeplitz_fill(const vmav<T,2> &mat,
+  int lmax, int l_exact, int l_toeplitz, int dl_band, size_t nthreads)
+  {
+  if ((l_exact<0) || (l_exact>=lmax))  // nothing to do
+    return;
+  vector<double> diag(lmax+1);
+  for (int l=0; l<=lmax; ++l)
+    diag[l] = sqrt(double(mat(l,l)));
+  vector<double> row_toep(lmax+1-l_toeplitz);
+  for (int l=l_toeplitz; l<=lmax; ++l)
+    row_toep[l-l_toeplitz] = mat(l_toeplitz,l)/(diag[l_toeplitz]*diag[l]);
+  vector<double> row_exact(lmax+1-l_exact);
+  for (int l=l_exact; l<=lmax; ++l)
+    row_exact[l-l_exact] = mat(l_exact,l)/(diag[l_exact]*diag[l]);
+
+  execDynamic(lmax-l_exact, nthreads, 8, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for (size_t xl1=rng.lo; xl1<rng.hi; ++xl1)
+        {
+        int l1 = int(xl1)+l_exact+1;
+        for (int l2=l1+1; l2<=lmax; ++l2)
+          {
+          if ((l1<l_toeplitz)&&((l2-l1)<=dl_band))  // already computed exactly
+            continue;
+          if (l1==l_toeplitz)  // already computed exactly
+            continue;
+          if ((l2-l1)<=(lmax-l_toeplitz))  // use column at l_toeplitz
+            mat(l1,l2) = T(row_toep[l2-l1]*diag[l1]*diag[l2]);
+          else  // use column at l_exact
+            mat(l1,l2) = T(row_exact[l2-l1]*diag[l1]*diag[l2]);
+          mat(l2,l1) = mat(l1,l2);
+          }
+        }
+    });
+  }
+
 template<typename Tout> void coupling_matrix_spin0_square(const cmav<double,2> &spec,
   size_t lmax, const vmav<Tout,3> &mat, int l_exact, int l_toeplitz, int dl_band, size_t nthreads)
   {
@@ -373,6 +410,9 @@ template<typename Tout> void coupling_matrix_spin0_square(const cmav<double,2> &
         }
       }
     });
+  if (l_exact>=0)
+    for (size_t imat=0; imat<mat.shape(0); ++imat)
+      toeplitz_fill(subarray<2>(mat,{{imat},{},{}}), lmax, l_exact, l_toeplitz, dl_band, nthreads);
   }
 
 template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> void coupling_matrix_spin0and2_tri(
@@ -808,6 +848,9 @@ template<size_t opmask, typename Tout> void coupling_matrix_spin0and2_new(
         }
       }
     });
+  if (l_exact>=0)
+    for (size_t imat=0; imat<mat.shape(0); ++imat)
+      toeplitz_fill(subarray<2>(mat,{{imat},{},{}}), lmax, l_exact, l_toeplitz, dl_band, nthreads);
   }
 
 template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3> &spec,
