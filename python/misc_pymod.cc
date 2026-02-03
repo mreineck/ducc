@@ -1416,6 +1416,7 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
+#if 0
 template<typename Tout> static NpArr Py2_coupling_matrix_spin0and2_pure(const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__)
   {
   auto spec = to_cmav<double,3>(spec_);
@@ -1478,114 +1479,9 @@ numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
     The coupling matrices. Identical to `res`, if it was provided
 )""";
 
+#endif
 
-template<int is00, int is02, int is20, int is22, int im00, int im02, int im20, int impp, int immm, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_tri(const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__)
-  {
-  constexpr size_t ncomp_spec=size_t(max(is00, max(is02, max(is20, is22)))) + 1;
-  constexpr size_t ncomp_out = size_t(max(im00, max(im02, max(im20, max(impp, immm))))) + 1;
-  auto spec = to_cmav<double,3>(spec_);
-  auto nspec = spec.shape(0);
-  MR_assert(spec.shape(1)==ncomp_spec, "bad ncomp_spec");
-  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,3>(mat__, {nspec, ncomp_out, ((lmax+1)*(lmax+2))/2});
-  {
-  py::gil_scoped_release release;
-  coupling_matrix_spin0and2_tri<is00, is02, is20, is22, im00, im02, im20, impp, immm, Tout>(spec, lmax, mat, nthreads);
-  }
-  return mat_;
-  }
-
-NpArr Py_coupling_matrix_spin0and2_tri
-  (const CNpArr &spec_, size_t lmax, const vector<int> &spec_index, const vector<int> &mat_index, size_t nthreads, const OptNpArr &mat__,
-  bool singleprec)
-  {
-  if (mat__)
-    singleprec = isPyarr<float>(mat__.value()); // override
-#define DUCC0_COUPLING_MACRO(s0,s1,s2,s3,m0,m1,m2,m3,m4) \
-  if ((spec_index==vector<int>{s0,s1,s2,s3}) && (mat_index==vector<int>{m0,m1,m2,m3,m4})) \
-    return singleprec ? \
-      Py2_coupling_matrix_spin0and2_tri<s0,s1,s2,s3,m0,m1,m2,m3,m4,float>(spec_, lmax, nthreads, mat__) : \
-      Py2_coupling_matrix_spin0and2_tri<s0,s1,s2,s3,m0,m1,m2,m3,m4,double>(spec_, lmax, nthreads, mat__);
-  DUCC0_COUPLING_MACRO(0,0,0,0, 0,-1,-1,-1,-1)  // plain spin-0
-  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3, 4)  // full spin0and2
-  DUCC0_COUPLING_MACRO(0,1,1,2, 0, 1,-1, 2,-1)
-  DUCC0_COUPLING_MACRO(0,1,1,2, 0, 1,-1, 2, 3)
-  DUCC0_COUPLING_MACRO(0,1,2,3, 0, 1, 2, 3,-1)  // full spin0and2 except --
-  DUCC0_COUPLING_MACRO(0,0,0,0,-1,-1,-1, 0, 1)  // just ++ and --
-  DUCC0_COUPLING_MACRO(0,0,0,0, 0, 1, 2, 3, 4)
-#undef DUCC0_COUPLING_MACRO
-  MR_fail("unsupported combination of spec_index and mat_index");
-  }
-
-constexpr const char *Py_coupling_matrix_spin0and2_tri_DS = R"""(
-This is similar to pspy's calc_coupling_spin0and2() method, with the following
-differences:
-
-- the l values in the output matrix go from 0 to lmax (inclusive) instead of
-  2 to lmax (exclusive)
-- the input power spectra are multiplied by (2*l+1)/(4*pi)
-- the output is stored in a triangular format,such that the entry (l1,l2>=l1)
-  has the index l1*(lmax+1) - (l1*(l1+1))/2 + l2.
-- the computation can be carried out for more than one set of power spectra
-  at the same time.
-- it is possible to specify which input spectra are provided, and which
-  combination of output matrices is requested
-
-Parameters
-----------
-spec : numpy.ndarray((nspec, 1<=x<=4, lmax_spec+1), dtype=np.float64)
-    the input spectra
-lmax : int
-    the maximum l moment included in the output matrices
-    In principle, this requires the input spectra to be provided with an
-    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
-    assumed to be zero.
-spec_index : tuple of int, length 4
-    Contains the index in spec for each possible input spectrum
-        | Pos 0: index of the wcl_00 spectrum
-        | Pos 1: index of the wcl_02 spectrum
-        | Pos 2: index of the wcl_20 spectrum
-        | Pos 3: index of the wcl_22 spectrum
-
-    The second dimension of `spec` must have the size `np.max(spec_index)+1`
-    All indices in the range `(0; np.max(spec_index))` must occur at least once.
-mat_index : tuple of int, length 5
-    Contains the index in the result for each possible coupling matrix
-        | Pos 0: index of the 00 matrix
-        | Pos 1: index of the 02 matrix
-        | Pos 2: index of the 20 matrix
-        | Pos 3: index of the ++ matrix
-        | Pos 4: index of the -- matrix
-
-    If any of the indices is -1, this matrix will not be computed.
-    The second dimension of `res` must have the size `np.max(mat_index)+1.`
-    All indices in the range `(0; np.max(mat_index))` must occur exactly once.
-nthreads : int
-    the number of threads to use for the calculations.
-res : numpy.ndarray((nspec, 1<=x<=5, ((lmax+1)*(lmax+2))/2), dtype=np.float32 or np.float64)
-    Optional array to store the output into.
-singleprec : bool
-    determines the accuracy of the output if `res` is not provided
-
-Returns
--------
-numpy.ndarray((nspec, 1<=x<=5, ((lmax+1)*(lmax+2))/2)), dtype=np.float32 or np.float64)
-    The coupling matrices. Identical to `res`, if it was provided
-
-Notes
------
-The currently supported combinations of `spec_index` and `mat_index` are:
-   | (0,1,2,3), ( 0, 1, 2, 3, 4)   # full computation
-   | (0,0,0,0), ( 0,-1,-1,-1,-1)   # just spin 0
-   | (0,1,1,2), ( 0, 1,-1, 2,-1)
-   | (0,1,1,2), ( 0, 1,-1, 2, 3)
-   | (0,1,2,3), ( 0, 1, 2, 3,-1)
-   | (0,0,0,0), (-1,-1,-1, 0, 1)   # only ++ and --
-   | (0,0,0,0), ( 0, 1, 2, 3, 4)   # for testing purposes
-
-)""";
-
-template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and2_new
+template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect
   (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
    size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
   {
@@ -1600,12 +1496,12 @@ template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_spin0and
   MR_assert(mat.shape(0)==nmat, "nmat mismatch");
   {
   py::gil_scoped_release release;
-  coupling_matrix_spin0and2_new<opmask, Tout>(spec, mat, optype,
+  coupling_matrix_rect<opmask, Tout>(spec, mat, optype,
     l_exact, l_toeplitz, dl_band, nthreads);
   }
   return mat_;
   }
-NpArr Py_coupling_matrix_spin0and2_new
+NpArr Py_coupling_matrix_rect
   (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
    size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
   {
@@ -1622,8 +1518,8 @@ NpArr Py_coupling_matrix_spin0and2_new
 #define DUCC0_COUPLING_MACRO(mask) \
   if (opmask==mask) \
     return singleprec ? \
-      Py2_coupling_matrix_spin0and2_new<mask,float>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band) : \
-      Py2_coupling_matrix_spin0and2_new<mask,double>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band);
+      Py2_coupling_matrix_rect<mask,float>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band) : \
+      Py2_coupling_matrix_rect<mask,double>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band);
   DUCC0_COUPLING_MACRO(1)
   DUCC0_COUPLING_MACRO(2)
   DUCC0_COUPLING_MACRO(3)
@@ -1642,7 +1538,7 @@ NpArr Py_coupling_matrix_spin0and2_new
 #undef DUCC0_COUPLING_MACRO
   MR_fail("should not get here");
   }
-constexpr const char *Py_coupling_matrix_spin0and2_new_DS = R"""(
+constexpr const char *Py_coupling_matrix_rect_DS = R"""(
 This is similar to pspy's calc_coupling_spin0and2() method, with the following
 differences:
 
@@ -2009,11 +1905,9 @@ void add_misc(py::module_ &msup)
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
 
-  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
-    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
-  m2.def("coupling_matrix_spin0and2_tri", Py_coupling_matrix_spin0and2_tri, Py_coupling_matrix_spin0and2_tri_DS,
-    "spec"_a, "lmax"_a, "spec_index"_a, "mat_index"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
-  m2.def("coupling_matrix_spin0and2_new", Py_coupling_matrix_spin0and2_new, Py_coupling_matrix_spin0and2_new_DS,
+//  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
+//    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
+  m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
 
