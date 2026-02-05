@@ -345,7 +345,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               mutexes(new_x).lock();
               old_x = new_x;
               }
-            grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
+            if ((bufr(iu)!=0)||(bufi(iu)!=0))
+              grid(idxu) += complex<Tcalc>(Tcalc(bufr(iu)), Tcalc(bufi(iu)));
             bufr(iu) = bufi(iu) = 0;
             }
           mutexes(old_x).unlock();
@@ -695,7 +696,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
               {
-              grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
+              if (norm(gbuf(iu,iv))>0)
+                grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
               gbuf(iu,iv) = 0;
               }
             }
@@ -730,7 +732,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                 }
               for (int64_t iv=0, idxv=idxv0; iv<nshift; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
                 {
-                grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
+                if (norm(gbuf(iu,iv))>0)
+                  grid(idxu,idxv) += complex<Tcalc>(gbuf(iu,iv));
                 gbuf(iu,iv) = 0;
                 }
               for (int64_t iv=nshift; iv<sv; ++iv)
@@ -905,9 +908,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.nvec*hlp.vlen;
         constexpr size_t NVEC2 = (2*SUPP+hlp.vlen-1)/hlp.vlen;
-        array<complex<Tacc>,SUPP> cdata;
-        array<mysimd<Tacc>,NVEC2> vdata;
-        for (size_t i=0; i<vdata.size(); ++i) vdata[i]=0;
 
         constexpr size_t lookahead=3;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
@@ -924,28 +924,29 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                  : hlp.prep({coords(row,0), coords(row,1)});
           complex<Tacc> v(points(row));
 
-          for (size_t cv=0; cv<SUPP; ++cv)
-            cdata[cv] = kv[cv]*v;
-
-          // really ugly, but attemps with type-punning via union fail on some platforms
-          memcpy(reinterpret_cast<void *>(vdata.data()),
-                 reinterpret_cast<const void *>(cdata.data()),
-                 SUPP*sizeof(complex<Tacc>));
+          constexpr auto vlen=hlp.vlen;
+          const auto vdata = [&kv,v]() constexpr noexcept
+            {
+            array<mysimd<Tacc>,NVEC2> res;
+            for (size_t i=0; i<SUPP; ++i)
+              {
+              complex<Tacc> tmp=kv[i]*v;
+              res[(2*i)/vlen][(2*i)%vlen] = tmp.real();
+              res[(2*i+1)/vlen][(2*i+1)%vlen] = tmp.imag();
+              }
+            for (size_t i=2*SUPP; i<vlen*NVEC2; ++i)
+              res[i/vlen][i%vlen]=0;
+            return res;
+            }();
 
           Tacc * DUCC0_RESTRICT xpx = reinterpret_cast<Tacc *>(hlp.p0);
-// It seems that performance is slightly better if we don't work in
-// memory-contiguous fashion, probably due to the unaligned accesses.
-#if 0  // old version, leaving it in for now
+#if 1
           for (size_t cu=0; cu<SUPP; ++cu)
             {
-            Tacc tmpx=ku[cu];
+            const Tacc tmpx=ku[cu];
+            auto * const DUCC0_RESTRICT px0 = xpx+cu*2*jump;
             for (size_t cv=0; cv<NVEC2; ++cv)
-              {
-              auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
-              auto tval = mysimd<Tacc>(px,element_aligned_tag());
-              tval += tmpx*vdata[cv];
-              tval.copy_to(px,element_aligned_tag());
-              }
+              (mysimd<Tacc>(px0+cv*hlp.vlen,element_aligned_tag()) + tmpx*vdata[cv]).copy_to(px0+cv*hlp.vlen,element_aligned_tag());
             }
 #else
           for (size_t cv=0; cv<NVEC2; ++cv)
@@ -1109,7 +1110,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                 {
                 auto t=gbuf(iu,iv,iw);
-                grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                if (norm(t)>0)
+                  grid(idxu,idxv,idxw) += complex<Tcalc>(t);
                 gbuf(iu,iv,iw) = 0;
                 }
             }
@@ -1151,7 +1153,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
                 for (int64_t iw=0, idxw=idxw0; iw<nshift; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
                   {
                   auto t=gbuf(iu,iv,iw);
-                  grid(idxu,idxv,idxw) += complex<Tcalc>(t);
+                  if (norm(t)>0)
+                    grid(idxu,idxv,idxw) += complex<Tcalc>(t);
                   gbuf(iu,iv,iw) = 0;
                   }
                 for (int64_t iw=nshift; iw<sw; ++iw)
@@ -1219,7 +1222,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
       private:
         static constexpr int nsafe = (supp+1)/2;
         static constexpr int su = 2*nsafe+(1<<log2tile), sv = su, sw = su;
-        static constexpr int swvec = max<size_t>(sw, ((supp+2*nvec-2)/nvec)*nvec);
+        static constexpr int swvec = max<size_t>(sw, ((supp+2*vlen-2)/vlen)*vlen);
         static constexpr double xsupp=2./supp;
         const Spreadinterp *parent;
 
