@@ -456,7 +456,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         array<array<double,1>,batchsize> frac;
         mysimd<Tacc> kubuf[batchsize*hlp.nvec];
 
-        constexpr size_t lookahead=10;
+        constexpr size_t lookahead=20;
 
         while (auto rng=sched.getNext())
           {
@@ -557,7 +557,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         array<array<double,1>,batchsize> frac;
         mysimd<Tcalc> kubuf[batchsize*hlp.nvec];
 
-        constexpr size_t lookahead=10;
+        constexpr size_t lookahead=20;
         while (auto rng=sched.getNext())
           {
           auto ix = rng.lo;
@@ -884,6 +884,93 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           p0i = px0i+ofs;
           }
       };
+    template<size_t supp> class HelperU2nu_cmplx
+      {
+      public:
+        static constexpr size_t vlen = mysimd<Tcalc>::size();
+        static constexpr size_t nvec = (supp+vlen-1)/vlen;
+
+      private:
+        static constexpr int nsafe = (supp+1)/2;
+        static constexpr int su = supp+(1<<log2tile), sv = su;
+        static constexpr int svvec = max<size_t>(sv, ((supp+2*vlen-2)/vlen)*vlen);
+        static constexpr double xsupp=2./supp;
+        const Spreadinterp *parent;
+
+        TemplateKernel<supp, mysimd<Tcalc>> tkrn;
+        const cmav<complex<Tcalc>,ndim> &grid;
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
+
+        vmav<complex<Tcalc>,ndim> gbuf;
+        const complex<Tcalc> *px0;
+
+        DUCC0_NOINLINE void load()
+          {
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              gbuf(iu,iv) = grid(idxu, idxv);
+          }
+        DUCC0_NOINLINE void loadshift(const array<int64_t, ndim> &b0old)
+          {
+          constexpr int nshift = 1<<log2tile;
+          // if we have shifted by nshift in the last direction, use shortcut
+          if ((b0old[0]==b0[0]) && (b0old[1]+nshift==b0[1]))
+            {
+            int64_t inu = int(parent->nover[0]);
+            int64_t inv = int(parent->nover[1]);
+            int64_t idxv0 = (b0[1]+inv+sv-nshift)%inv;
+            for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+              {
+              for (int64_t iv=0; iv+nshift<sv; ++iv)
+                gbuf(iu,iv) = gbuf(iu,iv+nshift);
+              for (int64_t iv=sv-nshift, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+                gbuf(iu,iv) = grid(idxu, idxv);
+              }
+            }
+          else
+            load();
+          }
+
+      public:
+        const complex<Tcalc> * DUCC0_RESTRICT p0;
+        union kbuf {
+          Tcalc scalar[2*nvec*vlen];
+          mysimd<Tcalc> simd[2*nvec];
+          };
+        kbuf buf;
+
+        HelperU2nu_cmplx(const Spreadinterp *parent_, const cmav<complex<Tcalc>,ndim> &grid_)
+          : parent(parent_), tkrn(*parent->krn), grid(grid_),
+            i0{-1000000, -1000000}, b0{-1000000, -1000000},
+            gbuf({size_t(su+1),size_t(svvec)}),
+            px0(gbuf.data()) {}
+
+        constexpr int lineJump() const { return svvec; }
+
+        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+          {
+          array<double,ndim> frac;
+          auto i0old = i0;
+          parent->template getpix<Tcoord>(in, frac, i0);
+          auto x0 = -frac[0]*2+(supp-1);
+          auto y0 = -frac[1]*2+(supp-1);
+          tkrn.eval2(Tcalc(x0), Tcalc(y0), &buf.simd[0]);
+          if (i0==i0old) return;
+          if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv))
+            {
+            auto b0old=b0;
+            for (size_t i=0; i<ndim; ++i)
+              b0[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            loadshift(b0old);
+            }
+          auto ofs = (i0[0]-b0[0])*svvec + i0[1]-b0[1];
+          p0 = px0+ofs;
+          }
+      };
 
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
@@ -907,9 +994,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.nvec*hlp.vlen;
-        constexpr size_t NVEC2 = (2*SUPP+hlp.vlen-1)/hlp.vlen;
+     //   const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
+        using Tsimd = mysimd<Tacc>;
+        constexpr size_t nvec = hlp.nvec;
+        constexpr size_t nvec2 = (2*SUPP+hlp.vlen-1)/hlp.vlen;
 
-        constexpr size_t lookahead=3;
+        constexpr size_t lookahead=10;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           if (ix+lookahead<coord_idx.size())
@@ -924,39 +1014,63 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                  : hlp.prep({coords(row,0), coords(row,1)});
           complex<Tacc> v(points(row));
 
+          //const array<Tacc, SUPP> xku = [&]() constexpr noexcept {
+            //array<Tacc, SUPP> tmp;
+            //for (size_t i=0; i<SUPP; ++i)
+              //tmp[i] = ku[i];
+            //return tmp;
+            //}();
+
           constexpr auto vlen=hlp.vlen;
           const auto vdata = [&kv,v]() constexpr noexcept
             {
-            array<mysimd<Tacc>,NVEC2> res;
+            array<mysimd<Tacc>,nvec2> res;
+#if 0
+            Tsimd vr=v.real(), vi=v.imag();
+            for (size_t i=0; i<nvec2/2; ++i)
+              {
+              auto v2r=kv[i]*vr, v2i=kv[i]*vi;
+              res[2*i  ] = simd_zip_lo(v2r,v2i);
+              res[2*i+1] = simd_zip_hi(v2r,v2i);
+              }
+            if constexpr(nvec2&1)
+              {
+              auto v2r=kv[nvec-1]*vr, v2i=kv[nvec-1]*vi;
+              res[nvec2-1] = simd_zip_lo(v2r,v2i);
+              }
+#else
             for (size_t i=0; i<SUPP; ++i)
               {
-              complex<Tacc> tmp=kv[i]*v;
-              res[(2*i)/vlen][(2*i)%vlen] = tmp.real();
-              res[(2*i+1)/vlen][(2*i+1)%vlen] = tmp.imag();
+//              complex<Tacc> tmp=kv[i]*v;
+              res[(2*i)/vlen][(2*i)%vlen] = kv[i]*v.real();
+              res[(2*i+1)/vlen][(2*i+1)%vlen] = kv[i]*v.imag();
               }
-            for (size_t i=2*SUPP; i<vlen*NVEC2; ++i)
+            for (size_t i=2*SUPP; i<vlen*nvec2; ++i)
               res[i/vlen][i%vlen]=0;
+#endif
             return res;
             }();
 
           Tacc * DUCC0_RESTRICT xpx = reinterpret_cast<Tacc *>(hlp.p0);
-#if 1
+// It seems that performance is slightly better if we don't work in
+// memory-contiguous fashion, probably due to the unaligned accesses.
+#if 1  // old version, leaving it in for now
           for (size_t cu=0; cu<SUPP; ++cu)
             {
-            const Tacc tmpx=ku[cu];
-            auto * const DUCC0_RESTRICT px0 = xpx+cu*2*jump;
-            for (size_t cv=0; cv<NVEC2; ++cv)
+            Tacc tmpx=ku[cu];
+            Tacc * DUCC0_RESTRICT px0 = xpx+cu*2*jump;
+            for (size_t cv=0; cv<nvec2; ++cv)
               (mysimd<Tacc>(px0+cv*hlp.vlen,element_aligned_tag()) + tmpx*vdata[cv]).copy_to(px0+cv*hlp.vlen,element_aligned_tag());
             }
 #else
-          for (size_t cv=0; cv<NVEC2; ++cv)
+          for (size_t cv=0; cv<nvec2; ++cv)
             {
             auto tmpx=vdata[cv];
             for (size_t cu=0; cu<SUPP; ++cu)
               {
               auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
               auto tval = mysimd<Tacc>(px,element_aligned_tag());
-              tval += tmpx*ku[cu];
+              tval += tmpx*xku[cu];
               tval.copy_to(px,element_aligned_tag());
               }
             }
@@ -965,7 +1079,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         });
       }
 
-    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper_separate
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
       const cmav<Tcoord,2> &coords, const vmav<complex<Tpoints>,1> &points) const
       {
@@ -985,7 +1099,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
 
-        constexpr size_t lookahead=3;
+        constexpr size_t lookahead=10;
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
           if (ix+lookahead<npoints)
@@ -1029,6 +1143,74 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             }
           points(row) = hsum_cmplx<Tcalc>(rr,ri);
+          }
+        });
+      }
+
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
+      (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
+      const cmav<Tcoord,2> &coords, const vmav<complex<Tpoints>,1> &points) const
+      {
+      {
+      using Tsimd = mysimd<Tcalc>;
+      constexpr size_t vlen=Tsimd::size();
+      constexpr size_t nvec=(SUPP+vlen-1)/vlen;
+      constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+      if constexpr(nvec2==2*vlen)
+        return interpolation_helper_separate<SUPP>(supp, grid, coords, points);
+      }
+
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid, coords, points);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
+      MR_assert(supp==SUPP, "requested support out of range");
+      bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
+
+      size_t chunksz = max<size_t>(1000, coord_idx.size()/(10*nthreads));
+      execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
+        {
+        HelperU2nu_cmplx<SUPP> hlp(this, grid);
+        constexpr int jump = hlp.lineJump();
+        const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+        //using Tsimd = mysimd<Tcalc>;
+        constexpr size_t vlen=hlp.vlen;
+        constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+
+        constexpr size_t lookahead=10;
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+          {
+          if (ix+lookahead<npoints)
+            {
+            auto nextidx = coord_idx[ix+lookahead];
+            points.prefetch_w(nextidx);
+            if (!sorted)
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
+            }
+          size_t row = coord_idx[ix];
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
+                 : hlp.prep({coords(row,0), coords(row,1)});
+          const array<Tacc, SUPP> xku = [&]() constexpr noexcept {
+            array<Tacc, SUPP> tmp;
+            for (size_t i=0; i<SUPP; ++i)
+              tmp[i] = ku[i];
+            return tmp;
+            }();
+          array<mysimd<Tcalc>,nvec2> arr;
+          for (size_t i=0; i<nvec2; ++i) arr[i] = 0;
+          for (size_t cu=0; cu<SUPP; ++cu)
+            {
+            const Tcalc * DUCC0_RESTRICT p1 = reinterpret_cast<const Tcalc *>(hlp.p0 + cu*jump);
+            for (size_t cv=0; cv<nvec2; ++cv)
+              arr[cv] += xku[cu]*mysimd<Tcalc>(p1+hlp.vlen*cv,element_aligned_tag());
+            }
+          complex<Tcalc> tres=0;
+          for (size_t i=0; i<SUPP; ++i)
+            tres += complex<Tcalc>(arr[(2*i  )/vlen][(2*i  )%vlen]*kv[i],
+                                   arr[(2*i+1)/vlen][(2*i+1)%vlen]*kv[i]);
+          points(row) = tres;
           }
         });
       }
@@ -1319,6 +1501,100 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
           }
       };
 
+    template<size_t supp> class HelperU2nu_cmplx
+      {
+      public:
+        static constexpr size_t vlen = mysimd<Tacc>::size();
+        static constexpr size_t nvec = (supp+vlen-1)/vlen;
+
+      private:
+        static constexpr int nsafe = (supp+1)/2;
+        static constexpr int su = supp+(1<<log2tile), sv = su, sw = su;
+        static constexpr double xsupp=2./supp;
+        const Spreadinterp *parent;
+        TemplateKernel<supp, mysimd<Tacc>> tkrn;
+        const cmav<complex<Tcalc>,ndim> &grid;
+        array<int64_t,ndim> i0; // start index of the current nonuniform point
+        array<int64_t,ndim> b0; // start index of the current buffer
+
+        vmav<complex<Tacc>,ndim> gbuf;
+        complex<Tacc> *px0;
+
+        DUCC0_NOINLINE void load()
+          {
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t inw = int(parent->nover[2]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw)%inw;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              for (int64_t iw=0, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+                gbuf(iu,iv,iw) = grid(idxu, idxv, idxw);
+          }
+        DUCC0_NOINLINE void loadshift(const array<int64_t, ndim> &b0old)
+          {
+          constexpr int nshift = 1<<log2tile;
+          if ((b0old[0]==b0[0]) && (b0old[1]==b0[1]) && (b0old[2]+nshift==b0[2]))
+            {
+          int64_t inu = int(parent->nover[0]);
+          int64_t inv = int(parent->nover[1]);
+          int64_t inw = int(parent->nover[2]);
+          int64_t idxv0 = (b0[1]+inv)%inv;
+          int64_t idxw0 = (b0[2]+inw+sw-nshift)%inw;
+          for (int64_t iu=0, idxu=(b0[0]+inu)%inu; iu<su; ++iu, idxu=(idxu+1<inu)?(idxu+1):0)
+            for (int64_t iv=0, idxv=idxv0; iv<sv; ++iv, idxv=(idxv+1<inv)?(idxv+1):0)
+              {
+              for (int64_t iw=0; iw+nshift<sw; ++iw)
+                gbuf(iu,iv,iw) = gbuf(iu,iv,iw+nshift);
+              for (int64_t iw=sw-nshift, idxw=idxw0; iw<sw; ++iw, idxw=(idxw+1<inw)?(idxw+1):0)
+                gbuf(iu,iv,iw) = grid(idxu, idxv, idxw);
+              }
+            }
+          else
+            load();
+          }
+
+      public:
+        complex<Tacc> * DUCC0_RESTRICT p0;
+        union kbuf {
+          Tacc scalar[3*nvec*vlen];
+          mysimd<Tacc> simd[3*nvec];
+          };
+        kbuf buf;
+
+        HelperU2nu_cmplx(const Spreadinterp *parent_, const cmav<complex<Tcalc>,ndim> &grid_)
+          : parent(parent_), tkrn(*parent->krn), grid(grid_),
+            i0{-1000000, -1000000, -1000000}, b0{-1000000, -1000000, -1000000},
+            gbuf({size_t(su+1),size_t(sv),size_t(sw)}),
+            px0(gbuf.data()) {}
+
+        constexpr int lineJump() const { return sw; }
+        constexpr int planeJump() const { return sv*sw; }
+
+        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+          {
+          array<double,ndim> frac;
+
+          auto i0old = i0;
+          parent->template getpix<Tcoord>(in, frac, i0);
+          auto x0 = -frac[0]*2+(supp-1);
+          auto y0 = -frac[1]*2+(supp-1);
+          auto z0 = -frac[2]*2+(supp-1);
+          tkrn.eval3(Tacc(x0), Tacc(y0), Tacc(z0), &buf.simd[0]);
+          if (i0==i0old) return;
+          if ((i0[0]<b0[0]) || (i0[1]<b0[1]) || (i0[2]<b0[2])
+           || (i0[0]+int(supp)>b0[0]+su) || (i0[1]+int(supp)>b0[1]+sv) || (i0[2]+int(supp)>b0[2]+sw))
+            {
+            auto b0old = b0;
+            for (size_t i=0; i<ndim; ++i)
+              b0[i]=((((i0[i]+nsafe)>>log2tile)<<log2tile))-nsafe;
+            loadshift(b0old);
+            }
+          p0 = px0 + (i0[0]-b0[0])*sv*sw + (i0[1]-b0[1])*sw + (i0[2]-b0[2]);
+          }
+      };
+#if 0
     template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
       (size_t supp, const cmav<Tcoord,2> &coords,
       const cmav<complex<Tpoints>,1> &points,
@@ -1358,7 +1634,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          constexpr size_t lookahead=3;
+          constexpr size_t lookahead=6;
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
@@ -1412,8 +1688,109 @@ else
           }
         });
       }
+#else
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void spreading_helper
+      (size_t supp, const cmav<Tcoord,2> &coords,
+      const cmav<complex<Tpoints>,1> &points,
+      const vmav<complex<Tcalc>,ndim> &grid) const
+      {
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
+      MR_assert(supp==SUPP, "requested support out of range");
+      bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
 
-    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
+      vmav<Mutex, ndim> mutexes ({(nover[0]+tilesize-1)/tilesize,
+                                  (nover[1]+tilesize-1)/tilesize,
+                                  (nover[2]+tilesize-1)/tilesize});
+
+      size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
+      execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
+        {
+        HelperNu2u<SUPP> hlp(this, grid, mutexes);
+        constexpr auto ljump = hlp.lineJump();
+        constexpr auto pjump = hlp.planeJump();
+        const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+        const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*hlp.vlen*hlp.nvec;
+//        using Tsimd = mysimd<Tacc>;
+//        constexpr size_t vlen = Tsimd::size();
+
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+          {
+          constexpr size_t lookahead=3;
+          if (ix+lookahead<npoints)
+            {
+            auto nextidx = coord_idx[ix+lookahead];
+            points.prefetch_r(nextidx);
+            if (!sorted)
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
+            }
+          size_t row = coord_idx[ix];
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
+                 : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
+          complex<Tacc> v(points(row));
+
+          const array<Tacc, SUPP> xkv = [&]() constexpr noexcept {
+            array<Tacc, SUPP> tmp;
+            for (size_t i=0; i<SUPP; ++i)
+              tmp[i] = kv[i];
+            return tmp;
+            }();
+#if 0
+          constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+          const array<Tsimd, nvec2> xdata = [&]() constexpr noexcept {
+            array<Tsimd, nvec2> xdata;
+            for (size_t cw=0; cw<SUPP; ++cw)
+              {
+              xdata[(2*cw  )/vlen][(2*cw  )%vlen] = kw[cw]*v.real();
+              xdata[(2*cw+1)/vlen][(2*cw+1)%vlen] = kw[cw]*v.imag();
+              }
+            return xdata;
+            } ();
+
+          Tacc * const DUCC0_RESTRICT ptr = reinterpret_cast<Tacc*>(hlp.p0);
+          for (size_t cu=0; cu<SUPP; ++cu)
+            for (size_t cv=0; cv<SUPP; ++cv)
+              {
+              const Tsimd fct = ku[cu]*xkv[cv];
+              Tacc * const DUCC0_RESTRICT ptr2 = ptr + 2*cu*pjump + 2*cv*ljump;
+              for (size_t cw=0; cw<nvec2; ++cw)
+                {
+                Tsimd tmp(ptr2+cw*vlen, element_aligned_tag());
+                tmp += fct*xdata[cw];
+                tmp.copy_to(ptr2+cw*vlen, element_aligned_tag());
+                }
+              }
+#else
+          const array<Tacc, 2*SUPP> xdata = [&]() constexpr noexcept {
+            array<Tacc, 2*SUPP> xdata;
+            for (size_t cw=0; cw<SUPP; ++cw)
+              {
+              xdata[2*cw] = kw[cw]*v.real();
+              xdata[2*cw+1] = kw[cw]*v.imag();
+              }
+            return xdata;
+            } ();
+
+          Tacc * DUCC0_RESTRICT ptr = reinterpret_cast<Tacc*>(hlp.p0);
+          for (size_t cu=0; cu<SUPP; ++cu)
+            for (size_t cv=0; cv<SUPP; ++cv)
+              {
+              const Tacc fct = ku[cu]*xkv[cv];
+              Tacc * DUCC0_RESTRICT ptr2 = ptr + 2*cu*pjump + 2*cv*ljump;
+              for (size_t cw=0; cw<2*SUPP; ++cw)
+                ptr2[cw] += fct*xdata[cw];
+              }
+#endif
+          }
+        });
+      }
+#endif
+
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper_separate
       (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
       const cmav<Tcoord,2> &coords, const vmav<complex<Tpoints>,1> &points) const
       {
@@ -1437,7 +1814,7 @@ else
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
-          constexpr size_t lookahead=3;
+          constexpr size_t lookahead=6;
           if (ix+lookahead<npoints)
             {
             auto nextidx = coord_idx[ix+lookahead];
@@ -1491,6 +1868,96 @@ else
               }
             }
           points(row) = hsum_cmplx<Tcalc>(rr,ri);
+          }
+        });
+      }
+
+    template<size_t SUPP, typename Tpoints> [[gnu::hot]] void interpolation_helper
+      (size_t supp, const cmav<complex<Tcalc>,ndim> &grid,
+      const cmav<Tcoord,2> &coords, const vmav<complex<Tpoints>,1> &points) const
+      {
+      {
+      using Tsimd = mysimd<Tcalc>;
+      constexpr size_t vlen=Tsimd::size();
+      constexpr size_t nvec=(SUPP+vlen-1)/vlen;
+      constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+      if constexpr(nvec2==2*vlen)
+        return interpolation_helper_separate<SUPP>(supp, grid, coords, points);
+      }
+      
+      if constexpr (SUPP>=8)
+        if (supp<=SUPP/2) return interpolation_helper<SUPP/2>(supp, grid, coords, points);
+      if constexpr (SUPP>4)
+        if (supp<SUPP) return interpolation_helper<SUPP-1>(supp, grid, coords, points);
+      MR_assert(supp==SUPP, "requested support out of range");
+      bool sorted = coords_sorted.size()!=0;
+      size_t npoints = points.shape(0);
+
+      size_t chunksz = max<size_t>(1000, npoints/(10*nthreads));
+      execDynamic(npoints, nthreads, chunksz, [&](Scheduler &sched)
+        {
+        HelperU2nu_cmplx<SUPP> hlp(this, grid);
+        constexpr auto ljump = hlp.lineJump();
+        constexpr auto pjump = hlp.planeJump();
+        const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
+        const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
+        const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*hlp.vlen*hlp.nvec;
+        using Tsimd = mysimd<Tcalc>;
+        constexpr size_t vlen=hlp.vlen;
+        constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+
+        while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
+          {
+          constexpr size_t lookahead=6;
+          if (ix+lookahead<npoints)
+            {
+            auto nextidx = coord_idx[ix+lookahead];
+            points.prefetch_w(nextidx);
+            if (!sorted)
+              for (size_t d=0; d<ndim; ++d) coords.prefetch_r(nextidx,d);
+            }
+          size_t row = coord_idx[ix];
+          sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
+                 : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
+#if 1
+          array<mysimd<Tcalc>,nvec2> arr;
+          for (size_t i=0; i<nvec2; ++i) arr[i]=0;
+          for (size_t cu=0; cu<SUPP; ++cu)
+            {
+            for (size_t cv=0; cv<SUPP; ++cv)
+              {
+              auto fct = ku[cu]*kv[cv];
+              for (size_t cw=0; cw<nvec2; ++cw)
+                arr[cw] += fct * Tsimd(reinterpret_cast<const Tcalc*>(hlp.p0+cu*pjump + cv*ljump) + cw*hlp.vlen, element_aligned_tag());
+              }
+            }
+          complex<Tcalc> tres=0;
+          for (size_t i=0; i<SUPP; ++i)
+            tres += complex<Tcalc>(arr[(2*i  )/vlen][(2*i  )%vlen]*kw[i],
+                                   arr[(2*i+1)/vlen][(2*i+1)%vlen]*kw[i]);
+          points(row) = tres;
+#else
+          array<Tcalc,2*SUPP> arr;
+          for (size_t i=0; i<2*SUPP; ++i) arr[i]=0;
+          const Tcalc *DUCC0_RESTRICT ptr=reinterpret_cast<const Tcalc*>(hlp.p0);
+          for (size_t cu=0; cu<SUPP; ++cu)
+            {
+            for (size_t cv=0; cv<SUPP; ++cv)
+              {
+              const Tcalc *DUCC0_RESTRICT ptr2=ptr+ 2*cu*pjump + 2*cv*ljump;
+              auto fct = ku[cu]*kv[cv];
+              for (size_t cw=0; cw<2*SUPP; ++cw)
+                arr[cw] += fct * ptr2[cw];
+              }
+            }
+          Tcalc rr=0, ri=0;
+          for (size_t i=0; i<SUPP; ++i)
+            {
+            rr += arr[2*i]*kw[i];
+            ri += arr[2*i+1]*kw[i];
+            }
+          points(row) = complex<Tcalc>(rr,ri);
+#endif
           }
         });
       }

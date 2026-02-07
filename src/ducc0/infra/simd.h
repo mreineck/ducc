@@ -858,6 +858,35 @@ using detail_simd::simd_select;
 using detail_simd::simd_exists;
 using detail_simd::vectorizable;
 
+template<typename inline Tsimd simd_duplicate_lo(Tsimd in)
+  {
+  constexpr size_t vlen=Tsimd::size();
+  if constexpr(vlen==1)
+    return in;
+  Tsimd res;
+  for (size_t i=0; i<vlen; i+=2)
+    res[i] = res[i+1] = in[i/2];
+  return res;
+  }
+template<typename inline Tsimd simd_duplicate_hi(Tsimd in)
+  {
+  constexpr size_t vlen=Tsimd::size();
+  if constexpr(vlen==1)
+    return in;
+  Tsimd res;
+  for (size_t i=0; i<vlen; i+=2)
+    res[i] = res[i+1] = in[vlen/2 + i/2];
+  return res;
+  }
+template<typename inline Tsimd simd_reverse (Tsimd in)
+  {
+  constexpr size_t vlen=Tsimd::size();
+  Tsimd res;
+  for (size_t i=0; i<vlen; ++1)
+    res[i] = in[vlen-1-i];
+  return res;
+  }
+
 }
 #endif
 #endif
