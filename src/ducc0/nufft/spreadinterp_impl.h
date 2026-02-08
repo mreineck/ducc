@@ -76,9 +76,9 @@ template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<floa
 
 
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
-template<> constexpr inline int log2tile_<double, 1> = 9;
-template<> constexpr inline int log2tile_<float , 1> = 9;
-template<> constexpr inline int log2tile_<double, 2> = 4;
+template<> constexpr inline int log2tile_<double, 1> = 10;
+template<> constexpr inline int log2tile_<float , 1> = 10;
+template<> constexpr inline int log2tile_<double, 2> = 5;
 template<> constexpr inline int log2tile_<float , 2> = 5;
 template<> constexpr inline int log2tile_<double, 3> = 4;
 template<> constexpr inline int log2tile_<float , 3> = 4;
@@ -1833,7 +1833,7 @@ else
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                    : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
-  #if 1
+#if 1
             array<mysimd<Tcalc>,nvec2> arr;
             for (size_t i=0; i<nvec2; ++i) arr[i]=0;
             for (size_t cu=0; cu<SUPP; ++cu)
@@ -1850,7 +1850,7 @@ else
               tres += complex<Tcalc>(arr[(2*i  )/vlen][(2*i  )%vlen]*kw[i],
                                      arr[(2*i+1)/vlen][(2*i+1)%vlen]*kw[i]);
             points(row) = tres;
-  #else
+#else
             array<Tcalc,2*SUPP> arr;
             for (size_t i=0; i<2*SUPP; ++i) arr[i]=0;
             const Tcalc *DUCC0_RESTRICT ptr=reinterpret_cast<const Tcalc*>(hlp.p0);
@@ -1871,7 +1871,7 @@ else
               ri += arr[2*i+1]*kw[i];
               }
             points(row) = complex<Tcalc>(rr,ri);
-  #endif
+#endif
             }
           });
         }
