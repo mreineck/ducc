@@ -1015,15 +1015,15 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                  : hlp.prep({coords(row,0), coords(row,1)});
           complex<Tacc> v(points(row));
 
-          //const array<Tacc, SUPP> xku = [&]() constexpr noexcept {
-            //array<Tacc, SUPP> tmp;
-            //for (size_t i=0; i<SUPP; ++i)
-              //tmp[i] = ku[i];
-            //return tmp;
-            //}();
+          const array<Tacc, SUPP> xkv = [&]() {
+            array<Tacc, SUPP> tmp;
+            for (size_t i=0; i<SUPP; ++i)
+              tmp[i] = kv[i];
+            return tmp;
+            } ();
 
           constexpr auto vlen=hlp.vlen;
-          const auto vdata = [&kv,v]() constexpr noexcept
+          const auto vdata = [&xkv,v]() constexpr noexcept
             {
             array<mysimd<Tacc>,nvec2> res;
 #if 0
@@ -1043,8 +1043,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             for (size_t i=0; i<SUPP; ++i)
               {
 //              complex<Tacc> tmp=kv[i]*v;
-              res[(2*i)/vlen][(2*i)%vlen] = kv[i]*v.real();
-              res[(2*i+1)/vlen][(2*i+1)%vlen] = kv[i]*v.imag();
+              res[(2*i)/vlen][(2*i)%vlen] = xkv[i]*v.real();
+              res[(2*i+1)/vlen][(2*i+1)%vlen] = xkv[i]*v.imag();
               }
             for (size_t i=2*SUPP; i<vlen*nvec2; ++i)
               res[i/vlen][i%vlen]=0;
@@ -1121,6 +1121,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                    : hlp.prep({coords(row,0), coords(row,1)});
             mysimd<Tcalc> rr=0, ri=0;
+            const array<Tsimd, hlp.nvec> xkv = [&]() constexpr noexcept {
+            array<Tacc, hlp.nvec> tmp;
+            for (size_t i=0; i<hlp.nvec; ++i)
+              tmp[i] = kv[i];
+            return tmp;
+            }();
             if constexpr (nvec==1)
               {
               for (size_t cu=0; cu<SUPP; ++cu)
@@ -1143,8 +1149,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                   {
                   const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + vlen*cv;
                   const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + vlen*cv;
-                  tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                  tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                  tmpr += xkv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
+                  tmpi += xkv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
                   }
                 rr += ku[cu]*tmpr;
                 ri += ku[cu]*tmpi;
@@ -1683,7 +1689,7 @@ if constexpr(SUPP<=8)
               for (size_t cv=0; cv<SUPP; ++cv)
                 {
                 Tsimd tmp(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
-                tmp += tmp2x*kv[cv];
+                tmp += tmp2x*xkv[cv];
                 tmp.copy_to(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
                 }
               }
@@ -1760,6 +1766,18 @@ else
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                    : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
+            const array<Tsimd, hlp.nvec> xkw = [&]() constexpr noexcept {
+            array<Tacc, hlp.nvec> tmp;
+            for (size_t i=0; i<hlp.nvec; ++i)
+              tmp[i] = kw[i];
+            return tmp;
+            }();
+            const array<Tcalc, SUPP> xkv = [&]() constexpr noexcept {
+            array<Tacc, SUPP> tmp;
+            for (size_t i=0; i<SUPP; ++i)
+              tmp[i] = kv[i];
+            return tmp;
+            }();
             mysimd<Tcalc> rr=0, ri=0;
             if constexpr (hlp.nvec==1)
               {
@@ -1792,11 +1810,11 @@ else
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*pjump + cv*ljump + hlp.vlen*cw;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*pjump + cv*ljump + hlp.vlen*cw;
-                    tmp2r += kw[cw]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                    tmp2i += kw[cw]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                    tmp2r += xkw[cw]*mysimd<Tcalc>(pxr,element_aligned_tag());
+                    tmp2i += xkw[cw]*mysimd<Tcalc>(pxi,element_aligned_tag());
                     }
-                  tmpr += kv[cv]*tmp2r;
-                  tmpi += kv[cv]*tmp2i;
+                  tmpr += xkv[cv]*tmp2r;
+                  tmpi += xkv[cv]*tmp2i;
                   }
                 rr += ku[cu]*tmpr;
                 ri += ku[cu]*tmpi;
