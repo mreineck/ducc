@@ -86,7 +86,7 @@ class Bench12:
             plan = ducc0.nufft.plan(nu2u=True, coord=coord, grid_shape=shape, epsilon=epsilon, nthreads=nthreads)
             res["ducc_1_planned_time_plan"] = time()-t0
             t0 = time()
-            out = plan.nu2u(points=points, forward=True, verbosity=1, out=out)
+            out = plan.nu2u(points=points, forward=True, verbosity=0, out=out)
             res["ducc_1_planned_time_exec"] = time()-t0
             res["ducc_1_planned_err"] = ducc0.misc.l2error(out, self._res_fiducial_1)
             print(f"ducc0,     planned, type 1: time={res['ducc_1_planned_time_exec']}, L2 error={res['ducc_1_planned_err']}")
@@ -398,17 +398,16 @@ def runbench3(npoints_in, npoints_out, minmax_in, minmax_out, nthreads, fname, s
         print()
     plot3(res, fname)
 
-ducc0.misc.preallocate_memory(16)
+
 singleprec = False
 # FINUFFT benchmarks, analogous to figures 6.1-6.3 in the 2018 paper
 if True:
-#    runbench12((   1000000,),  10000000, 1, "finufft_1d_serial.png"  , singleprec)
+    runbench12((   1000000,),  10000000, 1, "finufft_1d_serial.png"  , singleprec)
     runbench12(( 1000,1000,),  10000000, 1, "finufft_2d_serial.png"  , singleprec)
-#    runbench12((100,100,100),  10000000, 1, "finufft_3d_serial.png"  , singleprec)
-#    runbench12((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
+    runbench12((100,100,100),  10000000, 1, "finufft_3d_serial.png"  , singleprec)
+    runbench12((  10000000,), 100000000, 8, "finufft_1d_parallel.png", singleprec)
     runbench12(( 3162,3162,), 100000000, 8, "finufft_2d_parallel.png", singleprec)
-#    runbench12((216,216,216), 100000000, 8, "finufft_3d_parallel.png", singleprec)
-#    runbench12((256,256,256), 256**3//10000, 8, "finufft_3d_parallel.png", singleprec)
+    runbench12((216,216,216), 100000000, 8, "finufft_3d_parallel.png", singleprec)
 # NFFT.jl benchmarks, lower nonuniform point density
 if True:
     runbench12(( 512*512,),  512*512, 1, "bench_1d.png", singleprec)
