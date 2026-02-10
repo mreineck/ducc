@@ -1,30 +1,77 @@
 SHT
 ===
 
-The ``ducc0.sht`` module provides a high-performance interface for transforming data between harmonic space (spherical harmonic coefficients, :math:`a_{\ell m}`) and real space (pixelized maps).
+The ``ducc0.sht`` module provides a high-performance interface for
+transforming data between harmonic space (spherical harmonic
+coefficients, :math:`a_{\ell m}`) and real space (pixelized maps).
 
 Terminology: Synthesis versus Analysis
 --------------------------------------
 
-Users transitioning from other libraries like Healpy often look for ``alm2map`` and ``map2alm`` functions. ``Ducc0`` avoids this naming scheme, because the meaning of ``map2alm`` is not well defined, and because the typical semantics of ``map2alm`` expected by most users are actually ill-defined in most circumstances.
-Instead, ``ducc0`` defines a ``synthesis`` operator (corresponding to ``alm2map``) with clearly defined semantics, from which other operators are derived.
+Users transitioning from other libraries like Healpy often look for
+``alm2map`` and ``map2alm`` functions. ``Ducc0`` avoids this naming
+scheme, because the meaning of ``map2alm`` is not well defined, and
+because the typical semantics of ``map2alm`` expected by most users are
+actually ill-defined in most circumstances.
 
-1.  **Synthesis**  (:math:`a_{\ell m} \rightarrow` map): This is effectively a **pixelization** process. It takes a continuous signal defined by spherical harmonic coefficients and samples it onto a discrete grid. This operation is a direct linear projection and well defined for any band limit and distribution of pixels over the sphere. Let's denote this as :math:`\mathbf{S}`.
-2.  **Adjoint synthesis** (map :math:`\rightarrow a_{\ell m}` ): The transpose operator :math:`\mathbf{S}^\dagger` that maps pixels in real space to spherical harmonics. This operator is **not** the inverse :math:`\mathbf{S}^{-1}`, and in contrast to the inverse has the essential advantage of always being well defined (see below). While not immediately helpful to most end users, this operator is an essential building block for many higher-level (often iterative) algorithms, including approximate map analysis.
-3.  **(Pseudo-)Analysis** (map :math:`\rightarrow a_{\ell m}` ): These functions are an **attempt** to explain map values on a given pixelization scheme by a set of :math:`a_{\ell m}` coefficients as closely as possible.
+Instead, ``ducc0`` defines a ``synthesis`` operator (corresponding to
+``alm2map``) with clearly defined semantics, from which other operators
+are derived.
 
-    In strong contrast to the synthesis operation, analysis will not be exact in almost all situations, for a series of very different reasons:
+1. **Synthesis**  (:math:`a_{\ell m} \rightarrow` map):
 
-    - In most real-world scenarios the map contains more pixels than there are degrees of freedom in the corresponding :math:`a_{\ell m}` set. Consequently, :math:`\mathbf{S}` is not square, making inversion impossible by definition.
+   This is
+   effectively a **pixelization** process. It takes a continuous signal
+   defined by spherical harmonic coefficients and samples it onto a
+   discrete grid.
 
-    - However, for a number of pixelization schemes there exist quadrature rules which in this case (more pixels than harmonic degrees of freedom) at least allow exact recovery of harmonic coefficients from a map that was created by a preceding synthesis operation.
+   This operation is a direct linear projection and well defined for any
+   band limit and distribution of pixels over the sphere. Let's denote
+   this as :math:`\mathbf{S}`.
 
-      In other words, ``analysis(synthesis(a_lm)) == a_lm`` will hold in all cases, while the opposite direction ``synthesis(analysis(map))`` will generally **not** be the same as ``map``.
+2. **Adjoint synthesis** (map :math:`\rightarrow a_{\ell m}` ):
 
-      In yet other words, for some pixelizations, ``analysis`` can be made to work as the "left-inverse" of ``synthesis``, but definitely not as the general inverse.
+   The transpose operator :math:`\mathbf{S}^\dagger` that maps pixels
+   in real space to spherical harmonics. This operator is **not**
+   the inverse :math:`\mathbf{S}^{-1}`, and in contrast to the inverse
+   has the essential advantage of always being well defined (see below).
 
-      ``Ducc`` functions carrying out this kind of operation will contain ``analysis`` in their name, without the ``pseudo``.
-    - For other pixelizations (HEALPix is a prominent example), not even the left-inverse property can be guaranteed, and the analysis process will be performed by an iterative solver which aims to find a set of ``a_lm`` whose synthesis is as close as possible to the given map in a least-squares sense. Functions performing this task will contain ``pseudo_analysis`` in their name.
+   While not immediately helpful to most end users, this operator is an
+   essential building block for many higher-level (often iterative)
+   algorithms, including approximate map analysis.
+
+3. **(Pseudo-)Analysis** (map :math:`\rightarrow a_{\ell m}` ):
+
+   These functions are an **attempt** to explain map values on a given
+   pixelization scheme by a set of :math:`a_{\ell m}` coefficients as
+   closely as possible.
+
+   In strong contrast to the synthesis operation, analysis will not be
+   exact in almost all situations, for a series of very different reasons:
+
+   - In most real-world scenarios the map contains more pixels than
+     there are degrees of freedom in the corresponding
+     :math:`a_{\ell m}` set. Consequently, :math:`\mathbf{S}` is not
+     square, making inversion impossible by definition.
+
+   - However, for a number of pixelization schemes there exist
+     quadrature rules which in this case (more pixels than harmonic
+     degrees of freedom) at least allow exact recovery of harmonic
+     coefficients from a map that was created by a preceding synthesis
+     operation.
+
+     In other words, ``analysis(synthesis(a_lm)) == a_lm`` will hold in all cases, while the opposite direction ``synthesis(analysis(map))`` will generally **not** be the same as ``map``.
+
+     In yet other words, for some pixelizations, ``analysis`` can be made to work as the "left-inverse" of ``synthesis``, but definitely not as the general inverse.
+
+     ``Ducc`` functions carrying out this kind of operation will contain ``analysis`` in their name, without the ``pseudo``.
+
+   - For other pixelizations (HEALPix is a prominent example), not even
+     the left-inverse property can be guaranteed, and the analysis
+     process will be performed by an iterative solver which aims to
+     find a set of ``a_lm`` whose synthesis is as close as possible to
+     the given map in a least-squares sense. Functions performing this
+     task will contain ``pseudo_analysis`` in their name.
 
 
 Typical workflows
@@ -33,7 +80,10 @@ Typical workflows
 Healpix Map Synthesis
 ~~~~~~~~~~~~~~~~~~~~~
 
-This workflow demonstrates how to generate a pixelized map from a set of :math:`a_{\ell m}` coefficients using :func:`ducc0.sht.synthesis`. This is the standard use case for generating input sky components (CMB, foregrounds…) on a pixel grid::
+This workflow demonstrates how to generate a pixelized map from a set
+of :math:`a_{\ell m}` coefficients using :func:`ducc0.sht.synthesis`.
+This is the standard use case for generating input sky components
+(CMB, foregrounds…) on a pixel grid::
 
   import ducc0
   import numpy as np
