@@ -1,3 +1,7 @@
+0.41.0:
+- nufft:
+  - performance improvements
+
 0.40.0:
 - general:
   - updated Github actions
