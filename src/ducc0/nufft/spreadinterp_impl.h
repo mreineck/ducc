@@ -994,10 +994,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr auto jump = hlp.lineJump();
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.nvec*hlp.vlen;
-     //   const auto * DUCC0_RESTRICT kv = hlp.buf.simd+hlp.nvec;
         using Tsimd = mysimd<Tacc>;
         constexpr size_t vlen=Tsimd::size();
-   //     constexpr size_t nvec = (SUPP+vlen-1)/vlen;
         constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
 
         constexpr size_t lookahead=10;
@@ -1042,7 +1040,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 #else
             for (size_t i=0; i<SUPP; ++i)
               {
-//              complex<Tacc> tmp=kv[i]*v;
               res[(2*i)/vlen][(2*i)%vlen] = xkv[i]*v.real();
               res[(2*i+1)/vlen][(2*i+1)%vlen] = xkv[i]*v.imag();
               }
@@ -1141,7 +1138,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             else
               {
-  // The repeated addition to tmpr and tmpi may be a bottleneck ...
+// The repeated addition to tmpr and tmpi may be a bottleneck ...
               for (size_t cu=0; cu<SUPP; ++cu)
                 {
                 mysimd<Tcalc> tmpr(0), tmpi(0);
@@ -1612,8 +1609,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
         const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
         const auto * DUCC0_RESTRICT kw = hlp.buf.scalar+2*hlp.vlen*hlp.nvec;
-//        using Tsimd = mysimd<Tacc>;
-//        constexpr size_t vlen = Tsimd::size();
 
         while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
           {
@@ -1734,7 +1729,6 @@ else
 
       using Tsimd = mysimd<Tcalc>;
       constexpr size_t vlen=Tsimd::size();
-  //    constexpr size_t nvec=(SUPP+vlen-1)/vlen;
       constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
 
       bool sorted = coords_sorted.size()!=0;
@@ -1799,7 +1793,7 @@ else
               }
             else
               {
-  // The repeated addition to tmp2r and tmp2i may be a bottleneck ...
+// The repeated addition to tmp2r and tmp2i may be a bottleneck ...
               for (size_t cu=0; cu<SUPP; ++cu)
                 {
                 mysimd<Tcalc> tmpr(0), tmpi(0);

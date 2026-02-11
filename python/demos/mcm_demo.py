@@ -11,27 +11,11 @@ os.environ["OMP_NUM_THREADS"]=str(nthreads)
 from pspy._mcm_fortran import mcm_compute as mcm_fortran
 import ducc0
 
-def format_toepliz_fortran2(coupling, l_toep, l_exact, lmax):
-    """Take a matrix and apply the toepliz appoximation (fortran)
-
-    Parameters
-    ----------
-
-    coupling: array
-      consist of an array where the upper part is the exact matrix and
-      the lower part is the diagonal. We will feed the off diagonal
-      of the lower part using the measurement of the correlation from the exact computatio
-    l_toep: integer
-      the l at which we start the approx
-    l_exact: integer
-      the l until which we do the exact computation
-    lmax: integer
-      the maximum multipole of the array
-    """
-    toepliz_array = np.zeros(coupling.shape)
-    mcm_fortran.toepliz_array_fortran2(toepliz_array.T, coupling.T, l_toep, l_exact)
-    toepliz_array[coupling != 0] = coupling[coupling != 0]
-    return toepliz_array
+def format_toeplitz_fortran2(coupling, l_toep, l_exact, lmax):
+    toeplitz_array = np.zeros(coupling.shape)
+    mcm_fortran.toepliz_array_fortran2(toeplitz_array.T, coupling.T, l_toep, l_exact)
+    toeplitz_array[coupling != 0] = coupling[coupling != 0]
+    return toeplitz_array
 
 # This routine is more complicated than mcm00_ducc, since a few multiplication
 # steps are carried out in Python in pspy, and since the array indices are
@@ -47,7 +31,7 @@ def mcm00_pspy(spec, lmax):
         wcl = spec[i]*(2*lrange_spec+1)
         mcm_fortran.calc_coupling_spin0(wcl, coupling=mcmtmp.T, l_exact=l_exact, l_band=dl_band, l_toeplitz=l_toeplitz)
         if l_exact < lmax:
-           mcmtmp = format_toepliz_fortran2(mcmtmp, l_toeplitz, l_exact, lmax)
+           mcmtmp = format_toeplitz_fortran2(mcmtmp, l_toeplitz, l_exact, lmax)
         mcm_fortran.fill_upper(mcmtmp.T)
         res[i, 2:, 2:] = mcmtmp[:-2,:-2]
     return res
@@ -63,27 +47,22 @@ def mcm02_pspy(spec, lmax):
         mcm_fortran.calc_coupling_spin0and2(wcl[0], wcl[1], wcl[2], wcl[3], coupling=mcmtmp.T, l_exact=l_exact, l_band=dl_band, l_toeplitz=l_toeplitz)
         for j in range(5):
             if l_exact < lmax:
-                mcmtmp[j] = format_toepliz_fortran2(mcmtmp[j], l_toeplitz, l_exact, lmax)
+                mcmtmp[j] = format_toeplitz_fortran2(mcmtmp[j], l_toeplitz, l_exact, lmax)
             mcm_fortran.fill_upper(mcmtmp[j].T)
         res[i, :, 2:, 2:] = mcmtmp[:,:-2,:-2]
     return res
 
 def mcm00_ducc(spec, l1, l2):
-    out= np.zeros((spec.shape[0],l1+1,l2+1),dtype=np.float32)
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float32)
     ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
 
 def mcm02_ducc(spec, l1, l2):
     nspec = spec.shape[0]
-    out= np.zeros((nspec*5,l1+1,l2+1),dtype=np.float32)
+    out= np.empty((nspec*5,l1+1,l2+1),dtype=np.float32)
     spec = spec.reshape((nspec*4, spec.shape[2]))
     optype = (0,1,1,4)*nspec
     ducc0.misc.experimental.coupling_matrix_rect(spec, optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-
-def mcmpm_ducc(spec, l1, l2):
-    out= np.empty((2*spec.shape[0],l1+1, l2+1),dtype=np.float32)
-    ducc0.misc.experimental.coupling_matrix_rect(spec[:,3,:], lmax, (4,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
 
 # lmax up to which the MCM will be computed
