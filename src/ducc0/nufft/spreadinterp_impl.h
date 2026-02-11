@@ -1122,7 +1122,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                    : hlp.prep({coords(row,0), coords(row,1)});
             mysimd<Tcalc> rr=0, ri=0;
             const array<Tsimd, hlp.nvec> xkv = [&]() constexpr noexcept {
-            array<Tacc, hlp.nvec> tmp;
+            array<Tsimd, hlp.nvec> tmp;
             for (size_t i=0; i<hlp.nvec; ++i)
               tmp[i] = kv[i];
             return tmp;
@@ -1767,7 +1767,7 @@ else
             sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                    : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
             const array<Tsimd, hlp.nvec> xkw = [&]() constexpr noexcept {
-            array<Tacc, hlp.nvec> tmp;
+            array<Tsimd, hlp.nvec> tmp;
             for (size_t i=0; i<hlp.nvec; ++i)
               tmp[i] = kw[i];
             return tmp;
