@@ -1021,7 +1021,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             } ();
 
           constexpr auto vlen=hlp.vlen;
-          const auto vdata = [&xkv,v]() constexpr noexcept
+          const auto vdata = [&xkv,v]()
             {
             array<mysimd<Tacc>,nvec2> res;
 #if 0
@@ -1118,7 +1118,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                    : hlp.prep({coords(row,0), coords(row,1)});
             mysimd<Tcalc> rr=0, ri=0;
-            const array<Tsimd, hlp.nvec> xkv = [&]() constexpr noexcept {
+            const array<Tsimd, hlp.nvec> xkv = [&]() {
             array<Tsimd, hlp.nvec> tmp;
             for (size_t i=0; i<hlp.nvec; ++i)
               tmp[i] = kv[i];
@@ -1179,7 +1179,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                    : hlp.prep({coords(row,0), coords(row,1)});
-            const array<Tacc, SUPP> xku = [&]() constexpr noexcept {
+            const array<Tacc, SUPP> xku = [&]() {
               array<Tacc, SUPP> tmp;
               for (size_t i=0; i<SUPP; ++i)
                 tmp[i] = ku[i];
@@ -1625,7 +1625,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
                  : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
           complex<Tacc> v(points(row));
 
-          const array<Tacc, SUPP> xkv = [&]() constexpr noexcept {
+          const array<Tacc, SUPP> xkv = [&]() {
             array<Tacc, SUPP> tmp;
             for (size_t i=0; i<SUPP; ++i)
               tmp[i] = kv[i];
@@ -1633,7 +1633,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
             }();
 #if 0
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
-          const array<Tsimd, nvec2> xdata = [&]() constexpr noexcept {
+          const array<Tsimd, nvec2> xdata = [&]() {
             array<Tsimd, nvec2> xdata;
             for (size_t cw=0; cw<SUPP; ++cw)
               {
@@ -1667,7 +1667,7 @@ if constexpr(SUPP<=8)
           constexpr size_t nvec=(SUPP+vlen-1)/vlen;
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
-          const array<Tsimd, nvec2> xdata = [&]() constexpr noexcept {
+          const array<Tsimd, nvec2> xdata = [&]() {
             array<Tsimd, nvec2> xdata;
             for (size_t cw=0; cw<nvec*vlen; ++cw)
               {
@@ -1692,7 +1692,7 @@ if constexpr(SUPP<=8)
 else
 #endif
   {
-          const array<Tacc, 2*SUPP> xdata = [&]() constexpr noexcept {
+          const array<Tacc, 2*SUPP> xdata = [&]() {
             array<Tacc, 2*SUPP> xdata;
             for (size_t cw=0; cw<SUPP; ++cw)
               {
@@ -1760,13 +1760,13 @@ else
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1), coords(ix,2)})
                    : hlp.prep({coords(row,0), coords(row,1), coords(row,2)});
-            const array<Tsimd, hlp.nvec> xkw = [&]() constexpr noexcept {
+            const array<Tsimd, hlp.nvec> xkw = [&]() {
             array<Tsimd, hlp.nvec> tmp;
             for (size_t i=0; i<hlp.nvec; ++i)
               tmp[i] = kw[i];
             return tmp;
             }();
-            const array<Tcalc, SUPP> xkv = [&]() constexpr noexcept {
+            const array<Tcalc, SUPP> xkv = [&]() {
             array<Tacc, SUPP> tmp;
             for (size_t i=0; i<SUPP; ++i)
               tmp[i] = kv[i];
