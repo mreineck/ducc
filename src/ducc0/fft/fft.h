@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc FFT library
 
-Copyright (C) 2010-2025 Max-Planck-Society
+Copyright (C) 2010-2026 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
 
 Authors: Martin Reinecke, Peter Bell
@@ -60,6 +60,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory>
 #include <vector>
 #include <complex>
+#include <algorithm>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/mav.h"
@@ -286,7 +287,7 @@ template<typename Tfs> class pocketfft_c
     Tcpass<Tfs> plan;
 
   public:
-    pocketfft_c(size_t n, bool vectorize=false)
+    explicit pocketfft_c(size_t n, bool vectorize=false)
       : N(n), critbuf(((N&1023)==0) ? 16 : 0),
         plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
@@ -335,7 +336,7 @@ template<typename Tfs> class pocketfft_r
     Trpass<Tfs> plan;
 
   public:
-    pocketfft_r(size_t n, bool vectorize=false)
+    explicit pocketfft_r(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize(); }
@@ -384,7 +385,7 @@ template<typename Tfs> class pocketfft_hartley
     Trpass<Tfs> plan;
 
   public:
-    pocketfft_hartley(size_t n, bool vectorize=false)
+    explicit pocketfft_hartley(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
@@ -430,7 +431,7 @@ template<typename Tfs> class pocketfft_fht
     Trpass<Tfs> plan;
 
   public:
-    pocketfft_fht(size_t n, bool vectorize=false)
+    explicit pocketfft_fht(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
@@ -477,7 +478,7 @@ template<typename Tfs> class pocketfft_fftw
     Trpass<Tfs> plan;
 
   public:
-    pocketfft_fftw(size_t n, bool vectorize=false)
+    explicit pocketfft_fftw(size_t n, bool vectorize=false)
       : N(n), plan(rfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
     size_t bufsize() const { return N+plan->bufsize(); }
@@ -544,7 +545,7 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE T_dct1(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dct1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length-1)) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
@@ -589,7 +590,7 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE T_dst1(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dst1(size_t length, bool /*vectorize*/=false)
       : fftplan(2*(length+1)) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
@@ -629,7 +630,7 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
-    DUCC0_NOINLINE T_dcst23(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dcst23(size_t length, bool /*vectorize*/=false)
       : fftplan(length), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
@@ -728,7 +729,7 @@ template<typename T0> class T_dcst4
     size_t bufsz;
 
   public:
-    DUCC0_NOINLINE T_dcst4(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dcst4(size_t length, bool /*vectorize*/=false)
       : N(length),
         fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
         rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),

@@ -127,11 +127,11 @@ nthreads: int >= 0
     if 0, use as many threads as there are hardware threads available on the system
 mmax_in : None or int >= 0, <= lmax
     The maximum m order in the input
-    Coefficients with higher m are assumed to be zero. 
+    Coefficients with higher m are assumed to be zero.
     If not provided, this is set to lmax.
 mmax_out : None or int >= 0, <= lmax
     The maximum m order in the output
-    Coefficients with higher m are not provided in the output. 
+    Coefficients with higher m are not provided in the output.
     If not provided, this is set to lmax.
 out : None or numpy.ndarray(([ncomp,] ncoeff_out,), same dtype and shape as `alm`)
     ncoeff_out = ((mmax_out+1)*(mmax_out+2))//2 + (mmax_out+1)*(lmax-mmax_out)
@@ -1829,7 +1829,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis_general(
 py::tuple Py_pseudo_analysis_general(
   size_t lmax,
   const CNpArr &map, const CNpArr &loc, size_t spin,
-  size_t nthreads, size_t maxiter, double epsilon, double sigma_min, 
+  size_t nthreads, size_t maxiter, double epsilon, double sigma_min,
   double sigma_max, const OptCNpArr &mstart, ptrdiff_t lstride,
   const OptSizeT &mmax_, const OptNpArr &alm, bool verbose=false,
   bool alm_contains_initial_guess=false)

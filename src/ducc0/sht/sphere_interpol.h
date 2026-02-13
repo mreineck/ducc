@@ -489,7 +489,7 @@ template<typename T> class SphereInterpol
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
-      
+
       vmav<size_t,1> mval({mmax+1}, UNINITIALIZED);
       for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
@@ -640,7 +640,7 @@ template<typename T> class SphereInterpol
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
-      
+
       vmav<size_t,1> mval({mmax+1}, UNINITIALIZED);
       for (size_t i=0; i<=mmax; ++i)
         mval(i) = i;
@@ -662,6 +662,7 @@ template<typename T> class SphereInterpol
     vmav<T,3> build_planes() const
       {
       size_t nplanes=1+(spin>0);
+//FIXME: make theta direction stride 1?
       auto planes_ = vmav<T,4>::build_noncritical({nplanes, Ntheta(), (Nphi()+1)/2, 2}, PAGE_IN(nthreads));
       vmav<T,3> planes = planes_.template reinterpret<3>(
         {nplanes, Ntheta(), Nphi()}, {planes_.stride(0), planes_.stride(1), 1});

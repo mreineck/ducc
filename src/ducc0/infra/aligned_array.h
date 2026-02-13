@@ -123,9 +123,9 @@ template<typename T, size_t alignment=alignof(T)> class array_base
     array_base() : p(nullptr), sz(0) {}
     /// Creates an array with \a n entries.
     /** \note Memory is not initialized! */
-    array_base(size_t n) : p(ralloc(n)), sz(n) {}
+    explicit array_base(size_t n) : p(ralloc(n)), sz(n) {}
     array_base(const array_base &) = delete;
-    array_base(array_base &&other)
+    array_base(array_base &&other) noexcept
       : p(other.p), sz(other.sz)
       { other.p=nullptr; other.sz=0; }
     ~array_base() { dealloc(p); }

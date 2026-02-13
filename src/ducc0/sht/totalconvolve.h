@@ -463,7 +463,7 @@ template<typename T> class ConvolverPlan
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
-      
+
       vmav<size_t,1> mval({lmax+1}, UNINITIALIZED);
       vmav<size_t,1> mstart({lmax+1}, UNINITIALIZED);
       size_t ofs=0;
@@ -622,7 +622,7 @@ template<typename T> class ConvolverPlan
       vmav<double,1> theta({ntheta_s}, UNINITIALIZED);
       for (size_t i=0; i<ntheta_s; ++i)
         theta(i) = (i*pi)/(ntheta_s-1);
-      
+
       vmav<size_t,1> mval({lmax+1}, UNINITIALIZED);
       vmav<size_t,1> mstart({lmax+1}, UNINITIALIZED);
       size_t ofs=0;
@@ -703,7 +703,7 @@ template<typename T> class ConvolverPlan
       return cube;
       }
 
-    size_t Nthreads() const { return nthreads; }    
+    size_t Nthreads() const { return nthreads; }
   };
 
 }

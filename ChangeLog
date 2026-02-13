@@ -1,3 +1,25 @@
+0.41.0:
+- nufft:
+  - performance improvements
+
+0.40.0:
+- general:
+  - updated Github actions
+  - added demonstration code for generating ring and pixel weights for
+    Healpix in not_yet_integrated/healpix_weights.py
+  - not visible from Python: various minor cleanups to the
+    C++ code (making constructors explicit, ...)
+
+- misc:
+  - bug fix in OofaNoise: the parameters "f_min" and "f_knee" were
+    internally flipped. This is now fixed, and the constructor is now
+    keyword-only, to avoid silent change in behaviour.
+
+- sht:
+  - tweaks to memory layouts of temporary arrays, which may improve
+    performance in some circumstances.
+
+
 0.39.1:
 - general:
   - Workaround for compilation problems on Alpine Linux

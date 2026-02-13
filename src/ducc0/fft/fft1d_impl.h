@@ -469,7 +469,7 @@ template <typename Tfs> class cfftp5: public cfftpass<Tfs>
 
 #define POCKETFFT_PARTSTEP5b(u1,u2,twar,twbr,twai,twbi) \
         { \
-        Tcd ca,cb,da,db; \
+        Tcd ca,cb; \
         ca.r=t0.r+twar*t1.r+twbr*t2.r; \
         ca.i=t0.i+twar*t1.i+twbr*t2.i; \
         cb.i=twai*t4.r twbi*t3.r; \
@@ -1649,7 +1649,7 @@ MR_fail("must not get here");
     virtual size_t footprint() const
       {
       size_t res = myroots->footprint();
-      for (const auto &p: passes) res += p->footprint(); 
+      for (const auto &p: passes) res += p->footprint();
       return res;
       }
 
@@ -2895,7 +2895,7 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     virtual size_t footprint() const
       {
       size_t res = wa.size()*sizeof(Tfs);
-      for (const auto &p: passes) res += p->footprint(); 
+      for (const auto &p: passes) res += p->footprint();
       return res;
       }
 

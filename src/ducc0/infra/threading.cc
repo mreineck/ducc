@@ -99,7 +99,7 @@ class custom_latch
     std::atomic<std::ptrdiff_t> val;
 
   public:
-    custom_latch(std::ptrdiff_t start)
+    explicit custom_latch(std::ptrdiff_t start)
       : val(start) {}
 
     void count_down()
@@ -144,7 +144,7 @@ size_t ducc0_default_num_threads()
   static const size_t num_threads_ = []()
     {
     static size_t res = available_hardware_threads();
-    auto evar=getenv("DUCC0_NUM_THREADS");
+    auto *evar=getenv("DUCC0_NUM_THREADS");
     // fallback
     if (!evar)
       evar=getenv("OMP_NUM_THREADS");
@@ -158,13 +158,13 @@ size_t ducc0_default_num_threads()
     }();
   return num_threads_;
   }
- 
+
 static thread_local bool in_parallel_region = false;
 int pin_info()
   {
   static const int pin_info_ = []()
     {
-    auto evar=getenv("DUCC0_PIN_DISTANCE");
+    auto *evar=getenv("DUCC0_PIN_DISTANCE");
     if (!evar)
       return -1; // do nothing at all
     auto res = stringToData<long>(trim(std::string(evar)));
@@ -176,7 +176,7 @@ int pin_offset()
   {
   static const int pin_offset_ = []()
     {
-    auto evar=getenv("DUCC0_PIN_OFFSET");
+    auto *evar=getenv("DUCC0_PIN_OFFSET");
     if (!evar)
       return 0;
     auto res = stringToData<long>(trim(std::string(evar)));
@@ -322,7 +322,7 @@ class ducc_thread_pool: public thread_pool
 // return a pointer to a singleton thread_pool, which is always available
 inline ducc_thread_pool *get_master_pool()
   {
-  static auto master_pool = new ducc_thread_pool(ducc0_default_num_threads()-1);
+  static auto *master_pool = new ducc_thread_pool(ducc0_default_num_threads()-1);
 #if __has_include(<pthread.h>)
   static std::once_flag f;
   call_once(f,
@@ -414,7 +414,7 @@ class Distribution
     std::atomic<size_t> cur_dynamic_;
     size_t chunksize_;
     double fact_max_;
-    struct alignas(64) spaced_size_t { size_t v; }; 
+    struct alignas(64) spaced_size_t { size_t v; };
     std::vector<spaced_size_t> nextstart;
     enum SchedMode { SINGLE, STATIC, DYNAMIC, GUIDED };
     SchedMode mode;

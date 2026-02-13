@@ -513,7 +513,7 @@ template<typename I> template<typename I2>
     // TODO: ignore all disks with radius>=pi
 
     vector<T_Healpix_Base<I> > base(omax+1);
-    vmav<double,3> crlimit({size_t(omax)+1,nv,3}, UNINITIALIZED);
+    vmav<double,3> crlimit({omax+1,nv,3}, UNINITIALIZED);
     for (size_t o=0; o<=omax; ++o) // prepare data at the required orders
       {
       base[o].Set(o,NEST);

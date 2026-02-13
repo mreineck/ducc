@@ -345,7 +345,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
     using parent::parent; /* inherit constructor */
     using parent::get_gridsize;
     Nufft(bool gridding, const cmav<Tcoord,2> &coords,
-          const vector<size_t> &uniform_shape_, double epsilon_, 
+          const vector<size_t> &uniform_shape_, double epsilon_,
           size_t nthreads_, double sigma_min, double sigma_max,
           const vector<double> &periodicity, bool fft_order_,
           const vector<double> &corigin=vector<double>())
@@ -514,7 +514,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   MR_assert(ndim==coord.shape(1), "dimensionality mismatch");
   Nufft<Tcalc, Tacc, Tcoord> nufft(true, points.shape(0), uniform.shape(),
     epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-  nufft.nu2u(forward, verbosity, coord, points, uniform); 
+  nufft.nu2u(forward, verbosity, coord, points, uniform);
   }
 template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
   void u2nu(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
@@ -527,7 +527,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
   MR_assert(ndim==coord.shape(1), "dimensionality mismatch");
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points.shape(0), uniform.shape(),
     epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-  nufft.u2nu(forward, verbosity, uniform, coord, points); 
+  nufft.u2nu(forward, verbosity, uniform, coord, points);
   }
 
 template<typename T> auto get_mid_hdelta (const cmav<T,2> &v, size_t nthreads)
@@ -633,7 +633,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
 
       auto krn2 = selectKernel(kidx);
-      const auto &corr(krn2->Corr()); 
+      const auto &corr(krn2->Corr());
       fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
@@ -701,7 +701,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
           (*points_in_2)(i) = points_in(i) * (forward ? fact_out(i) : conj(fact_out(i)));
         });
       auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
-      nufft->nu2u(!forward, 0, *points_in_2, grid); 
+      nufft->nu2u(!forward, 0, *points_in_2, grid);
       points_in_2.reset();
       spreadinterp->interp(grid, points_out);
       }
@@ -747,7 +747,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
 
   const auto &krn(getKernel(kidx));
   auto krn2 = selectKernel(kidx);
-  const auto &corr(krn2->Corr()); 
+  const auto &corr(krn2->Corr());
 
   Tpoints psign = forward ? -1 : 1;
 
@@ -790,7 +790,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     period_out.push_back(dims[d]/gamma[d]);
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
     epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
-  nufft.u2nu(forward, 0, grid, coord_out, points_out); 
+  nufft.u2nu(forward, 0, grid, coord_out, points_out);
   }
 
   timers.poppush("output post-phasing and deconvolution");

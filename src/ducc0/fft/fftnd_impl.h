@@ -1424,7 +1424,7 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
       return;
       }
     }
- 
+
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T> >&>(in));
   const auto &out2(reinterpret_cast<const vfmav<Cmplx<T> >&>(out));
   if ((axes.size()>1) && (in.data()!=out.data())) // optimize axis order

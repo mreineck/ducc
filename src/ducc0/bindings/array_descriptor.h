@@ -117,7 +117,7 @@ struct ArrayDescriptor
           str[i] = stride[i];
           }
       }
-    
+
     template<bool swapdims, typename T, size_t ndim2> auto prep1() const
       {
       static_assert(ndim2<=maxdim, "dimensionality too high");
