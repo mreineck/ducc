@@ -986,6 +986,7 @@ numpy.ndarray(npoints, dtype=numpy.complex64 or numpy.complex128)
 void add_nufft(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("nufft");
   auto m2 = m.def_submodule("experimental");
 

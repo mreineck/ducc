@@ -2315,6 +2315,7 @@ to adjust your code at some point ion the future!
 void add_pythonfuncs(py::module_ &m)
   {
   using namespace py::literals;
+  auto None = py::none();
 
   m.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a,
     "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1,
@@ -2400,6 +2401,7 @@ void add_pythonfuncs(py::module_ &m)
 void add_sht(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");

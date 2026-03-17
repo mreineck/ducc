@@ -935,6 +935,7 @@ out : int
 void add_fft(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("fft");
   m.doc() = fft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,

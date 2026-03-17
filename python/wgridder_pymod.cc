@@ -584,6 +584,7 @@ to adjust your code at some point ion the future!
 void add_pythonfuncs(py::module_ &m)
   {
   using namespace py::literals;
+  auto None = py::none();
 
   m.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
@@ -601,6 +602,7 @@ void add_pythonfuncs(py::module_ &m)
 void add_wgridder(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("wgridder");
   auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 

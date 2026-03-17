@@ -1858,6 +1858,7 @@ to adjust your code at some point in the future!
 void add_misc(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 

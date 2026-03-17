@@ -633,7 +633,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       {
       MR_assert(coords.shape(1)==ndim, "ndim mismatch");
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
@@ -1207,7 +1207,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       {
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
       size_t ntiles_v = (nover[1]>>log2tile) + 3;
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
@@ -1900,7 +1900,7 @@ else
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
