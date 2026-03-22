@@ -133,3 +133,17 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
+# Rokhlin PSWF kernel (m=n=0)
+def kernel(x, par):
+    x=np.array(x)
+    c = par[0]
+    return ducc0.misc.experimental.pswf0(c,x)
+
+print("Table for Rokhlin PSWF(m=n=0) kernels")
+for ofactor in ofactors:
+    for W in Ws:
+        par_min=[0]
+        par_max=[50]
+        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        print(W, ofactor, err, res)
+

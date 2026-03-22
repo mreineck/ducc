@@ -37,6 +37,7 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/mcm.h"
+#include "ducc0/math/pswf_rokhlin.h"
 #include "ducc0/math/quaternion.h"
 #include "ducc0/bindings/pybind_utils.h"
 
@@ -1785,6 +1786,20 @@ numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
     Identical to `out` if it was provided.
 )""";
 
+static NpArr Py_pswf0(double c, const CNpArr &x_, const OptNpArr &out__)
+  {
+  const auto x = to_cfmav<double>(x_);
+  const auto [out_, out] = get_OptNpArr_and_vfmav<double>(out__, x.shape());
+  {
+  py::gil_scoped_release release;
+  PSWF0 pswf(c);
+  mav_apply([pswf](const double &x, double &val)
+    {
+    val = pswf(x);
+    }, 1, x, out);
+  }
+  return out_;
+  }
 
 static void print_diagnostics()
   {
@@ -1911,6 +1926,8 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
+
+  m2.def("pswf0", Py_pswf0, "c"_a, "x"_a, "out"_a=None);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
