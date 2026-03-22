@@ -10,11 +10,16 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include "ducc0/infra/mav.h"
+#include "ducc0/infra/simd.h"
 
 namespace ducc0 {
 
 constexpr int PSWF_ERROR = 42;
 
+/* Class for evaluation of the prolate spheroidal wavefunction
+   of order zero (Psi_0^c) inside [-1,1], for arbitrary frequency parameter c.
+   Computation is done using a basis of Legendre polynomials. */
 class PSWF0 {
 private:
   double c;
@@ -171,13 +176,13 @@ private:
       err = std::sqrt(err);
     }
 
-    int nterms=0;
+    int imax=0;
     for (int i = 0; i < n / 2; ++i) {
-      if (std::abs(xk[i]) > eps) nterms = i + 1;
+      if (std::abs(xk[i]) > eps) imax = i;
       xk[i] *= std::sqrt(i * 2 + .5);
+//      if (std::abs(xk[i]) > eps) imax = i;
     }
-
-    xk.resize(nterms + 1);
+    xk.resize(imax + 1);
   }
 
   static void prolps0i(double c, std::vector<double> &work) {
@@ -191,17 +196,31 @@ private:
     prolfun0(n, c, work, 1e-16);
   }
 
-  double eval_raw(double x) const {
-    int n       = workdata.size()*2 - 4;  // FIXME: why?
-    double pjm2 = 1.0;
-    double pjm1 = x;
+  template<typename T> T eval_raw(T x) const {
+    T pjm1 = 0;
+    T pjm2 = 1;
+    T val = workdata[0];
 
-    double val = workdata[0];
+    size_t i=1;
 
-    for (int j = 2; j <= n; j += 2) {
-      pjm2 = (f1[j]+1.) * x * pjm1 - f1[j] * pjm2;
-      val += workdata[j / 2] * pjm2;
-      pjm1 = (f1[j+1]+1.) * x * pjm2 - f1[j + 1] * pjm1;
+    for (; i + 4 <= workdata.size(); i+=4) {
+      pjm1 = (f1[2*i-2]+1.) * x * pjm2 - f1[2*i-2] * pjm1;
+      pjm2 = (f1[2*i-1]+1.) * x * pjm1 - f1[2*i-1] * pjm2;
+      val += workdata[i] * pjm2;
+      pjm1 = (f1[2*i  ]+1.) * x * pjm2 - f1[2*i  ] * pjm1;
+      pjm2 = (f1[2*i+1]+1.) * x * pjm1 - f1[2*i+1] * pjm2;
+      val += workdata[i+1] * pjm2;
+      pjm1 = (f1[2*i+2]+1.) * x * pjm2 - f1[2*i+2] * pjm1;
+      pjm2 = (f1[2*i+3]+1.) * x * pjm1 - f1[2*i+3] * pjm2;
+      val += workdata[i+2] * pjm2;
+      pjm1 = (f1[2*i+4]+1.) * x * pjm2 - f1[2*i+4] * pjm1;
+      pjm2 = (f1[2*i+5]+1.) * x * pjm1 - f1[2*i+5] * pjm2;
+      val += workdata[i+3] * pjm2;
+    }
+    for (; i < workdata.size(); ++i) {
+      pjm1 = (f1[2*i-2]+1.) * x * pjm2 - f1[2*i-2] * pjm1;
+      pjm2 = (f1[2*i-1]+1.) * x * pjm1 - f1[2*i-1] * pjm2;
+      val += workdata[i] * pjm2;
     }
     return val;
   }
@@ -209,10 +228,9 @@ private:
 public:
   PSWF0(double c_) : c(c_) {
     prolps0i(c, workdata);
-    f1.resize(2 * workdata.size());
-    f1[0] = 0;
-    for (size_t i = 1; i < f1.size(); ++i)
-      f1[i] = (i - 1.) / i;
+    f1.resize(2 * workdata.size() - 2);
+    for (size_t i = 0; i < f1.size(); ++i)
+      f1[i] = i / (i+1.);
     xv0 = 1. / eval_raw(0.);
   }
 
@@ -220,40 +238,24 @@ public:
     if (std::abs(x) > 1) return 0.;
     return eval_raw(x) * xv0;
   }
-#if 0
-  void multi_eval(const std::vector<double> &x, std::vector<double> &res) const {
-    int n = workdata.size()*2 - 4;  // FIXME: why?
-    res.resize(x.size());
 
-    constexpr int blksz = 4;
-    size_t i            = 0;
-    for (; i + blksz <= x.size(); i += blksz) {
-      std::array<double, blksz> xx, pjm1, pjm2, val;
+  void multi_eval(const cmav<double,1> &x, const vmav<double,1> &res) const {
+    MR_assert(x.size()==res.size(), "array size mismatch");
 
-      for (int m = 0; m < blksz; ++m) {
-        val[m]  = workdata[0];
-        pjm2[m] = 1.0;
-        xx[m]   = x[i + m];
-        pjm1[m] = xx[m];
-      }
-
-      for (int j = 2; j <= n; j += 2) {
-        for (int m = 0; m < blksz; ++m) {
-          pjm2[m] = (f1[j]+1.) * xx[m] * pjm1[m] - f1[j] * pjm2[m];
-          val[m] += workdata[j / 2] * pjm2[m];
-          pjm1[m] = (f1[j + 1]+1.) * xx[m] * pjm2[m] - f1[j + 1] * pjm1[m];
-        }
-      }
-
-      for (int m = 0; m < blksz; ++m) res[i + m] = val[m] * xv0;
+    using Tv = native_simd<double>;
+    constexpr size_t vlen = Tv::size();
+    size_t i = 0;
+    for (; i + vlen <= x.size(); i += vlen) {
+      Tv xx;
+      for (size_t m = 0; m < vlen; ++m) xx[m] = x(i + m);
+      const auto val = eval_raw(xx);
+      for (size_t m = 0; m < vlen; ++m)
+        res(i + m) = (std::abs(xx[m])>1) ? 0 : val[m] * xv0;
     }
 
-    for (; i < x.size(); ++i) res[i] = eval_raw(x[i]) * xv0;
-
-    for (size_t j = 0; j < x.size(); ++j)
-      if (std::abs(x[j]) > 1.) res[j] = 0.;
+    for (; i < x.size(); ++i) res(i) = operator()(x(i));
   }
-#endif
+
 };
 
 }

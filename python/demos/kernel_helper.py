@@ -56,6 +56,12 @@ mach_eps = 2.2e-16  # for double precision; use 1.19e-07 for single precision
 D = 1  # dimensionality
 nthreads=8
 
+ofactors = np.linspace(2,2,1)  # the oversampling factors to consider
+Ws = np.arange(4,17)  # range of kernel supports
+mach_eps = 2.2e-16  # for double precision; use 1.19e-07 for single precision
+D = 1  # dimensionality
+nthreads=8
+
 # Kaiser-Bessel kernel
 def kernel(x, par):
     x=np.array(x)
@@ -147,3 +153,17 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
+# print("Table for Rokhlin PSWF(m=n=0) kernels, heuristic for c parameter")
+# for ofactor in ofactors:
+    # for W in Ws:
+        # beta_cutoff = np.pi * W * (1.0 - 1.0 / (2.0 * ofactor)) - 0.05
+        # par_min=[beta_cutoff*0.9999]
+        # par_max=[beta_cutoff*1.0001]
+        # res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        # print(W, ofactor, err, res)
+
+from time import time
+args=np.arange(100000000.)/100000000.
+t0 = time()
+ducc0.misc.experimental.pswf0(38.,args)
+print("time:",time()-t0)

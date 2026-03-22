@@ -1788,15 +1788,17 @@ numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
 
 static NpArr Py_pswf0(double c, const CNpArr &x_, const OptNpArr &out__)
   {
-  const auto x = to_cfmav<double>(x_);
-  const auto [out_, out] = get_OptNpArr_and_vfmav<double>(out__, x.shape());
+  const auto x = to_cmav<double,1>(x_);
+  const auto [out_, out] = get_OptNpArr_and_vmav<double,1>(out__, {x.shape(0)});
   {
   py::gil_scoped_release release;
   PSWF0 pswf(c);
-  mav_apply([pswf](const double &x, double &val)
-    {
-    val = pswf(x);
-    }, 1, x, out);
+
+  //mav_apply([pswf](const double &x, double &val)
+    //{
+    //val = pswf(x);
+    //}, 1, x, out);
+  pswf.multi_eval(x, out);
   }
   return out_;
   }
