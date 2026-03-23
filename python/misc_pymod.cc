@@ -875,89 +875,6 @@ To generate multiple independent noise streams, use different `OofaNoise`
 objects (and supply them with independent Gaussian noise streams)!
 )""";
 
-class PolynomialFunctionApproximator
-  {
-  private:
-    size_t W, D;
-    vector<double> coeff;
-
-    static vector<double> getCoeffs(size_t W, size_t D,
-      const function<vector<double>(const vector<double> &)> &func)
-      {
-      vector<double> coeff(W*(D+1));
-      vector<double> chebroot(D+1);
-      for (size_t i=0; i<=D; ++i)
-        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
-      vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
-      vector<double> locations(W*(D+1));
-      for (size_t i=0; i<W; ++i)
-        {
-        double l = -1+2.*i/double(W);
-        double r = -1+2.*(i+1)/double(W);
-        for (size_t j=0; j<=D; ++j)
-          locations[i*(D+1)+j] = chebroot[j]*(r-l)*0.5 + (r+l)*0.5;
-        }
-      // function values at Chebyshev nodes
-      auto funcval(func(locations));
-
-      for (size_t i=0; i<W; ++i)
-        {
-        double avg = 0;
-        for (size_t j=0; j<=D; ++j)
-          {
-          y[j] = funcval[i*(D+1)+j];
-          avg += y[j];
-          }
-        avg/=(D+1);
-        for (size_t j=0; j<=D; ++j)
-          y[j] -= avg;
-        // Chebyshev coefficients
-        for (size_t j=0; j<=D; ++j)
-          {
-          lcf[j] = 0;
-          for (size_t k=0; k<=D; ++k)
-            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
-          }
-        lcf[0] *= 0.5;
-        // Polynomial coefficients
-        fill(C.begin(), C.end(), 0.);
-        C[0] = 1.;
-        C[1*(D+1) + 1] = 1.;
-        for (size_t j=2; j<=D; ++j)
-          {
-          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
-          for (size_t k=1; k<=j; ++k)
-            C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
-          }
-        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
-        for (size_t j=0; j<=D; ++j)
-          for (size_t k=0; k<=D; ++k)
-            lcf2[k] += C[j*(D+1) + k]*lcf[j];
-        lcf2[0] += avg;
-        for (size_t j=0; j<=D; ++j)
-          coeff[j*W + i] = lcf2[D-j];
-        }
-      return coeff;
-      }
-  public:
-    PolynomialFunctionApproximator(size_t W_, size_t D_,
-      const function<vector<double>(const vector<double> &)> &func)
-      : W(W_), D(D_), coeff(getCoeffs(W_, D_, func)) {}
-
-    double operator()(double x) const
-      {
-      if (abs(x)>=1) return 0.;
-      double xrel = W*0.5*(x+1.);
-      size_t nth = size_t(xrel);
-      nth = min<size_t>(nth, W-1);
-      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
-      double res = coeff[nth];
-      for (size_t i=1; i<=D; ++i)
-        res = res*locx+coeff[i*W+nth];
-      return res;
-      }
-  };
-
 static double get_max_kernel_error(const function<vector<double>(const vector<double> &,
     const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
@@ -968,12 +885,12 @@ static double get_max_kernel_error(const function<vector<double>(const vector<do
   size_t nx = size_t(2*x0*N+0.9999)+1;
   vector<double> corr;
   vmav<double,2> Cr({M,W});
-  unique_ptr<PolynomialFunctionApproximator> lamptr;
+  unique_ptr<FunctionApproximator<double>> lamptr;
   {
   py::gil_scoped_acquire acquire;
   function<vector<double>(const vector<double> &)> lam_
     = [&par,&func_](const vector<double> &v){ return func_(v, par); };
-  lamptr = make_unique<PolynomialFunctionApproximator>(W, W+3, lam_);
+  lamptr = make_unique<FunctionApproximator<double>>(-1., 1., W, W+3, lam_);
   }
   const auto &lam(*lamptr);
 
