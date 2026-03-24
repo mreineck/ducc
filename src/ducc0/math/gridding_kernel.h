@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2020-2024 Max-Planck-Society
+/* Copyright (C) 2020-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_GRIDDING_KERNEL_H
@@ -42,7 +42,112 @@ namespace detail_gridding_kernel {
 
 using namespace std;
 
-vector<double> getCoeffs(size_t W, size_t D, const function<double(double)> &func);
+template<typename Tv> class FunctionApproximator
+  {
+  private:
+    double lo, hi, inv_len;
+    size_t W, D;
+    vector<Tv> coeff;
+
+    void getCoeffs(const function<vector<Tv>(const vector<double> &)> &func)
+      {
+      coeff.resize(W*(D+1));
+      vector<double> chebroot(D+1);
+      for (size_t i=0; i<=D; ++i)
+        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
+      vector<Tv> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
+      vector<double> locations(W*(D+1));
+      for (size_t i=0; i<W; ++i)
+        {
+        double l = -1+2.*i/double(W);
+        double r = -1+2.*(i+1)/double(W);
+        for (size_t j=0; j<=D; ++j)
+          locations[i*(D+1)+j] = ((chebroot[j]*(r-l)*0.5 + (r+l)*0.5)+1.)*0.5*(hi-lo)+lo;
+        }
+      // function values at Chebyshev nodes
+      auto funcval(func(locations));
+
+      for (size_t i=0; i<W; ++i)
+        {
+        Tv avg = 0;
+        for (size_t j=0; j<=D; ++j)
+          {
+          y[j] = funcval[i*(D+1)+j];
+          avg += y[j];
+          }
+        avg/=(D+1);
+        for (size_t j=0; j<=D; ++j)
+          y[j] -= avg;
+        // Chebyshev coefficients
+        for (size_t j=0; j<=D; ++j)
+          {
+          lcf[j] = 0;
+          for (size_t k=0; k<=D; ++k)
+            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
+          }
+        lcf[0] *= 0.5;
+        // Polynomial coefficients
+        fill(C.begin(), C.end(), 0.);
+        C[0] = 1.;
+        C[1*(D+1) + 1] = 1.;
+        for (size_t j=2; j<=D; ++j)
+          {
+          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
+          for (size_t k=1; k<=j; ++k)
+            C[j*(D+1) + k] = 2.*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
+          }
+        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
+        for (size_t j=0; j<=D; ++j)
+          for (size_t k=0; k<=D; ++k)
+            lcf2[k] += C[j*(D+1) + k]*lcf[j];
+        lcf2[0] += avg;
+        for (size_t j=0; j<=D; ++j)
+          coeff[i*(D+1) + j] = lcf2[D-j];
+        }
+      }
+
+  public:
+    FunctionApproximator(double lo_, double hi_, size_t W_, size_t D_, const function<vector<Tv>(const vector<double> &)> &func)
+      : lo(lo_), hi(hi_), inv_len(1./(hi_-lo_)), W(W_), D(D_)
+      { getCoeffs(func); }
+    FunctionApproximator(double lo_, double hi_, size_t W_, size_t D_, const function<Tv(double)> &func)
+      : lo(lo_), hi(hi_), inv_len(1./(hi_-lo_)), W(W_), D(D_)
+      {
+      getCoeffs([func](const vector<double> &x) -> vector<Tv>
+        {
+        vector<Tv> res;
+        for (auto pos: x) res.push_back(func(pos));
+        return res;
+        });
+      }
+
+    Tv operator()(double x) const
+      {
+      x = (x-lo)*inv_len*2 - 1.;
+      if (abs(x)>=1) return Tv(0);
+      double xrel = W*0.5*(x+1.);
+      size_t nth = size_t(xrel);
+      nth = min<size_t>(nth, W-1);
+      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
+//      double locxsq = locx*locx;
+      size_t ofs = nth*(D+1);
+      Tv res0 = coeff[ofs];
+      for (size_t i=1; i<=D; ++i)
+        res0 = res0*locx+coeff[i+ofs];
+      return res0;
+#if 0
+      Tv res1 = coeff[ofs+1];
+      for (size_t i=2; i<=D; i+=2)
+        {
+        res0 = res0*locxsq+coeff[i+ofs];
+        res1 = res1*locxsq+coeff[i+ofs+1];
+        }
+      return res0*locx+res1;
+#endif
+      }
+
+    const vector<Tv> &Coeff() const { return coeff; }
+  };
 
 /*! A GriddingKernel is considered to be a symmetric real-valued function
     defined on the interval [-1; 1].
@@ -135,14 +240,14 @@ class PolynomialKernel: public GriddingKernel
   {
   private:
     size_t W, D;
-    vector<double> coeff;
+    FunctionApproximator<double> approx;
     KernelCorrection corr;
 
   public:
     PolynomialKernel(size_t W_, size_t D_, const function<double(double)> &func,
       const KernelCorrection &corr_)
       : W(W_), D(D_),
-        coeff(getCoeffs(W_, D_, func)),
+        approx(-1., 1., W_, D_, func),
         corr(corr_)
       {}
 
@@ -155,23 +260,13 @@ class PolynomialKernel: public GriddingKernel
     virtual vector<double> corfunc(size_t n, double dx, int nthreads=1) const
       { return corr.corfunc(n, dx, nthreads); }
 
-    const vector<double> &Coeff() const { return coeff; }
+    const vector<double> &Coeff() const { return approx.Coeff(); }
     size_t degree() const { return D; }
 
     const KernelCorrection &Corr() const { return corr; }
 
     double eval(double x) const
-      {
-      if (abs(x)>=1) return 0.;
-      double xrel = W*0.5*(x+1.);
-      size_t nth = size_t(xrel);
-      nth = min<size_t>(nth, W-1);
-      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
-      double res = coeff[nth];
-      for (size_t i=1; i<=D; ++i)
-        res = res*locx+coeff[i*W+nth];
-      return res;
-      }
+      { return approx(x); }
   };
 
 /*! This class is initialized with a \a PolynomialKernel object and provides
@@ -203,7 +298,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
       for (size_t j=0; j<=d_input; ++j)
         {
         for (size_t i=0; i<min(W, nvec_eval*vlen); ++i)
-          coeff[(j+ofs)*nvec_eval + i/vlen][i%vlen] = T(input[j*W+i]);
+          coeff[(j+ofs)*nvec_eval + i/vlen][i%vlen] = T(input[i*(d_input+1)+j]);
         for (size_t i=W; i<nvec_eval*vlen; ++i)
           coeff[(j+ofs)*nvec_eval + i/vlen][i%vlen] = T(0);
         }
@@ -451,6 +546,7 @@ double bestEpsilon(size_t ndim, bool singleprec,
 
 }
 
+using detail_gridding_kernel::FunctionApproximator;
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::getKernel;
 using detail_gridding_kernel::selectKernel;

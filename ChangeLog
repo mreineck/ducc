@@ -1,6 +1,8 @@
 0.41.0:
 - nufft:
-  - performance improvements
+  - significant speedup in Type 3 planning stage, by using polynomial
+    approximation for the deconvolution function.
+  - various small performance improvements
 
 0.40.0:
 - general:
