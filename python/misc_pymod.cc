@@ -1711,14 +1711,29 @@ static NpArr Py_pswf0(double c, const CNpArr &x_, const OptNpArr &out__)
   py::gil_scoped_release release;
   PSWF0 pswf(c);
 
-  //mav_apply([pswf](const double &x, double &val)
-    //{
-    //val = pswf(x);
-    //}, 1, x, out);
   pswf.multi_eval(x, out);
   }
   return out_;
   }
+const char *Py_pswf0_DS = R"""(
+Evaluates the Prolate Spheroidal Wave Function of order zero (Psi_0^c)
+inside the interval [-1,1], for arbitrary frequency parameter c.
+
+Parameters
+----------
+c : float > 0
+    the frequency parameter
+x : numpy.ndarray((nval,), dtype=numpy.float64)
+    The abscissas where the function should be evaluated.
+    Must lie in [-1;1].
+out : numpy.ndarray((nval,), dtype=numpy.float64)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval,), dtype=numpy.float64) : the computed function values
+    Identical to `out` if it was provided.
+)""";
 
 static void print_diagnostics()
   {
@@ -1846,7 +1861,7 @@ void add_misc(py::module_ &msup)
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
 
-  m2.def("pswf0", Py_pswf0, "c"_a, "x"_a, "out"_a=None);
+  m2.def("pswf0", Py_pswf0, Py_pswf0_DS, "c"_a, "x"_a, "out"_a=None);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
