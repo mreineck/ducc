@@ -56,12 +56,6 @@ mach_eps = 2.2e-16  # for double precision; use 1.19e-07 for single precision
 D = 1  # dimensionality
 nthreads=8
 
-ofactors = np.linspace(2,2,1)  # the oversampling factors to consider
-Ws = np.arange(4,17)  # range of kernel supports
-mach_eps = 2.2e-16  # for double precision; use 1.19e-07 for single precision
-D = 1  # dimensionality
-nthreads=8
-
 # Kaiser-Bessel kernel
 def kernel(x, par):
     x=np.array(x)
@@ -124,21 +118,6 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
-# PSWF kernel (m=n=0)
-def kernel(x, par):
-    import scipy
-    x=np.array(x)
-    c = par[0]
-    return scipy.special.pro_ang1(0,0,c,x)[0]
-
-print("Table for PSWF(m=n=0) kernels")
-for ofactor in ofactors:
-    for W in Ws:
-        par_min=[0]
-        par_max=[50]
-        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
-        print(W, ofactor, err, res)
-
 # Rokhlin PSWF kernel (m=n=0)
 def kernel(x, par):
     x=np.array(x)
@@ -153,17 +132,11 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
-# print("Table for Rokhlin PSWF(m=n=0) kernels, heuristic for c parameter")
-# for ofactor in ofactors:
-    # for W in Ws:
-        # beta_cutoff = np.pi * W * (1.0 - 1.0 / (2.0 * ofactor)) - 0.05
-        # par_min=[beta_cutoff*0.9999]
-        # par_max=[beta_cutoff*1.0001]
-        # res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
-        # print(W, ofactor, err, res)
-
-from time import time
-args=np.arange(100000000.)/100000000.
-t0 = time()
-ducc0.misc.experimental.pswf0(38.,args)
-print("time:",time()-t0)
+print("Table for Rokhlin PSWF(m=n=0) kernels, FINUFFT heuristic for c parameter")
+for ofactor in ofactors:
+    for W in Ws:
+        beta_cutoff = np.pi * W * (1.0 - 1.0 / (2.0 * ofactor)) - 0.05
+        par_min=[beta_cutoff*0.999999]
+        par_max=[beta_cutoff*1.000001]
+        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        print(W, ofactor, err, res)
