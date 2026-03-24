@@ -223,28 +223,29 @@ private:
     prolfun0(n, c, work, 1e-16);
   }
 
+  template<typename T, size_t N> array<T,N> eval_raw(array<T, N> x) const {
+    array<T,N> pjm1, pjm2, val;
+    for (size_t n=0; n<N; ++n) {
+      pjm1[n] = 0;
+      pjm2[n] = 1;
+      val[n] = workdata[0];
+    }
+
+    for (size_t i=1; i < workdata.size(); ++i) {
+      for (size_t n=0; n<N; ++n) {
+        pjm1[n] = (f1[2*i-2]+1.) * x[n] * pjm2[n] - f1[2*i-2] * pjm1[n];
+        pjm2[n] = (f1[2*i-1]+1.) * x[n] * pjm1[n] - f1[2*i-1] * pjm2[n];
+        val[n] += workdata[i] * pjm2[n];
+      }
+    }
+    return val;
+  }
   template<typename T> T eval_raw(T x) const {
     T pjm1 = 0;
     T pjm2 = 1;
     T val = workdata[0];
 
-    size_t i=1;
-
-    for (; i + 4 <= workdata.size(); i+=4) {
-      pjm1 = (f1[2*i-2]+1.) * x * pjm2 - f1[2*i-2] * pjm1;
-      pjm2 = (f1[2*i-1]+1.) * x * pjm1 - f1[2*i-1] * pjm2;
-      val += workdata[i] * pjm2;
-      pjm1 = (f1[2*i  ]+1.) * x * pjm2 - f1[2*i  ] * pjm1;
-      pjm2 = (f1[2*i+1]+1.) * x * pjm1 - f1[2*i+1] * pjm2;
-      val += workdata[i+1] * pjm2;
-      pjm1 = (f1[2*i+2]+1.) * x * pjm2 - f1[2*i+2] * pjm1;
-      pjm2 = (f1[2*i+3]+1.) * x * pjm1 - f1[2*i+3] * pjm2;
-      val += workdata[i+2] * pjm2;
-      pjm1 = (f1[2*i+4]+1.) * x * pjm2 - f1[2*i+4] * pjm1;
-      pjm2 = (f1[2*i+5]+1.) * x * pjm1 - f1[2*i+5] * pjm2;
-      val += workdata[i+3] * pjm2;
-    }
-    for (; i < workdata.size(); ++i) {
+    for (size_t i=1; i < workdata.size(); ++i) {
       pjm1 = (f1[2*i-2]+1.) * x * pjm2 - f1[2*i-2] * pjm1;
       pjm2 = (f1[2*i-1]+1.) * x * pjm1 - f1[2*i-1] * pjm2;
       val += workdata[i] * pjm2;
@@ -271,7 +272,18 @@ public:
 
     using Tv = native_simd<double>;
     constexpr size_t vlen = Tv::size();
+    constexpr size_t nvec = 4;
     size_t i = 0;
+    for (; i + nvec*vlen <= x.size(); i += nvec*vlen) {
+      array<Tv,nvec> xx;
+      for (size_t n=0; n<nvec; ++n)
+        for (size_t m = 0; m < vlen; ++m)
+          xx[n][m] = x(i + n*vlen + m);
+      const auto val = eval_raw(xx);
+      for (size_t n=0; n<nvec; ++n)
+        for (size_t m = 0; m < vlen; ++m)
+          res(i + n*vlen + m) = (std::abs(xx[n][m])>1) ? 0 : val[n][m] * xv0;
+    }
     for (; i + vlen <= x.size(); i += vlen) {
       Tv xx;
       for (size_t m = 0; m < vlen; ++m) xx[m] = x(i + m);
