@@ -67,14 +67,15 @@ private:
     gamma = -c * c * gamma0;
   }
 
+  // fills as, bs, cs in [0; (n+2)/2]
   static void prolmatr(std::vector<double> &as, std::vector<double> &bs,
                        std::vector<double> &cs, int n, double c, double rlam) {
-    for (int k = 0, k0 = 0; k0 <= n + 2; ++k, k0 += 2) {
-      prolcoef(rlam, k0, c, as[k], bs[k], cs[k]);
+    for (int k = 0; 2*k <= n + 2; ++k) {
+      prolcoef(rlam, 2*k, c, as[k], bs[k], cs[k]);
 
-      if (k0 != 0)
-        as[k] *= std::sqrt((k0 + .5) / (k0 - 1.5));
-      cs[k] *= std::sqrt((k0 + .5) / (k0 + 2.5));
+      if (k != 0)
+        as[k] *= std::sqrt((2*k + .5) / (2*k - 1.5));
+      cs[k] *= std::sqrt((2*k + .5) / (2*k + 2.5));
     }
   }
 
@@ -142,18 +143,15 @@ private:
   static void prolfact(std::vector<double> &a, const std::vector<double> &b,
                        const std::vector<double> &c, int n, std::vector<double> &u,
                        std::vector<double> &v, std::vector<double> &w) {
-    // Eliminate down
+    // Eliminate down and up, and scale
     for (int i = 0; i + 1 < n; ++i) {
       double d = c[i + 1] / a[i];
       a[i + 1] -= b[i] * d;
       u[i] = d;
+      v[i+1] = b[i] / a[i+1];
+      w[i+1] = 1. / a[i+1];
     }
-
-    // Eliminate up
-    for (int i = n - 1; i > 0; --i) v[i] = b[i - 1] / a[i];
-
-    // Scale the diagonal
-    for (int i = 0; i < n; ++i) w[i] = 1. / a[i];
+    w[0] = 1./a[0];
   }
 
   static void prolsolv(const std::vector<double> &u, const std::vector<double> &v,
@@ -161,31 +159,31 @@ private:
     // Eliminate down
     for (int i = 0; i + 1 < n; ++i) rhs[i + 1] -= u[i] * rhs[i];
 
-    // Eliminate up
-    for (int i = n - 1; i > 0; --i) rhs[i - 1] -= rhs[i] * v[i];
-
-    // Scale
-    for (int i = 0; i < n; ++i) rhs[i] *= w[i];
+    // Eliminate up and scale
+    for (int i = n - 1; i > 0; --i) {
+      rhs[i - 1] -= rhs[i] * v[i];
+      rhs[i] *= w[i];
+    }
+    rhs[0] *= w[0];
   }
 
   static void prolfun0(int n, double c, std::vector<double> &xk, double eps) {
     double delta = 1.0e-8;
 
-    xk.resize(n + 3);
-    std::vector<double> as(n + 2), bs(n + 2), cs(n + 2), u(n + 2), v(n + 2), w(n + 2);
+    xk.resize(n/2 + 3);
+    std::vector<double> as(n/2 + 2), bs(n/2 + 2), cs(n/2 + 2), u(n/2 + 2), v(n/2 + 2), w(n/2 + 2);
     prolmatr(as, bs, cs, n, c, 0.);
 
     prolql1(n / 2, bs, as);
 
+    std::fill(xk.begin(), xk.end(), 1.0);
+
     double rlam = -bs[n / 2 - 1] + delta;
-
-    std::fill(xk.begin(), xk.begin() + n, 1.0);
-
     prolmatr(as, bs, cs, n, c, rlam);
 
     prolfact(bs, cs, as, n / 2, u, v, w);
 
-    int numit = 4;
+    constexpr int numit = 4;
     for (int ijk = 0; ijk < numit; ++ijk) {
       prolsolv(u, v, w, n / 2, xk);
 
@@ -193,21 +191,16 @@ private:
       for (int j = 0; j < n / 2; ++j) d += xk[j] * xk[j];
 
       d = std::sqrt(d);
-      for (int j = 0; j < n / 2; ++j) xk[j] /= d;
-
-      double err = 0;
       for (int j = 0; j < n / 2; ++j) {
-        err += (as[j] - xk[j]) * (as[j] - xk[j]);
+        xk[j] /= d;
         as[j] = xk[j];
       }
-      err = std::sqrt(err);
     }
 
     int imax=0;
     for (int i = 0; i < n / 2; ++i) {
       if (std::abs(xk[i]) > eps) imax = i;
       xk[i] *= std::sqrt(i * 2 + .5);
-//      if (std::abs(xk[i]) > eps) imax = i;
     }
     xk.resize(imax + 1);
   }
