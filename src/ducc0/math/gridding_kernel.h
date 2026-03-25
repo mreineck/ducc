@@ -129,21 +129,11 @@ template<typename Tv> class FunctionApproximator
       size_t nth = size_t(xrel);
       nth = min<size_t>(nth, W-1);
       double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
-//      double locxsq = locx*locx;
       size_t ofs = nth*(D+1);
       Tv res0 = coeff[ofs];
       for (size_t i=1; i<=D; ++i)
         res0 = res0*locx+coeff[i+ofs];
       return res0;
-#if 0
-      Tv res1 = coeff[ofs+1];
-      for (size_t i=2; i<=D; i+=2)
-        {
-        res0 = res0*locxsq+coeff[i+ofs];
-        res1 = res1*locxsq+coeff[i+ofs+1];
-        }
-      return res0*locx+res1;
-#endif
       }
 
     const vector<Tv> &Coeff() const { return coeff; }
@@ -220,7 +210,7 @@ class GLFullCorrection: public KernelCorrection
     GLFullCorrection(size_t W, const function<double(double)> &func)
       {
       supp = W;
-      // 1.5*W is safe according to FINUFFT. It may even be posible to reduce
+      // 1.5*W is safe according to FINUFFT. It may even be possible to reduce
       // to 1*W.
       size_t p = size_t(1.5*W)+2;
       GL_Integrator integ(2*p);

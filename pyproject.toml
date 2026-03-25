@@ -72,6 +72,7 @@ sdist.include = [
     "src/ducc0/math/mcm.h",
     "src/ducc0/math/pointing.cc",
     "src/ducc0/math/pointing.h",
+    "src/ducc0/math/pswf_rokhlin.h",
     "src/ducc0/math/quaternion.h",
     "src/ducc0/math/rangeset.h",
     "src/ducc0/math/solvers.h",
