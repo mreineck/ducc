@@ -1020,12 +1020,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             return tmp;
             } ();
 
-          const auto vdata = [v,&xkv]()
+          constexpr auto vlen=hlp.vlen;
+          const auto vdata = [&xkv,v]()
             {
-// BEGIN MSVC bug workaround ... aargh
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
             constexpr size_t vlen=Tsimd::size();
             constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
-// END MSVC bug workaround
+#endif
             array<mysimd<Tacc>,nvec2> res;
 #if 0
             Tsimd vr=v.real(), vi=v.imag();
@@ -1172,10 +1173,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr size_t lookahead=10;
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
-// BEGIN MSVC bug workaround ... aargh
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
             constexpr size_t vlen=Tsimd::size();
             constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
-// END MSVC bug workaround
+#endif
             if (ix+lookahead<npoints)
               {
               auto nextidx = coord_idx[ix+lookahead];
@@ -1186,7 +1187,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                    : hlp.prep({coords(row,0), coords(row,1)});
-            const array<Tacc, SUPP> xku = [=]() {
+            const array<Tacc, SUPP> xku = [&]() {
               array<Tacc, SUPP> tmp;
               for (size_t i=0; i<SUPP; ++i)
                 tmp[i] = ku[i];
@@ -1675,10 +1676,10 @@ if constexpr(SUPP<=8)
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const array<Tsimd, nvec2> xdata = [&]() {
-// BEGIN MSVC bug workaround ... aargh
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
             constexpr size_t vlen=Tsimd::size();
             constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
-// END MSVC bug workaround
+#endif
             array<Tsimd, nvec2> xdata;
             for (size_t cw=0; cw<nvec*vlen; ++cw)
               {
