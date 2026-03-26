@@ -1172,6 +1172,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr size_t lookahead=10;
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
+// BEGIN MSVC bug workaround ... aargh
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+// END MSVC bug workaround
             if (ix+lookahead<npoints)
               {
               auto nextidx = coord_idx[ix+lookahead];
