@@ -1020,13 +1020,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             return tmp;
             } ();
 
-          constexpr auto vlen=hlp.vlen;
-          const auto vdata = [&xkv,v]()
+          const auto vdata = [=,&xkv]()
             {
 // BEGIN MSVC bug workaround ... aargh
-            using Tsimd = mysimd<Tacc>;
-            constexpr size_t vlen=Tsimd::size();
-            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+ //           constexpr size_t vlen=Tsimd::size();
+ //           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
 // END MSVC bug workaround
             array<mysimd<Tacc>,nvec2> res;
 #if 0
@@ -1184,7 +1182,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             size_t row = coord_idx[ix];
             sorted ? hlp.prep({coords(ix,0), coords(ix,1)})
                    : hlp.prep({coords(row,0), coords(row,1)});
-            const array<Tacc, SUPP> xku = [&]() {
+            const array<Tacc, SUPP> xku = [=]() {
               array<Tacc, SUPP> tmp;
               for (size_t i=0; i<SUPP; ++i)
                 tmp[i] = ku[i];
