@@ -1023,6 +1023,11 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr auto vlen=hlp.vlen;
           const auto vdata = [&xkv,v]()
             {
+// BEGIN MSVC bug workaround ... aargh
+            using Tsimd = mysimd<Tacc>;
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+// END MSVC bug workaround
             array<mysimd<Tacc>,nvec2> res;
 #if 0
             Tsimd vr=v.real(), vi=v.imag();
