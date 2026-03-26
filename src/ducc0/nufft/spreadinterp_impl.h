@@ -1672,7 +1672,6 @@ if constexpr(SUPP<=8)
   {
           using Tsimd=mysimd<Tacc>;
           constexpr size_t vlen=Tsimd::size();
-          constexpr size_t nvec=(SUPP+vlen-1)/vlen;
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const array<Tsimd, nvec2> xdata = [&]() {
@@ -1681,7 +1680,8 @@ if constexpr(SUPP<=8)
             constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
 #endif
             array<Tsimd, nvec2> xdata;
-            for (size_t cw=0; cw<nvec*vlen; ++cw)
+            for (size_t i=0; i<nvec2; ++i) xdata[i]=0;
+            for (size_t cw=0; cw<SUPP; ++cw)
               {
               xdata[(2*cw  )/vlen][(2*cw  )%vlen] = kw[cw]*v.real();
               xdata[(2*cw+1)/vlen][(2*cw+1)%vlen] = kw[cw]*v.imag();
