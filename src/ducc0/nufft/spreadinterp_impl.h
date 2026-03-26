@@ -1675,6 +1675,10 @@ if constexpr(SUPP<=8)
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const array<Tsimd, nvec2> xdata = [&]() {
+// BEGIN MSVC bug workaround ... aargh
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+// END MSVC bug workaround
             array<Tsimd, nvec2> xdata;
             for (size_t cw=0; cw<nvec*vlen; ++cw)
               {
