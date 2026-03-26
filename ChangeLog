@@ -1,8 +1,19 @@
 0.41.0:
+- general:
+  - fixed a bug in Python wrapping code which could lead to segfaults at
+    library loading time
+
 - nufft:
   - significant speedup in Type 3 planning stage, by using polynomial
     approximation for the deconvolution function.
   - various small performance improvements
+
+- misc:
+  - implementation of PSWF functions of order zero, mainly for use
+    in NUFFT experiments.
+  - INTERFACE CHANGE (in experimental code):
+    more flexible mode-coupling matrix implementation
+
 
 0.40.0:
 - general:

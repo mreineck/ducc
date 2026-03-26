@@ -14,7 +14,7 @@
 
         ducc = py-pkgs.buildPythonPackage {
           pname = "ducc0";
-          version = "0.40.0";
+          version = "0.41.0";
           pyproject = true;
 
           # stdenv = pkgs.clangStdenv;
