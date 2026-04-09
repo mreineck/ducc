@@ -1,3 +1,10 @@
+0.41.1:
+- general:
+  - changed the inclusion order of header files in some places to make
+    sure "Python.h" always comes first
+    (see https://docs.python.org/3.15/c-api/intro.html#include-files)
+
+
 0.41.0:
 - general:
   - fixed a bug in Python wrapping code which could lead to segfaults at
