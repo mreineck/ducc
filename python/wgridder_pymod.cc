@@ -16,11 +16,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include "ducc0/../../python/module_adders.h"
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/wgridder/wgridder.h"
 
 namespace ducc0 {

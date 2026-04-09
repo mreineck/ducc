@@ -25,10 +25,8 @@
  *  Author: Martin Reinecke
  */
 
-#include <vector>
-#include <cmath>
-#include <complex>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
@@ -39,7 +37,11 @@
 #include "ducc0/math/mcm.h"
 #include "ducc0/math/pswf_rokhlin.h"
 #include "ducc0/math/quaternion.h"
-#include "ducc0/bindings/pybind_utils.h"
+
+#include <vector>
+#include <cmath>
+#include <complex>
+
 
 namespace ducc0 {
 

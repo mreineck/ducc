@@ -36,11 +36,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Python interface.
  */
 
-#include <complex>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/fft/fft.h"
-#include "ducc0/bindings/pybind_utils.h"
+#include <complex>
 
 namespace ducc0 {
 
