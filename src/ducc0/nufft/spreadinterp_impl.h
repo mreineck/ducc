@@ -182,7 +182,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
 
   public:
     Spreadinterp_ancestor(size_t npoints,
-      const array<size_t,ndim> &over_shape, size_t kidx,
+      const array<size_t,ndim> &over_shape, size_t supp_, double ofactor_,
       size_t nthreads_,
       const vector<double> &periodicity,
       const vector<double> &corigin_)
@@ -195,7 +195,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
       for (size_t i=0; i<ndim; ++i)
         MR_assert((nover[i]>>log2tile)<=max_ntile<ndim>, "oversampled grid too large");
 
-      krn = selectKernel(kidx);
+      krn = PSWF_selectKernel(supp_, ofactor_);
       supp = krn->support();
       nsafe = (supp+1)/2;
 
@@ -230,10 +230,10 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
   public: \
     using parent::parent; /* inherit constructor */ \
     Spreadinterp(const cmav<Tcoord,2> &coords, \
-          const array<size_t, ndim> &over_shape_, size_t kidx,  \
+          const array<size_t, ndim> &over_shape_, size_t supp_, double ofactor_,  \
           size_t nthreads_, const vector<double> &periodicity, \
           const vector<double> &corigin_=vector<double>()) \
-      : parent(coords.shape(0), over_shape_, kidx, nthreads_, \
+      : parent(coords.shape(0), over_shape_, supp_, ofactor_, nthreads_, \
                periodicity, corigin_), \
         coords_sorted({coords.shape(0),ndim},PAGE_IN(nthreads)) \
       { \
@@ -439,7 +439,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         if (supp<=SUPP/2) return spreading_helper<SUPP/2>(supp, coords, points, grid);
       if constexpr (SUPP>4)
         if (supp<SUPP) return spreading_helper<SUPP-1>(supp, coords, points, grid);
-      MR_assert(supp==SUPP, "requested support out of range");
+      MR_assert(supp==SUPP, "requested support out of range", SUPP, supp);
       bool sorted = coords_sorted.size()!=0;
 
       vmav<Mutex,ndim> mutexes({(nover[0]+tilesize-1)/tilesize});
@@ -1936,7 +1936,7 @@ else
 
 template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx>
 Spreadinterp2<Tcalc, Tacc, Tcoord, Tidx>::Spreadinterp2(size_t npoints,
-  const vector<size_t> &over_shape, size_t kidx,
+  const vector<size_t> &over_shape, size_t supp, double ofactor,
   size_t nthreads,
   const vector<double> &periodicity,
   const vector<double> &corigin)
@@ -1944,31 +1944,31 @@ Spreadinterp2<Tcalc, Tacc, Tcoord, Tidx>::Spreadinterp2(size_t npoints,
   size_t ndim = over_shape.size();
   if (ndim==1)
     si1 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>>
-      (npoints, array<size_t,1>{over_shape[0]}, kidx, nthreads, periodicity, corigin);
+      (npoints, array<size_t,1>{over_shape[0]}, supp, ofactor, nthreads, periodicity, corigin);
   else if (ndim==2)
     si2 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>>
-      (npoints, array<size_t,2>{over_shape[0],over_shape[1]}, kidx, nthreads, periodicity, corigin);
+      (npoints, array<size_t,2>{over_shape[0],over_shape[1]}, supp, ofactor, nthreads, periodicity, corigin);
   else if (ndim==3)
     si3 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>>
-      (npoints, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, kidx, nthreads, periodicity, corigin);
+      (npoints, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, supp, ofactor, nthreads, periodicity, corigin);
   }
 
 template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx>
 Spreadinterp2<Tcalc, Tacc, Tcoord, Tidx>::Spreadinterp2(const cmav<Tcoord,2> &coords,
-  const vector<size_t> &over_shape, size_t kidx,
+  const vector<size_t> &over_shape, size_t supp, double ofactor,
   size_t nthreads, const vector<double> &periodicity,
   const vector<double> &corigin)
   {
   size_t ndim = over_shape.size();
   if (ndim==1)
     si1 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 1>>
-      (coords, array<size_t,1>{over_shape[0]}, kidx, nthreads, periodicity, corigin);
+      (coords, array<size_t,1>{over_shape[0]}, supp, ofactor, nthreads, periodicity, corigin);
   else if (ndim==2)
     si2 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 2>>
-      (coords, array<size_t,2>{over_shape[0],over_shape[1]}, kidx, nthreads, periodicity, corigin);
+      (coords, array<size_t,2>{over_shape[0],over_shape[1]}, supp, ofactor, nthreads, periodicity, corigin);
   else if (ndim==3)
     si3 = make_unique<Spreadinterp<Tcalc, Tacc, Tcoord, Tidx, 3>>
-      (coords, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, kidx, nthreads, periodicity, corigin);
+      (coords, array<size_t,3>{over_shape[0],over_shape[1],over_shape[2]}, supp, ofactor, nthreads, periodicity, corigin);
   }
 
 template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx>

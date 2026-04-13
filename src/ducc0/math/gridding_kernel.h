@@ -139,6 +139,9 @@ template<typename Tv> class FunctionApproximator
     const vector<Tv> &Coeff() const { return coeff; }
   };
 
+double PSWF_get_best_sigma(double sigma_lo, double sigma_hi, size_t W, 
+  size_t ndim, bool singleprec, double epsilon);
+
 /*! A GriddingKernel is considered to be a symmetric real-valued function
     defined on the interval [-1; 1].
     This range is subdivided into W equal-sized parts. */
@@ -475,6 +478,7 @@ struct KernelParams
   bool singleprec;
   };
 
+shared_ptr<PolynomialKernel> PSWF_selectKernel(size_t supp, double ofactor);
 shared_ptr<PolynomialKernel> selectKernel(size_t idx);
 const KernelParams &getKernel(size_t idx);
 
@@ -536,6 +540,8 @@ double bestEpsilon(size_t ndim, bool singleprec,
 
 }
 
+using detail_gridding_kernel::PSWF_get_best_sigma;
+using detail_gridding_kernel::PSWF_selectKernel;
 using detail_gridding_kernel::FunctionApproximator;
 using detail_gridding_kernel::GriddingKernel;
 using detail_gridding_kernel::getKernel;

@@ -40,12 +40,12 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
   public:
     Spreadinterp2(size_t npoints,
-      const vector<size_t> &over_shape, size_t kidx,
+      const vector<size_t> &over_shape, size_t supp, double ofactor,
       size_t nthreads,
       const vector<double> &periodicity,
       const vector<double> &corigin=vector<double>());
     Spreadinterp2(const cmav<Tcoord,2> &coords,
-      const vector<size_t> &over_shape, size_t kidx,
+      const vector<size_t> &over_shape, size_t supp, double ofactor,
       size_t nthreads, const vector<double> &periodicity,
       const vector<double> &corigin=vector<double>());
     ~Spreadinterp2();

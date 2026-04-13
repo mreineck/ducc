@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_COMMON_H
@@ -222,6 +222,171 @@ template<typename Tcalc, typename Tacc> auto findNufftParameters_type3(double ep
       }
     }
   return make_tuple(minidx, bigdims, vssafe);
+  }
+
+/*! Selects the most efficient combination of gridding kernel and oversampled
+    grid size for the provided problem parameters. */
+template<typename Tcalc, typename Tacc> auto PSWF_findNufftParameters(double epsilon,
+  double sigma_min, double sigma_max, const vector<size_t> &dims,
+  size_t npoints, bool gridding, size_t nthreads)
+  {
+  auto vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
+  auto ndim = dims.size();
+  double mincost = 1e300;
+  constexpr double nref_fft=2048;
+  constexpr double costref_fft=0.0693;
+  vector<size_t> bigdims(ndim, 0);
+
+  size_t best_W=~(size_t(0));
+  double best_sigma=-1;
+  constexpr bool singleprec = std::is_same<Tcalc,float>::value;
+  vector<pair<size_t,double>> candidates;
+  for (size_t W=4; W<(singleprec?9:17); ++W)
+    {
+    double sigma = PSWF_get_best_sigma(sigma_min, sigma_max, W, ndim, singleprec, epsilon);
+    if (sigma>0)
+      if (candidates.empty() || (get<1>(candidates.back())>sigma))
+        candidates.emplace_back(W, sigma);
+    }
+  MR_assert(!candidates.empty(),
+    "No appropriate kernel found for the specified combination of parameters\n"
+    "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
+
+  for(auto cand: candidates)
+    {
+    auto supp = get<0>(cand);
+    auto nvec = (supp+vlen-1)/vlen;
+    auto ofactor = get<1>(cand);
+    vector<size_t> lbigdims(ndim,0);
+    double gridsize=1;
+    for (size_t idim=0; idim<ndim; ++idim)
+      {
+      lbigdims[idim] = 2*good_size_complex(size_t(dims[idim]*ofactor*0.5)+1);
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
+      gridsize *= lbigdims[idim];
+      }
+    double logterm = log(gridsize)/log(nref_fft*nref_fft);
+    double fftcost = gridsize/(nref_fft*nref_fft)*logterm*costref_fft;
+    size_t kernelpoints = nvec*vlen;
+    for (size_t idim=0; idim+1<ndim; ++idim)
+      kernelpoints*=supp;
+    double gridcost = 2.2e-10*npoints*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
+    if (gridding) gridcost *= sizeof(Tacc)/sizeof(Tcalc);
+    // FIXME: heuristics could be improved
+    gridcost /= nthreads;  // assume perfect scaling for now
+    constexpr double max_fft_scaling = 6;
+    constexpr double scaling_power=2;
+    auto sigmoid = [](double x, double m, double s)
+      {
+      auto x2 = x-1;
+      auto m2 = m-1;
+      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
+      };
+    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
+    double cost = fftcost+gridcost;
+    if (cost<mincost)
+      {
+      mincost=cost;
+      bigdims=lbigdims;
+      best_W = supp;
+      best_sigma = ofactor;
+      }
+    }
+  return make_tuple(best_W, best_sigma, bigdims);
+  }
+
+/*! Selects the most efficient combination of gridding kernel and oversampled
+    grid size for the provided Type 3 problem parameters. */
+template<typename Tcalc, typename Tacc> auto PSWF_findNufftParameters_type3(double epsilon,
+  double sigma_min, double sigma_max, const vector<double> &hdelta_in, const vector<double> &hdelta_out,
+  size_t npoints_in, size_t npoints_out, size_t nthreads)
+  {
+  auto vlen = mysimd<Tacc>::size();
+  auto ndim = hdelta_in.size();
+
+  vector<double> rawdim(ndim), vssafe(ndim);
+  for (size_t idim=0; idim<ndim; ++idim)
+    {
+    double Xsafe = hdelta_in[idim],
+           Ssafe = hdelta_out[idim];
+    if ((Xsafe==0) && (Ssafe==0))
+      Xsafe = Ssafe = 1.0;
+    else
+      {
+      if (Xsafe==0) Xsafe = 1./Ssafe;
+      if (Ssafe==0) Ssafe = 1./Xsafe;
+      }
+    rawdim[idim] = 2*Ssafe*Xsafe/pi;
+    vssafe[idim] = Ssafe;
+    }
+
+  constexpr bool singleprec = std::is_same<Tcalc,float>::value;
+  vector<pair<size_t,double>> candidates;
+  for (size_t W=4; W<(singleprec?9:17); ++W)
+    {
+    // using epsilon*0.5 here, since a type 3 consists of two transforms
+    double sigma = PSWF_get_best_sigma(sigma_min, sigma_max, W, ndim, singleprec, epsilon*0.5);
+    if (sigma>0)
+      if (candidates.empty() || (get<1>(candidates.back())>sigma))
+        candidates.emplace_back(W, sigma);
+    }
+  MR_assert(!candidates.empty(),
+    "No appropriate kernel found for the specified combination of parameters\n"
+    "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
+
+  double mincost = 1e300;
+  constexpr double nref_fft=2048;
+  constexpr double costref_fft=0.0693;
+  vector<size_t> bigdims(ndim, 0);
+  size_t best_W=~(size_t(0));
+  double best_sigma=-1;
+  for(auto cand: candidates)
+    {
+    auto supp = get<0>(cand);
+    auto nvec = (supp+vlen-1)/vlen;
+    auto ofactor = get<1>(cand);
+    vector<size_t> lbigdims(ndim,0);
+    double gridsize2=1;
+    for (size_t idim=0; idim<ndim; ++idim)
+      {
+      double tmp = rawdim[idim]*ofactor+supp+1;
+      lbigdims[idim] = size_t(ceil(tmp)); // no need to find good FFT size here
+      lbigdims[idim] += lbigdims[idim]&1;  // make even
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 16);
+      lbigdims[idim] = max<size_t>(lbigdims[idim], 2*supp);  // FINUFFT does this ... why exactly?
+      // now determine grid size for the actual FFT, which is oversampled once more
+      tmp = lbigdims[idim]*ofactor+supp+1;
+      gridsize2 *= 2*good_size_complex(size_t(tmp*0.5)+1);
+      }
+    double logterm = log(gridsize2)/log(nref_fft*nref_fft);
+    double fftcost = gridsize2/(nref_fft*nref_fft)*logterm*costref_fft;
+    size_t kernelpoints = nvec*vlen;
+    for (size_t idim=0; idim+1<ndim; ++idim)
+      kernelpoints*=supp;
+    // "npoints" is already the sum of input and output points, so no need to multiply by 2 here
+    double gridcost = 2.2e-10*(kernelpoints + (ndim*nvec*(supp+3)*vlen));
+    gridcost *= sizeof(Tacc)/sizeof(Tcalc)*npoints_in + npoints_out;
+    // FIXME: heuristics could be improved
+    gridcost /= nthreads;  // assume perfect scaling for now
+    constexpr double max_fft_scaling = 6;
+    constexpr double scaling_power=2;
+    auto sigmoid = [](double x, double m, double s)
+      {
+      auto x2 = x-1;
+      auto m2 = m-1;
+      return 1.+x2/pow((1.+pow(x2/m2,s)),1./s);
+      };
+    fftcost /= sigmoid(nthreads, max_fft_scaling, scaling_power);
+    double cost = fftcost+gridcost;
+    if (cost<mincost)
+      {
+      mincost=cost;
+      bigdims=lbigdims;
+      best_W = supp;
+      best_sigma = ofactor;
+      }
+    }
+  return make_tuple(best_W, best_sigma, bigdims, vssafe);
   }
 
 }} // close namespaces

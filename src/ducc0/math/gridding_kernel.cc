@@ -17,7 +17,10 @@
 /* Copyright (C) 2020-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
+#include <cmath>
+#include <limits>
 #include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/pswf_rokhlin.h"
 
 namespace ducc0 {
 
@@ -1507,6 +1510,70 @@ shared_ptr<PolynomialKernel> selectKernel(size_t idx)
   auto e0 = KernelDB[idx].e0;
   auto lam = [beta,e0](double v){return esknew(v, beta, e0);};
   return make_shared<PolynomialKernel>(supp, supp+3, lam, GLFullCorrection(supp, lam));
+  }
+
+// Beatty estimate for the PSWF parameter, taken from Finufft
+static double get_beta(size_t W, double sigma)
+  {
+  return pi * W * (1. - 1./(2.*sigma)) - 0.05;
+  }
+static double get_rdyn(size_t W, double c, double sigma)
+  {
+  PSWF0 pswf(c);
+  // Here we make use of the fact pswf(0)==1
+  return 1./pswf(pi*W/(2*sigma*c));
+  }
+static double tol_kernel(size_t W, double sigma, size_t ndim)
+  {
+  // factor currently used in ducc (too conservative)
+//  double tolfac = ndim;
+  double tolfac = 0.18 * pow(1.4,(ndim - 1));
+  constexpr double nsoff=1.2;
+  return tolfac/exp((W-nsoff)*pi* sqrt(1. - 1./sigma));
+  }
+static double tol_rdyn(size_t W, double sigma, size_t ndim, bool singleprec)
+  {
+  double c = get_beta(W, sigma);
+  // Dynamic range of the deconvolution correction function
+  // (I may not have all factors correct here yet)
+//  double rdyn = get_corfunc2(W, c, 0.)/get_corfunc2(W, c, 1./(2*sigma));
+  double rdyn = get_rdyn(W, c, sigma);
+  double epsmach = singleprec ? numeric_limits<float>::epsilon() : numeric_limits<double>::epsilon();
+  return epsmach*pow(rdyn, ndim);
+  }
+static bool tol_is_reached(size_t W, double sigma, size_t ndim,
+  bool singleprec, double epsilon)
+  {
+  double t1 = tol_kernel(W, sigma, ndim);
+  if (t1>epsilon)
+    return false;
+  double t2 = tol_rdyn(W, sigma, ndim, singleprec);
+  return (t1+t2) <= epsilon;
+  }
+
+double PSWF_get_best_sigma(double sigma_lo, double sigma_hi, size_t W, 
+  size_t ndim, bool singleprec, double epsilon)
+  {
+  if (tol_is_reached(W, sigma_lo, ndim, singleprec, epsilon))
+    return sigma_lo;
+  if (!tol_is_reached(W, sigma_hi, ndim, singleprec, epsilon))
+    return -1.;
+//  MR_assert(tol_is_reached(W, sigma_hi, ndim, singleprec, epsilon), "tolerance not achievable", W, " ", sigma_lo," ",sigma_hi," ",ndim," ",singleprec, " ",epsilon);
+  while (sigma_hi-sigma_lo > 1e-3)
+    {
+    double sigmamid = (sigma_lo+sigma_hi)/2.;
+    if (tol_is_reached(W, sigmamid, ndim, singleprec, epsilon))
+      sigma_hi = sigmamid;
+    else
+      sigma_lo = sigmamid;
+    }
+  return sigma_hi;
+ }
+
+shared_ptr<PolynomialKernel> PSWF_selectKernel(size_t supp, double ofactor)
+  {
+  PSWF0 pswf(get_beta(supp, ofactor));
+  return make_shared<PolynomialKernel>(supp, supp+3, pswf, GLFullCorrection(supp, pswf));
   }
 
 double bestEpsilon(size_t ndim, bool singleprec,

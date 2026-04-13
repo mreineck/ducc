@@ -266,10 +266,10 @@ template<typename Tcalc, typename Tacc> class Nufft_ancestor
     // oversampled grid dimensions
     vector<size_t> nover;
 
-size_t krn_id;
     shared_ptr<PolynomialKernel> krn;
 
     size_t supp;
+double ofactor;
 
     vector<vector<double>> corfac;
 
@@ -305,14 +305,14 @@ size_t krn_id;
 
       timers.push("parameter calculation");
       vector<size_t> tdims{nuni.begin(), nuni.end()};
-      auto [kidx, dims] = findNufftParameters<Tcalc,Tacc>
+      auto [supp_, ofactor_, dims] = PSWF_findNufftParameters<Tcalc,Tacc>
         (epsilon, sigma_min, sigma_max, tdims, npoints, gridding, nthreads);
       nover = dims;
       timers.pop();
 
-      krn = selectKernel(kidx);
-      krn_id = kidx;
-      supp = krn->support();
+      supp = supp_;
+ofactor = ofactor_;
+      krn = PSWF_selectKernel(supp, ofactor);
 
       MR_assert(epsilon>0, "epsilon must be positive");
 
@@ -335,8 +335,9 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
   private:
     using parent=Nufft_ancestor<Tcalc, Tacc>;
     using parent::nthreads,
-          parent::timers, parent::krn_id, parent::fft_order, parent::nuni,
+          parent::timers, parent::fft_order, parent::nuni,
           parent::nover, parent::report,
+          parent::supp, parent::ofactor,
           parent::corfac;
 
     Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp;
@@ -351,7 +352,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
           const vector<double> &corigin=vector<double>())
       : parent(gridding, coords.shape(0), uniform_shape_, epsilon_, nthreads_,
                sigma_min, sigma_max, fft_order_),
-        spreadinterp(coords, nover, krn_id, nthreads, periodicity, corigin)
+        spreadinterp(coords, nover, supp, ofactor, nthreads, periodicity, corigin)
       {}
     Nufft (bool gridding, size_t npoints_,
       const vector<size_t> &uniform_shape, double epsilon_,
@@ -360,7 +361,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
           const vector<double> &corigin=vector<double>())
       : parent(gridding, npoints_, uniform_shape, epsilon_, nthreads_,
                sigma_min, sigma_max, fft_order_),
-        spreadinterp(npoints_, nover, krn_id, nthreads, periodicity, corigin)
+        spreadinterp(npoints_, nover, supp, ofactor, nthreads, periodicity, corigin)
       {}
 
     template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
@@ -575,7 +576,8 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
     vmav<complex<Tpoints>,1> fact_in, fact_out;
     vector<size_t> dims;
 
-    size_t kidx;
+    size_t supp;
+double ofactor;
     size_t nthreads;
     unique_ptr<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>> spreadinterp;
     unique_ptr<Nufft<Tcalc, Tacc, Tcoord>> nufft;
@@ -593,16 +595,16 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);
       auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
 
-      auto [kidx_, dims_, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
+      auto [supp_, ofactor_, dims_, Ssafe] = PSWF_findNufftParameters_type3<Tcalc,Tacc>
         (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out,
          coord_in.shape(0), coord_out.shape(0), nthreads);
-      kidx = kidx_;
+      supp = supp_;
+      ofactor= ofactor_;
       dims = dims_;
 
-      const auto &krn(getKernel(kidx));
       vector<double> gamma(ndim);
       for (size_t idim=0; idim<ndim; ++idim)
-        gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
+        gamma[idim] = dims[idim]/(2*ofactor*Ssafe[idim]);
 
       fact_in.assign(vmav<complex<Tpoints>,1>({coord_in.shape(0)}));
       {
@@ -622,7 +624,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         period_in.push_back(2*pi*gamma[d]);
 
       spreadinterp = make_unique<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>>
-        (coord_in, dims, kidx, nthreads, period_in, mid_in);
+        (coord_in, dims, supp, ofactor, nthreads, period_in, mid_in);
       }
 
       vector<double> period_out;
@@ -630,12 +632,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
         period_out.push_back(dims[d]/gamma[d]);
 
       nufft = make_unique<Nufft<Tcalc, Tacc, Tcoord>>(false, coord_out, dims,
-        epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
+        epsilon*0.5, nthreads, ofactor*0.99, ofactor*1.01, period_out, true, mid_out);
 
-      auto krn2 = selectKernel(kidx);
+      auto krn2 = PSWF_selectKernel(supp, ofactor);
       const auto &corr(krn2->Corr());
       fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
-      FunctionApproximator<double> corfunc2(-0.01,1./krn.ofactor+0.01,krn.W,krn.W+3,[&](double x) { return corr.template corfunc<double>(x); });
+      FunctionApproximator<double> corfunc2(-0.01,1./ofactor+0.01,supp,supp+3,[&](double x) { return corr.template corfunc<double>(x); });
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -735,7 +737,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
 
   timers.poppush("get spreading parameters");
-  auto [kidx, dims, Ssafe] = findNufftParameters_type3<Tcalc,Tacc>
+  auto [supp, ofactor, dims, Ssafe] = PSWF_findNufftParameters_type3<Tcalc,Tacc>
     (epsilon, sigma_min, sigma_max, hdelta_in, hdelta_out,
      points_in.shape(0), points_out.shape(0), nthreads);
 
@@ -746,15 +748,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
     //cout << dims.back() << ")" << endl;
     //}
 
-  const auto &krn(getKernel(kidx));
-  auto krn2 = selectKernel(kidx);
+  auto krn2 = PSWF_selectKernel(supp, ofactor);
   const auto &corr(krn2->Corr());
 
   Tpoints psign = forward ? -1 : 1;
 
   vector<double> gamma(ndim);
   for (size_t idim=0; idim<ndim; ++idim)
-    gamma[idim] = dims[idim]/(2*krn.ofactor*Ssafe[idim]);
+    gamma[idim] = dims[idim]/(2*ofactor*Ssafe[idim]);
 
   timers.poppush("input rescaling & pre-pasing");
   // try to use points_out for temporary points_in_2 storage
@@ -780,7 +781,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   for (size_t d=0; d<ndim; ++d)
     period_in.push_back(2*pi*gamma[d]);
   Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t> spreadinterp
-    (coord_in.shape(0), dims, kidx, nthreads, period_in, mid_in);
+    (coord_in.shape(0), dims, supp, ofactor, nthreads, period_in, mid_in);
   auto grid = vfmav<complex<Tcalc>>::build_noncritical(dims);
   spreadinterp.spread(coord_in, *points_in_2, grid);
   points_in_2.reset();
@@ -790,12 +791,12 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   for (size_t d=0; d<ndim; ++d)
     period_out.push_back(dims[d]/gamma[d]);
   Nufft<Tcalc, Tacc, Tcoord> nufft(false, points_out.shape(0), dims,
-    epsilon*0.5, nthreads, krn.ofactor*0.99, krn.ofactor*1.01, period_out, true, mid_out);
+    epsilon*0.5, nthreads, ofactor*0.99, ofactor*1.01, period_out, true, mid_out);
   nufft.u2nu(forward, 0, grid, coord_out, points_out);
   }
 
   timers.poppush("output post-phasing and deconvolution");
-  FunctionApproximator<double> corfunc2(-0.01,1./krn.ofactor+0.01,krn.W,krn.W+3,[&](double x) { return corr.template corfunc<double>(x); });
+  FunctionApproximator<double> corfunc2(-0.01,1./ofactor+0.01,supp,supp+3,[&](double x) { return corr.template corfunc<double>(x); });
   execStatic(points_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out,dims=dims](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
