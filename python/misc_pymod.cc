@@ -1737,6 +1737,54 @@ numpy.ndarray((nval,), dtype=numpy.float64) : the computed function values
     Identical to `out` if it was provided.
 )""";
 
+class Py_PSWF0: protected PSWF0
+  {
+  public:
+    Py_PSWF0(double c) : PSWF0(c) {}
+
+    NpArr Py_eval(const CNpArr &x_, const OptNpArr &out__) const
+      {
+      const auto x = to_cmav<double,1>(x_);
+      const auto [out_, out] = get_OptNpArr_and_vmav<double,1>(out__, {x.shape(0)});
+        {
+        py::gil_scoped_release release;
+        multi_eval(x, out);
+        }
+      return out_;
+      }
+  };
+constexpr const char *Py_PSWF0_DS = R"""(
+Class for efficient evaluation of the Prolate Spheroidal Wave Function
+of order zero (Psi_0^c) inside the interval [-1,1],
+for a fixed frequency parameter c.
+)""";
+constexpr const char *Py_PSWF0_init_DS = R"""(
+PSWF0 constructor
+
+Parameters
+----------
+c : float > 0
+    the frequency parameter to use for this object
+)""";
+
+constexpr const char *Py_PSWF0_eval_DS = R"""(
+Compute the PSWF0 for the frequency parameter given to the constructor
+at the provided abscissas
+
+Parameters
+----------
+x : numpy.ndarray((nval,), dtype=numpy.float64)
+    The abscissas where the function should be evaluated.
+    Must lie in [-1;1].
+out : numpy.ndarray((nval,), dtype=numpy.float64)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval,), dtype=numpy.float64) : the computed function values
+    Identical to `out` if it was provided.
+)""";
+
 static void print_diagnostics()
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
@@ -1864,6 +1912,9 @@ void add_misc(py::module_ &msup)
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
 
   m2.def("pswf0", Py_pswf0, Py_pswf0_DS, "c"_a, "x"_a, "out"_a=None);
+  py::class_<Py_PSWF0> (m2, "PSWF0", Py_PSWF0_DS)
+    .def(py::init<double>(), Py_PSWF0_init_DS, "c"_a)
+    .def ("eval", &Py_PSWF0::Py_eval, Py_PSWF0_eval_DS, "x"_a, "out"_a=None);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);
