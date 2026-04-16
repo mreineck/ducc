@@ -51,7 +51,7 @@ class PSWF0 {
 private:
   double c;
   std::vector<double> workdata; // Legendre coefficients
-  std::vector<double> f1;   // f1 = (j-1.)/j
+  std::vector<std::array<double,3>> coef;
   double xv0;
 
   static void prolcoef(double rlam, int k, double c, double &alpha, double &beta,
@@ -214,31 +214,52 @@ private:
   }
 
   template<typename T, size_t N> std::array<T,N> eval_raw(std::array<T, N> x) const {
-    std::array<T,N> pjm1, pjm2, val;
+    std::array<T,N> pjm1, pjm2, val, xsq;
     for (size_t n=0; n<N; ++n) {
       pjm1[n] = 0;
       pjm2[n] = 1;
       val[n] = workdata[0];
+      xsq[n] = x[n]*x[n];
     }
 
-    for (size_t i=1; i < workdata.size(); ++i) {
+    size_t i=1;
+    for (; i+1<coef.size(); i+=2) {
       for (size_t n=0; n<N; ++n) {
-        pjm1[n] = (f1[2*i-2]+1.) * x[n] * pjm2[n] - f1[2*i-2] * pjm1[n];
-        pjm2[n] = (f1[2*i-1]+1.) * x[n] * pjm1[n] - f1[2*i-1] * pjm2[n];
-        val[n] += workdata[i] * pjm2[n];
+        pjm1[n] = pjm2[n]*(xsq[n]*coef[i][0] - coef[i][1]) - pjm1[n]*coef[i][2];
+        val[n] += workdata[i] * pjm1[n];
+        pjm2[n] = pjm1[n]*(xsq[n]*coef[i+1][0] - coef[i+1][1]) - pjm2[n]*coef[i+1][2];
+        val[n] += workdata[i+1] * pjm2[n];
+      }
+    }
+    for (; i<coef.size(); ++i) {
+      for (size_t n=0; n<N; ++n) {
+      T tmp = pjm2[n]*(xsq[n]*coef[i][0] - coef[i][1]) - pjm1[n]*coef[i][2];
+      val[n] += workdata[i] * tmp;
+      pjm1[n] = pjm2[n];
+      pjm2[n] = tmp;
       }
     }
     return val;
   }
+
   template<typename T> T eval_raw(T x) const {
+    const T xsq = x*x;
     T pjm1 = 0;
     T pjm2 = 1;
     T val = workdata[0];
 
-    for (size_t i=1; i < workdata.size(); ++i) {
-      pjm1 = (f1[2*i-2]+1.) * x * pjm2 - f1[2*i-2] * pjm1;
-      pjm2 = (f1[2*i-1]+1.) * x * pjm1 - f1[2*i-1] * pjm2;
-      val += workdata[i] * pjm2;
+    size_t i=1;
+    for (; i+1<coef.size(); i +=2) {
+      pjm1 = pjm2*(xsq*coef[i][0] - coef[i][1]) - pjm1*coef[i][2];
+      val += workdata[i] * pjm1;
+      pjm2 = pjm1*(xsq*coef[i+1][0] - coef[i+1][1]) - pjm2*coef[i+1][2];
+      val += workdata[i+1] * pjm2;
+    }
+    for (; i<coef.size(); ++i) {
+      T tmp = pjm2*(xsq*coef[i][0] - coef[i][1]) - pjm1*coef[i][2];
+      val += workdata[i] * tmp;
+      pjm1 = pjm2;
+      pjm2 = tmp;
     }
     return val;
   }
@@ -246,9 +267,14 @@ private:
 public:
   PSWF0(double c_) : c(c_) {
     prolps0i(c, workdata);
-    f1.resize(2*workdata.size() - 2);
-    for (size_t i=0; i<f1.size(); ++i)
-      f1[i] = i/(i+1.);
+    coef.resize(workdata.size());
+    for (size_t i=1; i<coef.size(); ++i)
+      {
+      double l = 2*i-1.;
+      coef[i][0] = ((2.*l-1.)*(2.*l+1.))/(l*(l+1.));
+      coef[i][1] = ((2.*l+1.)*(l-1.)*(l-1.) + l*l*(2.*l-3))/(l*(l+1.)*(2.*l-3.));
+      coef[i][2] = ((2.*l+1.)*(l-1.)*(l-2.))/(l*(l+1.)*(2.*l-3.));
+      }
     xv0 = 1./eval_raw(0.);
   }
 
@@ -262,7 +288,8 @@ public:
 
     using Tv = native_simd<double>;
     constexpr size_t vlen=Tv::size();
-    constexpr size_t nvec=4;
+    constexpr size_t nvec=2;
+
     size_t i=0;
     for (; i+nvec*vlen<=x.size(); i+=nvec*vlen) {
       std::array<Tv,nvec> xx;
