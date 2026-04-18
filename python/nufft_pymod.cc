@@ -993,24 +993,24 @@ void add_nufft(py::module_ &msup)
 
   m.def("u2nu", &Py_u2nu, u2nu_DS,  py::kw_only(), "grid"_a, "coord"_a,
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
-        "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
+        "sigma_min"_a=1.19, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
   m.def("nu2u", &Py_nu2u, nu2u_DS, py::kw_only(), "points"_a, "coord"_a,
         "forward"_a, "epsilon"_a, "nthreads"_a=1, "out"_a=None, "verbosity"_a=0,
-        "sigma_min"_a=1.2, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
+        "sigma_min"_a=1.19, "sigma_max"_a=2.51, "periodicity"_a=2*pi,
         "fft_order"_a=false);
   m2.def("nu2nu", &Py_nu2nu, nu2nu_DS, py::kw_only(), "points_in"_a, "coord_in"_a,
         "coord_out"_a, "forward"_a, "epsilon"_a, "nthreads"_a=1,
-        "points_out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.2, "sigma_max"_a=2.51);
+        "points_out"_a=None, "verbosity"_a=0, "sigma_min"_a=1.19, "sigma_max"_a=2.51);
   m.def("bestEpsilon", &bestEpsilon, bestEpsilon_DS, py::kw_only(),
-        "ndim"_a, "singleprec"_a, "sigma_min"_a=1.1, "sigma_max"_a=2.6);
+        "ndim"_a, "singleprec"_a, "sigma_min"_a=1.19, "sigma_max"_a=2.51);
 
   py::class_<Py_Nufftplan> (m, "plan", /*py::module_local(),*/
                             "Class for repeated execution of type 1/2 NUFFTs")
     .def(py::init<bool, const CNpArr &, const vector<size_t> &,
                   double, size_t, double, double, const Periodicity &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
-        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.19, "sigma_max"_a=2.51,
         "periodicity"_a=2*pi, "fft_order"_a=false)
     .def("nu2u", &Py_Nufftplan::nu2u, plan_nu2u_DS, py::kw_only(), "forward"_a,
       "verbosity"_a=0, "points"_a, "out"_a=None)
@@ -1023,7 +1023,7 @@ void add_nufft(py::module_ &msup)
                   double, size_t, double, double, const Periodicity &, bool, bool>(),
       incremental_nu2u_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid_shape"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.19, "sigma_max"_a=2.51,
         "periodicity"_a=2*pi, "fft_order"_a=false, "singleprec"_a=false)
     .def("add_points", &Py_incremental_nu2u::add_points,
       incremental_nu2u_add_points_DS, py::kw_only(), "coord"_a, "points"_a)
@@ -1036,7 +1036,7 @@ void add_nufft(py::module_ &msup)
                   double, size_t, double, double, const Periodicity &, bool>(),
       incremental_u2nu_init_DS,
       py::kw_only(), "npoints_estimate"_a=1000000000, "grid"_a, "forward"_a,
-        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.19, "sigma_max"_a=2.51,
         "periodicity"_a=2*pi, "fft_order"_a=false)
     .def("get_points", &Py_incremental_u2nu::get_points,
       incremental_u2nu_get_points_DS, py::kw_only(),
@@ -1047,7 +1047,7 @@ void add_nufft(py::module_ &msup)
     .def(py::init<const CNpArr &, const CNpArr &,
                   double, size_t, double, double, size_t>(),
       plan3_init_DS, py::kw_only(), "coord_in"_a, "coord_out"_a,
-        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.1, "sigma_max"_a=2.6,
+        "epsilon"_a, "nthreads"_a=0, "sigma_min"_a=1.19, "sigma_max"_a=2.51,
         "verbosity"_a=0)
     .def("exec", &Py_Nufft3plan::exec, plan3_exec_DS, py::kw_only(), "forward"_a,
       "points_in"_a, "points_out"_a=None)
