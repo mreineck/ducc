@@ -24,6 +24,7 @@
  */
 
 #include <tuple>
+#include "ducc0/infra/threading.h"
 #include "ducc0/math/gl_integrator.h"
 
 namespace ducc0 {
@@ -32,10 +33,10 @@ namespace detail_gl_integrator {
 
 using namespace std;
 
-template<typename T> inline T one_minus_x2 (T x)
+template<typename T> static inline T one_minus_x2 (T x)
   { if (x<0) x=-x; return (x>T(0.1)) ? (T(1)+x)*(T(1)-x) : T(1)-x*x; }
 
-tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
+static tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
   {
   using Tfloat = long double;
   constexpr Tfloat eps=Tfloat(3e-14L);
@@ -84,7 +85,7 @@ tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
 // https://epubs.siam.org/doi/pdf/10.1137/140954969
 
 // This function computes the kth zero of the BesselJ(0,x)
-double besseljzero(int k)
+static double besseljzero(int k)
   {
   constexpr static array<double,12> JZ
     {2.40482555769577276862163187933,  5.52007811028631064959660411281,
@@ -108,7 +109,7 @@ double besseljzero(int k)
   }
 
 // This function computes the square of BesselJ(1, BesselZero(0,k))
-double besselj1squared(int k)
+static double besselj1squared(int k)
   {
   constexpr static array<double,13> J1
     {0.269514123941916926139021992911 , 0.115780138582203695807812836182,
@@ -131,7 +132,7 @@ double besselj1squared(int k)
   }
 
 // Compute a node-weight pair, with k limited to half the range
-tuple<double,double,double> calc_gl_bogaert(size_t n, size_t k0)
+static tuple<double,double,double> calc_gl_bogaert(size_t n, size_t k0)
   {
   size_t k = ((2*k0-1)<=n) ? k0 : n-k0+1;
   // First get the Bessel zero
@@ -210,27 +211,51 @@ tuple<double,double,double> calc_gl_bogaert(size_t n, size_t k0)
                     (k==k0) ? theta : pi-theta);
   }
 
-tuple<double, double, double> calc_gl(size_t n, size_t k)
-  {
-  MR_assert(n>=k, "k must not be greater than n");
-  MR_assert(k>0, "k must be positive");
-  return (n<=100) ? calc_gl_iterative(n,k) : calc_gl_bogaert(n,k);
-  }
-
 GL_Integrator::GL_Integrator(size_t n, size_t /*nthreads*/)
   : n_(n)
   {
   MR_assert(n>=1, "number of points must be at least 1");
-  size_t m = (n+1)>>1;
-  x.resize(m);
-  w.resize(m);
-  th.resize(m);
-  for (size_t i=0; i<m; ++i)
+  if (n<=100)
     {
-    auto tmp = calc_gl(n, m-i);
-    x[i] = get<0>(tmp);
-    w[i] = get<1>(tmp);
-    th[i] = get<2>(tmp);
+    static array<vector<double>,100> xcache, wcache, thcache;
+    static Mutex mut;
+  
+    {
+    LockGuard lock(mut);
+  
+    if (xcache[n-1].empty())
+      {
+      size_t m = (n+1)>>1;
+      xcache[n-1].resize(m);
+      wcache[n-1].resize(m);
+      thcache[n-1].resize(m);
+      for (size_t i=0; i<m; ++i)
+        {
+        auto [xi, wi, thi] = calc_gl_iterative(n, m-i);
+        xcache[n-1][i] = xi;
+        wcache[n-1][i] = wi;
+        thcache[n-1][i] = thi;
+        }
+      }
+    }
+  
+    x = xcache[n-1];
+    w = wcache[n-1];
+    th = thcache[n-1];
+    }
+  else
+    {
+    size_t m = (n+1)>>1;
+    x.resize(m);
+    w.resize(m);
+    th.resize(m);
+    for (size_t i=0; i<m; ++i)
+      {
+      auto [xi, wi, thi] = calc_gl_bogaert(n, m-i);
+      x[i] = xi;
+      w[i] = wi;
+      th[i] = thi;
+      }
     }
   }
 
