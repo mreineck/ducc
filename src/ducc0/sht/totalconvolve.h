@@ -66,7 +66,7 @@ template<typename T> class ConvolverPlan
     // _b: oversampled grid
     // no suffix: grid with borders
     size_t nphi_s, ntheta_s, npsi_s;
-    size_t kernel_index;
+    tuple<size_t, double, vector<size_t>> kdata;
     shared_ptr<PolynomialKernel> kernel;
     size_t nphi_b, ntheta_b, npsi_b;
     double dphi, dtheta, dpsi, xdphi, xdtheta, xdpsi;
@@ -370,12 +370,12 @@ template<typename T> class ConvolverPlan
         nphi_s(good_size_real(2*lmax+1,2)),
         ntheta_s(nphi_s/2+1),
         npsi_s(kmax*2+1),
-        kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
+        kdata(PSWF_findNufftParameters<T,T>(epsilon, sigma_min, sigma_max,
           {(2*ntheta_s-2), nphi_s, npsi_s}, npoints, true, nthreads)),
-        kernel(selectKernel(kernel_index)),
-        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
-        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),
-        npsi_b(size_t(npsi_s*ducc0::getKernel(kernel_index).ofactor+0.99999)),
+        kernel(PSWF_selectKernel(get<0>(kdata), get<1>(kdata))),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*get<1>(kdata)/2.)))),
+        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*get<1>(kdata))+1))),
+        npsi_b(size_t(npsi_s*get<1>(kdata)+0.99999)),
         dphi(2*pi/nphi_b),
         dtheta(pi/(ntheta_b-1)),
         dpsi(2*pi/npsi_b),

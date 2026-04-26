@@ -470,70 +470,10 @@ template<size_t W, typename Tsimd> class TemplateKernel
       }
   };
 
-struct KernelParams
-  {
-  size_t W;
-  double ofactor, epsilon, beta, e0;
-  size_t ndim;
-  bool singleprec;
-  };
-
 shared_ptr<PolynomialKernel> PSWF_selectKernel(size_t supp, double ofactor);
-shared_ptr<PolynomialKernel> selectKernel(size_t idx);
-const KernelParams &getKernel(size_t idx);
 
 template<typename T> constexpr inline size_t Wmax()
   { return is_same<T,float>::value ? 8 : 16; }
-
-extern const vector<KernelParams> KernelDB;
-
-/*! Returns the 2-parameter ES kernel for the given oversampling factor,
- *  dimensionality, and error that has the smallest support. */
-template<typename T> auto selectKernel(double ofactor, size_t ndim, double epsilon)
-  {
-  constexpr bool singleprec = is_same<T, float>::value;
-  size_t Wmin = Wmax<T>();
-  size_t idx = KernelDB.size();
-  for (size_t i=0; i<KernelDB.size(); ++i)
-    {
-    if  ((KernelDB[i].ndim==ndim) && (KernelDB[i].singleprec==singleprec)
-      && (KernelDB[i].ofactor<=ofactor) && (KernelDB[i].epsilon<=epsilon)
-      && (KernelDB[i].W<=Wmin))
-      {
-      idx = i;
-      Wmin = KernelDB[i].W;
-      }
-    }
-  return selectKernel(idx);
-  }
-
-template<typename T> auto getAvailableKernels(double epsilon,
-  size_t ndim, double ofactor_min=1.1, double ofactor_max=2.6)
-  {
-  constexpr bool singleprec = is_same<T, float>::value;
-  vector<double> ofc(20, ofactor_max);
-  vector<size_t> idx(20, KernelDB.size());
-  size_t Wlim = Wmax<T>();
-  for (size_t i=0; i<KernelDB.size(); ++i)
-    {
-    auto ofactor = KernelDB[i].ofactor;
-    size_t W = KernelDB[i].W;
-    if ((KernelDB[i].ndim==ndim) && (KernelDB[i].singleprec==singleprec)
-      && (W<=Wlim) && (KernelDB[i].epsilon<=epsilon)
-      && (ofactor<=ofc[W]) && (ofactor>=ofactor_min))
-      {
-      ofc[W] = ofactor;
-      idx[W] = i;
-      }
-    }
-  vector<size_t> res;
-  for (auto v: idx)
-    if (v<KernelDB.size()) res.push_back(v);
-  MR_assert(!res.empty(),
-    "No appropriate kernel found for the specified combination of parameters\n"
-    "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
-  return res;
-  }
 
 double bestEpsilon(size_t ndim, bool singleprec,
   double ofactor_min=1.1, double ofactor_max=2.6);
@@ -544,13 +484,9 @@ using detail_gridding_kernel::PSWF_get_best_sigma;
 using detail_gridding_kernel::PSWF_selectKernel;
 using detail_gridding_kernel::FunctionApproximator;
 using detail_gridding_kernel::GriddingKernel;
-using detail_gridding_kernel::getKernel;
-using detail_gridding_kernel::selectKernel;
-using detail_gridding_kernel::getAvailableKernels;
 using detail_gridding_kernel::bestEpsilon;
 using detail_gridding_kernel::PolynomialKernel;
 using detail_gridding_kernel::TemplateKernel;
-using detail_gridding_kernel::KernelParams;
 
 }
 

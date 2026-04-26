@@ -51,6 +51,7 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/rangeset.h"
 #include "ducc0/wgridder/wgridder.h"
+#include "ducc0/nufft/nufft.h"
 
 namespace ducc0 {
 
@@ -1513,23 +1514,38 @@ timers.pop();
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
-      auto idx = getAvailableKernels<Tcalc>(epsilon, do_wgridding ? 3 : 2, sigma_min, sigma_max);
+      constexpr bool singleprec = std::is_same<Tcalc,float>::value;
+      vector<pair<size_t,double>> candidates;
+      for (size_t W=4; W<(singleprec?9:17); ++W)
+        {
+        double sigma = PSWF_get_best_sigma(sigma_min, sigma_max, W, 2+do_wgridding, singleprec, epsilon);
+        if (sigma>0)
+          if (candidates.empty() || (get<1>(candidates.back())>sigma))
+            candidates.emplace_back(W, sigma);
+        }
+      MR_assert(!candidates.empty(),
+        "No appropriate kernel found for the specified combination of parameters\n"
+        "(epsilon, sigma_min, sigma_max, ndim, floating point precision).");
+
       double mincost = 1e300;
       constexpr double nref_fft=2048;
       constexpr double costref_fft=0.0693;
-      size_t minnu=0, minnv=0, minidx=~(size_t(0));
+      size_t minnu=0, minnv=0;
       size_t vlen;
       // Avoid duplicated-branches warning when the sizes are equal.
       if constexpr (mysimd<Tacc>::size() == mysimd<Tcalc>::size())
         vlen = mysimd<Tacc>::size();
       else
         vlen = gridding ? mysimd<Tacc>::size() : mysimd<Tcalc>::size();
-      for (size_t i=0; i<idx.size(); ++i)
+
+      size_t best_W=~(size_t(0));
+      double best_sigma=-1;
+
+      for (auto cand: candidates)
         {
-        const auto &krn(getKernel(idx[i]));
-        auto supp = krn.W;
+        auto supp = get<0>(cand);
         auto nvec = (supp+vlen-1)/vlen;
-        auto ofactor = krn.ofactor;
+        auto ofactor = get<1>(cand);
         size_t nu=2*good_size_complex(size_t(nxdirty*ofactor*0.5)+1);
         size_t nv=2*good_size_complex(size_t(nydirty*ofactor*0.5)+1);
         nu = max<size_t>(nu,16);
@@ -1562,13 +1578,14 @@ timers.pop();
           mincost=cost;
           minnu=nu;
           minnv=nv;
-          minidx = idx[i];
+          best_W = supp;
+          best_sigma = ofactor;
           }
         }
       timers.pop();
       nu = minnu;
       nv = minnv;
-      return minidx;
+      return make_tuple(best_W, best_sigma);
       }
 
     void scanData()
@@ -1653,11 +1670,11 @@ timers.pop();
         if (gridding) mav_apply([](Timg &v){v=Timg(0);}, nthreads, dirty_out);
         return;
         }
-      auto kidx = getNuNv();
+      auto [supp_, sigma_] = getNuNv();
       MR_assert((nu>>log2tile)<(size_t(1)<<16), "nu too large");
       MR_assert((nv>>log2tile)<(size_t(1)<<16), "nv too large");
-      ofactor = min(double(nu)/nxdirty, double(nv)/nydirty);
-      krn = selectKernel(kidx);
+      ofactor = sigma_; //min(double(nu)/nxdirty, double(nv)/nydirty);
+      krn = PSWF_selectKernel(supp_, sigma_); //selectKernel(kidx);
       supp = krn->support();
       nsafe = (supp+1)/2;
       ushift = supp*(-0.5)+1+nu;

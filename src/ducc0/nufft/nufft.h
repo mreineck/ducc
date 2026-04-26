@@ -818,7 +818,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
 } // namespace detail_nufft
 
 // public names
-using detail_nufft::findNufftKernel;
+using detail_nufft::PSWF_findNufftParameters;
 using detail_nufft::u2nu;
 using detail_nufft::nu2u;
 using detail_nufft::nu2nu;

@@ -67,7 +67,7 @@ template<typename T> class SphereInterpol
     // _b: oversampled grid
     // no suffix: grid with borders
     size_t nphi_s, ntheta_s;
-    size_t kernel_index;
+    tuple<size_t, double, vector<size_t>> kdata;
     shared_ptr<PolynomialKernel> kernel;
     size_t nphi_b, ntheta_b;
     double dphi, dtheta, xdphi, xdtheta;
@@ -430,11 +430,11 @@ template<typename T> class SphereInterpol
         spin(spin_),
         nphi_s(good_size_real(2*mmax+1, 2)),
         ntheta_s(good_size_real(lmax+1)+1),
-        kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
+        kdata(PSWF_findNufftParameters<T,T>(epsilon, sigma_min, sigma_max,
           {(2*ntheta_s-2), nphi_s}, npoints, true, nthreads)),
-        kernel(selectKernel(kernel_index)),
-        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*mmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
-        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),
+        kernel(PSWF_selectKernel(get<0>(kdata), get<1>(kdata))),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*mmax+1)*get<1>(kdata)/2.)))),
+        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*get<1>(kdata))+1))),
         dphi(2*pi/nphi_b),
         dtheta(pi/(ntheta_b-1)),
         xdphi(1./dphi),
