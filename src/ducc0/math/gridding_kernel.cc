@@ -28,13 +28,6 @@ namespace detail_gridding_kernel {
 
 using namespace std;
 
-template<typename T> T esknew (T v, T beta, T e0)
-  {
-  auto tmp = (1-v)*(1+v);
-  auto tmp2 = tmp>=0;
-  return tmp2*exp(beta*(pow(tmp*tmp2, e0)-1));
-  }
-
 // Beatty estimate for the PSWF parameter, taken from Finufft
 static double get_beta(size_t W, double sigma)
   {
