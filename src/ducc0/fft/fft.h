@@ -90,32 +90,39 @@ template<bool fwd, typename T, typename T2> void special_mul (const Cmplx<T> &v1
 
 struct util1d // hack to avoid duplicate symbols
   {
+  // Finds the smallest product p of 2s and 3s, such that p*x>=n.
+  // Returns min(p*x, bestfac).
+  static size_t iter23(size_t n, size_t x, size_t bestfac)
+    {
+    while (x<n) x*=2;
+    // In the loop below, successively remove factors of 2 and
+    // add factors of 3, such that x stays in (n/2; 3*n).
+    // Whenever a new minimum target value is found, remember it.
+    // Stop if either x==n or no factors of 2 are left.
+    for (;;)
+      {
+      if (x<n)
+        x*=3;
+      else if (x>n)
+        {
+        if (x<bestfac) bestfac=x;
+        if (x&1) return bestfac;  // no more factors 2 left
+        x>>=1;  // remove a factor 2
+        }
+      else
+        return n;
+      }
+    }
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n */
   DUCC0_NOINLINE static size_t good_size_cmplx(size_t n)
     {
     if (n<=12) return n;
 
-    size_t bestfac=2*n;
+    size_t bestfac=2*n;  // guaranteed upper limit to the solution
     for (size_t f11=1; f11<bestfac; f11*=11)
       for (size_t f117=f11; f117<bestfac; f117*=7)
         for (size_t f1175=f117; f1175<bestfac; f1175*=5)
-          {
-          size_t x=f1175;
-          while (x<n) x*=2;
-          for (;;)
-            {
-            if (x<n)
-              x*=3;
-            else if (x>n)
-              {
-              if (x<bestfac) bestfac=x;
-              if (x&1) break;
-              x>>=1;
-              }
-            else
-              return n;
-            }
-          }
+          if ((bestfac=iter23(n, f1175, bestfac))==n) return n;
     return bestfac;
     }
   /* returns the smallest composite of 2, 3, 5, 7 and 11 which is >= n
@@ -132,25 +139,9 @@ struct util1d // hack to avoid duplicate symbols
     {
     if (n<=6) return n;
 
-    size_t bestfac=2*n;
+    size_t bestfac=2*n;  // guaranteed upper limit to the solution
     for (size_t f5=1; f5<bestfac; f5*=5)
-      {
-      size_t x = f5;
-      while (x<n) x *= 2;
-      for (;;)
-        {
-        if (x<n)
-          x*=3;
-        else if (x>n)
-          {
-          if (x<bestfac) bestfac=x;
-          if (x&1) break;
-          x>>=1;
-          }
-        else
-          return n;
-        }
-      }
+      if ((bestfac=iter23(n, f5, bestfac))==n) return n;
     return bestfac;
     }
   /* returns the smallest composite of 2, 3, 5 which is >= n
