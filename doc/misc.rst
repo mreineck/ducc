@@ -20,6 +20,30 @@ Miscellaneous notes
    weights computed this way, which makes subsequent calls to the
    integrator functions even faster.
 
+2. Prolate spheroidal wave functions
+
+   Ducc0 can compute prolate spheroidal wave functions (PSWF) of order 0,
+   which are useful for non-uniform FFTs, radio interferometry gridding,
+   and many more contexts.
+
+   The implementation is based on Vladimir Rokhlin's Fortran code,
+   available in https://github.com/flatironinstitute/dmk.
+   Several performance improvements are added on top:
+
+   - Since the functions in question are even, we can skip all
+     polynomial coefficients of odd degree. This allows for
+     significantly faster evaluation and reduces storage requirements.
+   - The function evaluation routine avoids all floating-point division
+     instructions and uses small tables of precomputed values where
+     necessary, which results in another considerable speed-up.
+   - Further gains are possible by computing several function values
+     simultaneously, by using SIMD instructions.
+
+   Overall, setting up a PSWF computation object for a given parameter
+   ``c`` requires (roughly) ``c`` microseconds, whereas any subsequent
+   function evaluation takes 10-100 nanoseconds.
+
+
 .. automodule:: ducc0.misc
     :members:
 
