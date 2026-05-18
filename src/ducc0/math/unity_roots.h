@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2021 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
@@ -50,9 +50,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define DUCC0_UNITY_ROOTS_H
 
 #include <cmath>
+#include <memory>
 #include <cstddef>
 #include <type_traits>
 #include <vector>
+#include <tuple>
 
 namespace ducc0 {
 
@@ -196,6 +198,60 @@ template<typename T, typename Tc> class UnityRoots
       }
   };
 
+/* f : number to convert.
+ * num, denom: returned parts of the rational.
+ * md: max denominator value.  Note that machine floating point number
+ *     has a finite resolution (1e-16 ish for 64 bit double), so specifying
+ *     a "best match with minimal error" is often wrong, because one can
+ *     always just retrieve the significand and return that divided by
+ *     2**52, which is in a sense accurate, but generally not very useful:
+ *     1.0/7.0 would be "2573485501354569/18014398509481984", for example.
+ */
+template<typename T> static tuple<int64_t, int64_t> rat_approx0(T f, int64_t md)
+  {
+  static_assert(is_same<T,double>::value || is_same<T,float>::value,
+    "unsupported floating point type");
+
+  if (md <= 1) return make_tuple(int64_t(f), int64_t(1));
+
+  // take care of negative numbers
+  bool neg = f<0;
+  if (neg) f = -f;
+
+  // move number into interval [1;2]
+  int64_t sub = int64_t(floor(f))-1;
+  f -= sub;
+
+  // Multiply number by a sufficiently large power of 2 to make it integer 
+  int64_t n = ((int64_t)1)<<53;
+  f = ldexp(f,53);
+  int64_t d = int64_t(f);
+
+  /* continued fraction and check denominator each step */
+  int64_t h[3] = { 0, 1, 0 }, k[3] = { 1, 0, 0 };
+  for (int i = 0; i < 64; i++) {
+    int64_t a = n ? d / n : 0;
+    if (i && !a) break;
+
+    int64_t x = d;
+    d = n;
+    n = x % n;
+
+    x = a;
+    if (k[1] * a + k[0] >= md) {
+      x = (md - k[0]) / k[1];
+      if ((x*2 >= a) || (k[1]>=md))
+        i = 65;
+      else
+        break;
+    }
+
+    h[2] = x * h[1] + h[0]; h[0] = h[1]; h[1] = h[2];
+    k[2] = x * k[1] + k[0]; k[0] = k[1]; k[1] = k[2];
+  }
+  return make_tuple(neg ? -(h[1]+k[1]*sub) : h[1]+k[1]*sub, k[1]);
+}
+
 template<typename T, typename Tc> class MultiExp
   {
   private:
@@ -204,29 +260,54 @@ template<typename T, typename Tc> class MultiExp
     size_t N, mask, shift;
     vector<cmplx_> v1, v2;
 
+    unique_ptr<UnityRoots<T,Tc>> ur;
+    size_t num, den;
+
   public:
     MultiExp(T ang0, size_t n)
       : N(n)
       {
-      Thigh ang = ang0;
-      size_t nval = n+2;
-      shift = 1;
-      while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
-      mask = (size_t(1)<<shift)-1;
-      v1.resize(mask+1);
-      v1[0]={Thigh(1), Thigh(0)};
-      for (size_t i=1; i<v1.size(); ++i)
-        v1[i] = {cos(i*ang), sin(i*ang)};
-      v2.resize((nval+mask)/(mask+1));
-      v2[0]={Thigh(1), Thigh(0)};
-      for (size_t i=1; i<v2.size(); ++i)
-        v2[i] = {cos((i*(mask+1))*ang), sin((i*(mask+1))*ang)};
+      // Check if ang0 is a clean fraction of 2*pi.
+      // If yes, use UnityRoots internally, because this will be
+      // more accurate.
+      static constexpr T pi = T(3.141592653589793238462643383279502884197L);
+      T frac = ang0/(2*pi);
+      frac -= floor(frac);  // bring frac into [0;1] range
+      // limit denominator to 10*N, to avoid using too much memory
+      auto[num_,den_] = rat_approx0(frac, 10*N);
+      if (T(num_)==frac*T(den_))  // we found a clean fraction
+        {
+        num = size_t(num_);
+        den = size_t(den_);
+        ur = make_unique<UnityRoots<T,Tc>>(den);
+        }
+      else
+        {
+        Thigh ang = ang0;
+        size_t nval = n+2;
+        shift = 1;
+        while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
+        mask = (size_t(1)<<shift)-1;
+        v1.resize(mask+1);
+        v1[0]={Thigh(1), Thigh(0)};
+        for (size_t i=1; i<v1.size(); ++i)
+          v1[i] = {cos(i*ang), sin(i*ang)};
+        v2.resize((nval+mask)/(mask+1));
+        v2[0]={Thigh(1), Thigh(0)};
+        for (size_t i=1; i<v2.size(); ++i)
+          v2[i] = {cos((i*(mask+1))*ang), sin((i*(mask+1))*ang)};
+        }
       }
 
     size_t size() const { return N; }
 
     Tc operator[](size_t idx) const
       {
+      if (ur)
+        {
+        auto tmp = idx*num;
+        return (tmp<den) ? (*ur)[tmp] : (*ur)[tmp%den];
+        }
       auto x1=v1[idx&mask], x2=v2[idx>>shift];
       return Tc(T(x1.r*x2.r-x1.i*x2.i), T(x1.r*x2.i+x1.i*x2.r));
       }
