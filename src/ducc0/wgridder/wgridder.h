@@ -36,6 +36,20 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<compl
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift);
 
+template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,1>, typename Timg>
+  void ms2dirty_new(
+    const cmav<double,2> &uvw,                        // (nrows,3)
+    const cmav<size_t,1> &freqlist_id,                // (nrows),
+    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
+    const Tms_in &ms,                                 // concatenated array of visibilities, shape (sum_i(freqlist_nfreq[freqlist_id[i]))
+    const cmav<Tms,1> &wgt_,                          // same shape as above
+    const cmav<uint8_t,1> &mask_,                     // same shape as above
+    double pixsize_x, double pixsize_y, double epsilon,
+    bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
+    bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
+    double sigma_max, double center_x, double center_y, bool allow_nshift);
+
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
