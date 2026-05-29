@@ -198,6 +198,7 @@ template<typename T, typename Tc> class UnityRoots
       }
   };
 
+// Rational approximation for floating-point numbers
 /* f : number to convert.
  * num, denom: returned parts of the rational.
  * md: max denominator value.  Note that machine floating point number
