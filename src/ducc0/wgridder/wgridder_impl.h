@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_H
@@ -3202,15 +3202,17 @@ do_wgridding, nthreads, dirty, verbosity, flip_u, flip_v, flip_w,divide_by_n, si
      sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_new(const cmav<double,2> &uvw,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+  void dirty2ms_new(
+    const cmav<double,2> &uvw,
     const cmav<size_t,1> &freqlist_id,                // (nrows),
     const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
     const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
-  const cmav<Timg,2> &dirty,
-  const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,1> &ms,
-  size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
+    const cmav<Timg,2> &dirty,
+    const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,
+    double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,1> &ms,
+    size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+    double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
   auto ms_in(ms.build_uniform(ms.shape(),1.));

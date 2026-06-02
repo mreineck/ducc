@@ -57,6 +57,18 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
   double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift);
 
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+  void dirty2ms_new(
+    const cmav<double,2> &uvw,
+    const cmav<size_t,1> &freqlist_id,                // (nrows),
+    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
+    const cmav<Timg,2> &dirty,
+    const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,
+    double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,1> &ms,
+    size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+    double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift);
+
 tuple<size_t, size_t, size_t, size_t, double, double>
  get_facet_data(size_t npix_x, size_t npix_y, size_t nfx, size_t nfy, size_t ifx, size_t ify,
   double pixsize_x, double pixsize_y, double center_x, double center_y);
@@ -80,6 +92,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 // public names
 using detail_gridder::ms2dirty;
 using detail_gridder::dirty2ms;
+using detail_gridder::ms2dirty_new;
+using detail_gridder::dirty2ms_new;
 using detail_gridder::ms2dirty_tuning;
 using detail_gridder::dirty2ms_tuning;
 
