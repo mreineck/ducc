@@ -17,8 +17,8 @@
 /* Copyright (C) 2019-2025 Max-Planck-Society
    Author: Martin Reinecke */
 
-#ifndef DUCC0_WGRIDDER_H
-#define DUCC0_WGRIDDER_H
+#ifndef DUCC0_WGRIDDER_IMPL_H
+#define DUCC0_WGRIDDER_IMPL_H
 
 #include <cstring>
 #include <complex>
