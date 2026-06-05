@@ -1690,7 +1690,7 @@ timers.pop();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,2>, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
@@ -1723,11 +1723,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-tuple<size_t, size_t, size_t, size_t, double, double>
- get_facet_data(size_t npix_x, size_t npix_y, size_t nfx, size_t nfy, size_t ifx, size_t ify,
-  double pixsize_x, double pixsize_y, double center_x, double center_y);
-
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
@@ -1774,7 +1770,7 @@ tuple<vmav<uint8_t,2>,size_t,size_t, size_t>  get_tuning_parameters(const cmav<d
   double epsilon, bool do_wgridding, size_t nthreads,
   size_t verbosity, double center_x, double center_y);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> void ms2dirty_tuning(const cmav<double,2> &uvw,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in> void ms2dirty_tuning(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
