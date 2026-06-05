@@ -3244,7 +3244,7 @@ do_wgridding, nthreads, msnew, verbosity, flip_u, flip_v, flip_w,divide_by_n, si
      sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
