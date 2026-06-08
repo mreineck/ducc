@@ -331,11 +331,12 @@ class Baselines_new
   {
   protected:
     vector<UVW> coord;
-    vector<size_t> id;
-    vector<size_t> ms_ofs;
+    size_t nfreqs = 0;   // if 0, data set is "ragged", and we need
+                         // more complicated address calculations
+    vector<size_t> id;        // only allocated if nfreqs == 0
+    vector<size_t> ms_ofs;    // only allocated if nfreqs == 0
     vector<size_t> freq_ofs;
     vector<double> f_over_c;
-    size_t nrows;
     double umax, vmax;
 
   public:
@@ -347,28 +348,33 @@ class Baselines_new
       const cmav<double,1> &freqlist_freqs,
       bool flip_u=false, bool flip_v=false, bool flip_w=false)
       {
-      nrows = coord_.shape(0);
+      size_t nrows = coord_.shape(0);
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
-      size_t nrows = coord_.shape(0);
       MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
-      id.resize(nrows);
       size_t max_id = 0;
       for (size_t i=0; i<nrows; ++i)
-        {
-        id[i] = freqlist_id(i);
         max_id = max(max_id, freqlist_id(i));
-        }
       MR_assert(max_id+1<=freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
       freq_ofs.resize(max_id+2);
       freq_ofs[0] = 0;
       for (size_t i=0; i<=max_id; ++i)
         freq_ofs[i+1] = freq_ofs[i] + freqlist_nfreqs(i);
       MR_assert(freqlist_freqs.shape(0)>=freq_ofs.back(), "freqlist_freqs array is too small");
-      ms_ofs.resize(nrows+1);
-      ms_ofs[0] = 0;
-      for (size_t i=0; i<nrows; ++i)
-        ms_ofs[i+1] = ms_ofs[i] + freqlist_nfreqs(id[i]);
+      if (max_id==0)  // simple case, we only have one frequency list
+        {
+        nfreqs = freqlist_nfreqs(0);
+        }
+      else
+        {
+        id.resize(nrows);
+        for (size_t i=0; i<nrows; ++i)
+          id[i] = freqlist_id(i);
+        ms_ofs.resize(nrows+1);
+        ms_ofs[0] = 0;
+        for (size_t i=0; i<nrows; ++i)
+          ms_ofs[i+1] = ms_ofs[i] + freqlist_nfreqs(id[i]);
+        }
 
       f_over_c.resize(freq_ofs.back());
       double fcmax = 0;
@@ -400,13 +406,16 @@ class Baselines_new
       }
 
     size_t ofs_ms(size_t irow) const
-      { return ms_ofs[irow]; }
+      { return nfreqs==0 ? ms_ofs[irow] : irow*nfreqs; }
     size_t ofs_ms(size_t irow, size_t ichan) const
-      { return ms_ofs[irow] + ichan; }
+      { return ofs_ms(irow) + ichan; }
+  private:
     size_t ofs_freq(size_t irow) const
-      { return freq_ofs[id[irow]]; }
+      { return nfreqs==0 ? freq_ofs[id[irow]] : 0; }
     size_t ofs_freq(size_t irow, size_t ichan) const
-      { return freq_ofs[id[irow]] + ichan; }
+      { return ofs_freq(irow) + ichan; }
+
+  public:
     double ffact(size_t irow, size_t ichan) const
       { return f_over_c[ofs_freq(irow, ichan)]; }
     UVW effectiveCoord(size_t irow, size_t ichan) const
@@ -420,8 +429,8 @@ class Baselines_new
       DUCC0_PREFETCH_R(&coord[irow]);
       DUCC0_PREFETCH_R(&id[irow]);
       } // FIXME: prefetch channels?
-    size_t Nrows() const { return nrows; }
-    size_t Nchannels(size_t irow) const { return freq_ofs[id[irow]+1]-freq_ofs[id[irow]]; }
+    size_t Nrows() const { return coord.size(); }
+    size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
   };
