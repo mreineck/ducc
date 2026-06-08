@@ -37,7 +37,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<compl
   double sigma_max, double center_x, double center_y, bool allow_nshift);
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,1>, typename Timg>
-  void ms2dirty_new(
+  void ms2dirty_bda(
     const cmav<double,2> &uvw,                        // (nrows,3)
     const cmav<size_t,1> &freqlist_id,                // (nrows),
     const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
@@ -58,7 +58,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift);
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
-  void dirty2ms_new(
+  void dirty2ms_bda(
     const cmav<double,2> &uvw,
     const cmav<size_t,1> &freqlist_id,                // (nrows),
     const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
@@ -92,8 +92,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 // public names
 using detail_gridder::ms2dirty;
 using detail_gridder::dirty2ms;
-using detail_gridder::ms2dirty_new;
-using detail_gridder::dirty2ms_new;
+using detail_gridder::ms2dirty_bda;
+using detail_gridder::dirty2ms_bda;
 using detail_gridder::ms2dirty_tuning;
 using detail_gridder::dirty2ms_tuning;
 

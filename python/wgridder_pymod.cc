@@ -291,10 +291,10 @@ template<typename T> static NpArr Py2_vis2dirty_bda(const CNpArr &uvw_,
   {
   py::gil_scoped_release release;
   double_precision_accumulation ?
-    ms2dirty_new<T,double>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+    ms2dirty_bda<T,double>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
       do_wgridding,nthreads,dirty2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
       sigma_max, center_x, center_y, allow_nshift) :
-    ms2dirty_new<T,T>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+    ms2dirty_bda<T,T>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,vis,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
       do_wgridding,nthreads,dirty2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
       sigma_max, center_x, center_y, allow_nshift);
   }
@@ -604,7 +604,7 @@ template<typename T> static NpArr Py2_dirty2vis_bda(const CNpArr &uvw_,
   auto mask2 = to_cmav<uint8_t,1>(mask);
   {
   py::gil_scoped_release release;
-  dirty2ms_new<T,T>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
+  dirty2ms_bda<T,T>(uvw,freqlist_id,freqlist_nfreqs,freqlist_freqs,dirty,wgt2,mask2,pixsize_x,pixsize_y,epsilon,
     do_wgridding,nthreads,vis2,verbosity,flip_u,flip_v,flip_w,divide_by_n, sigma_min,
     sigma_max, center_x, center_y, allow_nshift);
   }

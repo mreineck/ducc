@@ -29,10 +29,10 @@ auto get_winfo(const cmav<double,2> &uvw, const cmav<double,1> &freq,
                const cmav<uint8_t,2> &mask_, size_t nbin, size_t nthreads)
   {
   MR_assert(nbin<255, "too many bins requested");
-  Baselines bl(uvw, freq, false);
+  Baselines bl(uvw, cmav<size_t,1>::build_uniform({uvw.shape(0)},0), cmav<size_t,1>::build_uniform({1},freq.shape(0)), freq, false);
 
   size_t nrow=bl.Nrows(),
-         nchan=bl.Nchannels();
+         nchan=bl.Nchannels(0);
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform({nrow,nchan}, 1));
   checkShape(mask.shape(), {nrow,nchan});
 
