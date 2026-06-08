@@ -3,7 +3,7 @@
  *
  *  For details see section 9 of https://wg21.link/N4808
  *
- *  \copyright Copyright (C) 2019-2021 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2026 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
 // so we don't use the standard library SIMD support on MacOS.
 // In fact, we only trust libstdc++ at the moment to implement this fully.
-#if (!defined (DUCC0_NO_SIMD)) && __has_include(<experimental/simd>) && defined(__GLIBCXX__) && defined(__GNUC__) && (__GNUC__>=12)
+#if (!defined (DUCC0_NO_SIMD)) && (!defined(__APPLE__)) && __has_include(<experimental/simd>) && defined(__GLIBCXX__) && defined(__GNUC__) && (__GNUC__>=12)
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
