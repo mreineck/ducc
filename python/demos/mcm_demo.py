@@ -56,27 +56,39 @@ def mcm00_ducc(spec, l1, l2):
     out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float32)
     ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
-
+def mcm00_ducc_new(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float32)
+    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
+def mcmpp_ducc(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(2,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
+def mcmpp_ducc_new(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(2,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
 def mcm02_ducc(spec, l1, l2):
-    nspec = spec.shape[0]
-    out= np.empty((nspec*5,l1+1,l2+1),dtype=np.float32)
-    spec = spec.reshape((nspec*4, spec.shape[2]))
-    optype = (0,1,1,4)*nspec
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(1,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
+def mcm02_ducc_new(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(1,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
 
 # lmax up to which the MCM will be computed
-l1=1000
-l2=700
+l1=10
+l2=10
 lmax=max(l1,l2)
 
-l_exact=100
+l_exact=-1
 dl_band=200
 l_toeplitz=170
 
 # number of spectra to process simultaneously
 
-nspec=5
+nspec=1
 
 print()
 print("Mode coupling matrix computation comparison")
@@ -90,14 +102,21 @@ spec = np.random.uniform(0.1,1.,size=(nspec, 4, 2*lmax+1))
 print()
 print("Spin 0 case:")
 
-t0=time()
-pspy = mcm00_pspy(spec[:,0,:], lmax)
-print(f"pspy time: {time()-t0}s")
+#t0=time()
+#pspy = mcm00_pspy(spec[:,0,:], lmax)
+#print(f"pspy time: {time()-t0}s")
 
 t0=time()
-duccsq = mcm00_ducc(spec[:,0,:], l1, l2)
+duccsq = mcm02_ducc(spec[:,0,:], l1, l2)
 print(f"ducc square time (single precision): {time()-t0}s")
+t0=time()
+duccnewsq = mcm02_ducc_new(spec[:,0,:], l1, l2)
+print(f"ducc square new time (single precision): {time()-t0}s")
+print(ducc0.misc.l2error(duccsq,duccnewsq))
+print(duccsq)
+print(duccnewsq)
 
+exit()
 # compare the results
 print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,2:l1+1,2:l2+1],4*np.pi*duccsq[:,2:,2:])}")
 print()
