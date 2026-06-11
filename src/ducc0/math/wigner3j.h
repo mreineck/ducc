@@ -62,6 +62,56 @@ template<typename Tsimd> void flexible_wigner3j_vec
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vector<double> &res);
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, const vmav<double,1> &res);
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
+
+template<typename Tsimd> class Wigner3j_direct
+  {
+  private:
+    vector<double> g, fct;
+    Tsimd iota;
+    static constexpr size_t safety = 16; // safety margin beyond lmax
+    inline static Tsimd sqr(Tsimd arg) { return arg*arg; }
+
+  public:
+    Wigner3j_direct(size_t lmax)
+      : g(2*lmax+1+safety), fct(2*lmax+1+safety)
+      {
+      for (size_t i=0; i<g.size(); i++)
+        {
+        // FIXME: it may be more accurate to do the g recurrence in logarithms.
+        g[i] = (i==0) ? 1. : g[i-1]*((i-0.5)/i);
+        fct[i] = 1./(g[i]*(2*i+1));
+        }
+      for (size_t i=0; i<Tsimd::size(); ++i)
+        iota[i] = double(i);
+      }
+
+    // ofs = (el3-el3min)/2
+    Tsimd get_00_sq(int el1, int el2, int ofs) const
+      {
+      return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
+      }
+    // ofs = (el3-el3min)/2
+    Tsimd get_p2m2_sq(int el1, int el2, int ofs) const
+      {
+      auto el2v = double(el2) + iota;
+      auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
+  
+      auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
+  
+      auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
+  
+      auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
+      auto B_sq = pref_5_num_sq / lmbda_sq;
+  
+      auto threej_000_sq = get_00_sq(el1, el2, ofs);
+      auto threej_000_2_sq = get_00_sq(el1, el2+2, ofs-1);
+  
+      auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
+      auto eta_sq = ((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+      return inner_sq / eta_sq;
+      }
+  };
+
 }
 
 using detail_wigner3j::wigner3j;
@@ -72,6 +122,8 @@ using detail_wigner3j::wigner3j_00_vec_squared_compact;
 
 using detail_wigner3j::flexible_wigner3j;
 using detail_wigner3j::flexible_wigner3j_vec;
+
+using detail_wigner3j::Wigner3j_direct;
 }
 
 #endif
