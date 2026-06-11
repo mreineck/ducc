@@ -127,7 +127,7 @@ template<typename Tsimd> class Wigner3j_direct
 //el3 = 2*ofs + el3min = 2*ofs + el2-el1
 //J = el1+el2+el2-el1+2*ofs == even
 // Note: the signs on the two roots don't matter, as long as we just get them both right or wrong together
-      auto x_eta_sq = 1./((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+      auto x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
       auto threej_000_sq = get_TT(el1, el2, ofs);
       auto tmp1 = sqrt(A_sq*threej_000_sq*x_eta_sq);
       auto threej_000_2_sq = get_TT(el1, el2+2, ofs-1);
