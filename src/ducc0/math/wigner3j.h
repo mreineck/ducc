@@ -63,6 +63,7 @@ void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, vector<double> &r
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min, const vmav<double,1> &res);
 int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
+// Direct evaluation of Wigner 3j symbols, following https://arxiv.org/abs/2602.15605
 template<typename Tsimd> class Wigner3j_direct
   {
   private:
@@ -86,12 +87,12 @@ template<typename Tsimd> class Wigner3j_direct
       }
 
     // ofs = (el3-el3min)/2
-    Tsimd get_00_sq(int el1, int el2, int ofs) const
+    Tsimd get_TT(int el1, int el2, int ofs) const
       {
       return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
       }
     // ofs = (el3-el3min)/2
-    Tsimd get_p2m2_sq(int el1, int el2, int ofs) const
+    Tsimd get_EE(int el1, int el2, int ofs) const
       {
       auto el2v = double(el2) + iota;
       auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
@@ -103,12 +104,37 @@ template<typename Tsimd> class Wigner3j_direct
       auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
       auto B_sq = pref_5_num_sq / lmbda_sq;
   
-      auto threej_000_sq = get_00_sq(el1, el2, ofs);
-      auto threej_000_2_sq = get_00_sq(el1, el2+2, ofs-1);
+      auto threej_000_sq = get_TT(el1, el2, ofs);
+      auto threej_000_2_sq = get_TT(el1, el2+2, ofs-1);
   
       auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
-      auto eta_sq = ((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+      auto eta_sq = (el1-1.)*(el1+2.)*(el2v-1.)*el2v;
       return inner_sq / eta_sq;
+      }
+    // ofs = (el3-el3min)/2
+    Tsimd get_TE(int el1, int el2, int ofs) const
+      {
+      auto el2v = double(el2) + iota;
+      auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
+  
+      auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
+  
+      auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
+
+      auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
+      auto B_sq = pref_5_num_sq / lmbda_sq;
+
+//el3 = 2*ofs + el3min = 2*ofs + el2-el1
+//J = el1+el2+el2-el1+2*ofs == even
+// Note: the signs on the two roots don't matter, as long as we just get them both right or wrong together
+      auto x_eta_sq = 1./((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+      auto threej_000_sq = get_TT(el1, el2, ofs);
+      auto tmp1 = sqrt(A_sq*threej_000_sq*x_eta_sq);
+      auto threej_000_2_sq = get_TT(el1, el2+2, ofs-1);
+      auto tmp2 = -sqrt(B_sq*threej_000_2_sq*x_eta_sq);
+  
+      auto threej_0p2m2 = tmp1+tmp2;
+      return sqrt(threej_000_sq)*threej_0p2m2;
       }
   };
 

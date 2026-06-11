@@ -143,7 +143,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wig00_new
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
     int el3 = el3min+i;
-    Tsimd j3val = w3j.get_00_sq(el1,el2,ofs);
+    Tsimd j3val = w3j.get_TT(el1,el2,ofs);
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
@@ -159,7 +159,7 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wig00_ne
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
     int el3 = el3min+i;
-    Tsimd j3val = w3j.get_00_sq(el1,el2,ofs);
+    Tsimd j3val = w3j.get_TT(el1,el2,ofs);
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
@@ -179,7 +179,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wigpp_new
     el2v[i] = double(el2+i);
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
-    auto j3val = w3j.get_p2m2_sq(el1,el2,ofs);
+    auto j3val = w3j.get_EE(el1,el2,ofs);
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
@@ -199,14 +199,14 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wigpp_ne
     el2v[i] = double(el2+i);
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
-    auto j3val = w3j.get_p2m2_sq(el1,el2,ofs);
+    auto j3val = w3j.get_EE(el1,el2,ofs);
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
   }
 template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wig02_new
-  (int el1, int el2, int lmax_spec, const vector<double> &g, const vector<double> &fct, const vmav<double,2> &spec2)
+  (int el1, int el2, int lmax_spec, const Wigner3j_direct<Tsimd> &w3j, const vmav<double,2> &spec2)
   {
   constexpr size_t vlen = Tsimd::size();
   array<Tsimd,nspec> val;
@@ -219,21 +219,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wig02_new
     el2v[i] = double(el2+i);
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
-    auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
-
-    auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
-
-    auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
-
-    auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
-    auto B_sq = pref_5_num_sq / lmbda_sq;
-
-    auto threej_000_sq = g[el1-ofs] * Tsimd(&g[el2-el1+ofs],element_aligned_tag()) * g[ofs] * Tsimd(&fct[el2+ofs],element_aligned_tag());
-    auto threej_000_2_sq = g[el1-ofs+1] * Tsimd(&g[el2-el1+ofs+1],element_aligned_tag()) * g[ofs-1] * Tsimd(&fct[el2+ofs+1],element_aligned_tag());
-
-    auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
-    auto eta_sq = ((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-    auto j3val = sqrt(inner_sq / eta_sq * threej_000_sq);
+    auto j3val = w3j.get_TE(el1,el2,ofs);
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
@@ -241,7 +227,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wig02_new
   return val;
   }
 template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wig02_new
-  (int el1, int el2, int lmax_spec, size_t nspec, const vector<double> &g, const vector<double> &fct, const Tspec &spec2, Tval &val)
+  (int el1, int el2, int lmax_spec, size_t nspec, const Wigner3j_direct<Tsimd> &w3j, const Tspec &spec2, Tval &val)
   {
   constexpr size_t vlen = Tsimd::size();
   for (size_t ispec=0; ispec<nspec; ++ispec)
@@ -253,21 +239,7 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wig02_ne
     el2v[i] = double(el2+i);
   for (int i=0, ofs=0; i<=max_i; ++ofs, i+=2)
     {
-    auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
-
-    auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
-
-    auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
-
-    auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
-    auto B_sq = pref_5_num_sq / lmbda_sq;
-
-    auto threej_000_sq = g[el1-ofs] * Tsimd(&g[el2-el1+ofs],element_aligned_tag()) * g[ofs] * Tsimd(&fct[el2+ofs],element_aligned_tag());
-    auto threej_000_2_sq = g[el1-ofs+1] * Tsimd(&g[el2-el1+ofs+1],element_aligned_tag()) * g[ofs-1] * Tsimd(&fct[el2+ofs+1],element_aligned_tag());
-
-    auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
-    auto eta_sq = ((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-    auto j3val = sqrt(inner_sq / eta_sq * threej_000_sq);
+    auto j3val = w3j.get_TE(el1,el2,ofs);
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
@@ -580,12 +552,7 @@ template<typename Tout> void coupling_matrix_02_rect_new(const cmav<double,2> &s
       spec2(i,l) = 0.;
   auto diag(vmav<Tout,2>::build_noncritical({nspec, lmax+1}));
 
-  vector<double> g(2*lmax+1+vlen), fct(2*lmax+1+vlen);
-  for (size_t i=0; i<2*lmax+1+vlen; i++)
-    {
-    g[i] = (i==0) ? 1. : g[i-1]*((i-0.5)/i);
-    fct[i] = 1./(g[i]*(2*i+1));
-    }
+  Wigner3j_direct<Tsimd> w3j(lmax);
 
   execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
     {
@@ -616,22 +583,22 @@ else
         if (el3min<=int(lmax_spec))
           {
           if (nspec==1)
-            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,1>(el1, el2, lmax_spec, g, fct, spec2));
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,1>(el1, el2, lmax_spec, w3j, spec2));
           else if (nspec==2)
-            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,2>(el1, el2, lmax_spec, g, fct, spec2));
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,2>(el1, el2, lmax_spec, w3j, spec2));
           else if (nspec==3)
-            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,3>(el1, el2, lmax_spec, g, fct, spec2));
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,3>(el1, el2, lmax_spec, w3j, spec2));
           else if (nspec==4)
-            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,4>(el1, el2, lmax_spec, g, fct, spec2));
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wig02_new<Tsimd,4>(el1, el2, lmax_spec, w3j, spec2));
           else if (nspec<=50)
             {
             array<Tsimd,50> val;
-            sum_wig02_new<Tsimd>(el1, el2, lmax_spec, nspec, g, fct, spec2, val); 
+            sum_wig02_new<Tsimd>(el1, el2, lmax_spec, nspec, w3j, spec2, val); 
             store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
             }
           else
             {
-            sum_wig02_new<Tsimd>(el1, el2, lmax_spec, nspec, g, fct, spec2, val); 
+            sum_wig02_new<Tsimd>(el1, el2, lmax_spec, nspec, w3j, spec2, val); 
             store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
             }
           }
