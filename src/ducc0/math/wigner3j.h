@@ -98,6 +98,16 @@ if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
       auto ofs = (el3-el3min)/2;
       return sign*sqrt(fct[el2+ofs] * g[el2-el1+ofs] * g[ofs] * g[el1-ofs]);
       }
+    double simple_000_sq(int el1, int el2, int el3) const
+      {
+if (el1>el2) return simple_000_sq(el2,el3,el1);
+auto J = el1+el2+el3;
+if (J&1) return 0;
+      auto el3min = el2-el1;
+if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
+      auto ofs = (el3-el3min)/2;
+      return fct[el2+ofs] * g[el2-el1+ofs] * g[ofs] * g[el1-ofs];
+      }
     double simple_0m1p1(int el1, int el2, int el3) const
       {
       auto J = el1+el2+el3;
@@ -116,6 +126,28 @@ if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
              + 0.5*simple_000(el1, el2+1, el3+1)*sqrt((J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.)));
         }
       }
+    double simple_0m1p1_sq(int el1, int el2, int el3) const
+      {
+      auto J = el1+el2+el3;
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2;
+      auto Jppm = J-2*el3;
+      if (J&1)  // odd
+        {
+// eq 25
+        return 0.25*simple_000_sq(el1,el2,el3+1)*(J+2.)*(Jmpp+1.)*(Jpmp+1.)*Jppm/(el2*(el2+1.)*el3*(el3+1.));
+        }
+      else
+        {
+// eq 34
+auto t1sq = (el2+1.)*(el3+1.)/(el2*el3)*simple_000_sq(el1,el2,el3);
+auto t2sq = 0.25*simple_000_sq(el1, el2+1, el3+1)*(J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.));
+return t1sq+t2sq-2.*sqrt(t1sq*t2sq);
+        auto tmp= sqrt((el2+1.)*(el3+1.)/(el2*el3))*simple_000(el1,el2,el3)
+             + 0.5*simple_000(el1, el2+1, el3+1)*sqrt((J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.)));
+        return tmp*tmp;
+        }
+      }
     double simple_0m2p2(int el1, int el2, int el3) const
       {  // eq 56
       auto J = el1+el2+el3;
@@ -130,9 +162,55 @@ if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
              -Lambda*simple_0m1p1(el1,el2,el3+1))/eta;
       }
 
+    double simple_0m2p2_sq(int el1, int el2, int el3) const
+      {  // eq 56
+      auto J = el1+el2+el3;
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2;
+      auto Jppm = J-2*el3;
+MR_assert(J&1,"oops");
+      auto eta_sq = (el2-1.)*(el2+2.)*(el3-1.)*el3;
+      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
+
+//auto term1 = -sqrt(1./(el2+1.));
+//auto term2 = -sqrt(el2+1.);
+auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
+//auto term25 = simple_000(el1,el2,el3+1)*sqrt((J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3+2.)/(el2*(el3+1.))) * (term1+term2);
+auto term25_sq = simple_000_sq(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3+2.)/(el2*(el3+1.)) * termsumsq;
+//auto term3 = -Lambda*0.5*simple_000(el1, el2+1, el3+2)*sqrt((J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2*(el2+1.)*(el3+1.)*(el3+2.)));
+auto term3_sq = Lambda_sq*0.25*simple_000_sq(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2*(el2+1.)*(el3+1.)*(el3+2.));
+// term25 and term 3 have opposite signs?
+//      auto res = term25 + term3;
+auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
+return res/eta_sq;
+      }
+    Tsimd get_EB_el3(int el1, int el2, int el3) const
+      {  // eq 56
+      auto el2v = double(el2) + iota;
+      auto el3v = double(el3) + iota;
+      auto J = el1+el2v+el3v;
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2v;
+      auto Jppm = J-2*el3v;
+//MR_assert(J&1,"oops");
+      auto eta_sq = (el2v-1.)*(el2v+2.)*(el3v-1.)*el3v;
+      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
+
+      auto termsumsq = (el2v+1.) + 2. + 1./(el2v+1.);
+      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
+      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
+      auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
+      return res/eta_sq;
+      }
+
     // ofs = (el3-el3min)/2
     Tsimd get_TT(int el1, int el2, int ofs) const
       {
+      return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
+      }
+    Tsimd get_TT_el3(int el1, int el2, int el3) const
+      {
+int ofs = (el3-(el2-el1))/2;
       return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
       }
     // ofs = (el3-el3min)/2
@@ -179,6 +257,35 @@ if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
   
       auto threej_0p2m2 = tmp1+tmp2;
       return sqrt(threej_000_sq)*threej_0p2m2;
+      }
+    Tsimd get_EB_el3(int el1, int el2, int el3) const
+      {  // eq 56
+      auto el1v = double(el1) + iota;
+      auto el3v = double(el3) + iota;
+      auto J = el11+el2+el3v;
+      auto Jmpp = J-2*el1v;
+      auto Jpmp = J-2*el2;
+      auto Jppm = J-2*el3v;
+//MR_assert(J&1,"oops");
+      auto eta_sq = (el2-1.)*(el2+2.)*(el3v-1.)*el3v;
+      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
+
+      auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
+      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
+      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
+#else
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2v;
+      auto Jppm = J-2*el3v;
+//MR_assert(J&1,"oops");
+      auto eta_sq = (el2v-1.)*(el2v+2.)*(el3v-1.)*el3v;
+      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
+
+      auto termsumsq = (el2v+1.) + 2. + 1./(el2v+1.);
+      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
+      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
+      auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
+      return res/eta_sq;
       }
   };
 
