@@ -260,7 +260,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wigEB_new
   for (int i=1; i<=max_i; i+=2)
     {
     int el3 = el3min+i;
-    Tsimd j3val = w3j.get_EB_el3(el3,el1,el2);
+    Tsimd j3val = w3j.get_EB_el3(el1,el2,el3);
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }

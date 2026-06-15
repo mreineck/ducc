@@ -190,11 +190,6 @@ return res/eta_sq;
       {
       return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
       }
-    Tsimd get_TT_el3(int el1, int el2, int el3) const
-      {
-int ofs = (el3-(el2-el1))/2;
-      return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
-      }
     // ofs = (el3-el3min)/2
     Tsimd get_EE(int el1, int el2, int ofs) const
       {
@@ -240,25 +235,26 @@ int ofs = (el3-(el2-el1))/2;
       auto threej_0p2m2 = tmp1+tmp2;
       return sqrt(threej_000_sq)*threej_0p2m2;
       }
+// el1+el2+el3 must be odd for this one
     Tsimd get_EB_el3(int el1, int el2, int el3) const
       {  // eq 56
-      auto el1v = double(el1) + iota;
       auto el3v = double(el3) + iota;
-      auto J = el1v+el2+el3v;
-      auto Jmpp = J-2*el1v;
-      auto Jpmp = J-2*el2;
-      auto Jppm = J-2*el3v;
+      auto el2v = double(el2) + iota;
+      auto J = el3v+el1+el2v;
+      auto Jmpp = J-2*el3v;
+      auto Jpmp = J-2*el1;
+      auto Jppm = J-2*el2v;
 //MR_assert(J&1,"oops");
-      auto eta_sq = (el2-1.)*(el2+2.)*(el3v-1.)*el3v;
+      auto eta_sq = (el1-1.)*(el1+2.)*(el2v-1.)*el2v;
       auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-auto other = el2*(el3v+1.);
+auto other = el1*(el2v+1.);
 
-      auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
-int ofs = (el1-(el3+1-el2))/2;
-      auto term25_sq = get_TT(el2,el3+1,ofs)*Lambda_sq*(el3v+2.)* termsumsq;
-      auto term3_sq = Lambda_sq*0.25*get_TT(el2+1, el3+2, ofs)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/((el2+1.)*(el3v+2.));
+      auto termsumsq = (el1+1.) + 2. + 1./(el1+1.);
+int ofs = (el3-(el2+1-el1))/2;
+      auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
+      auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/((el1+1.)*(el2v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-      return res/(eta_sq*other);
+      return res*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq/(eta_sq*other);
       }
   };
 
