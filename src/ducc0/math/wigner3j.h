@@ -85,7 +85,7 @@ template<typename Tsimd> class Wigner3j_direct
       for (size_t i=0; i<Tsimd::size(); ++i)
         iota[i] = double(i);
       }
-
+#if 0
     double simple_000(int el1, int el2, int el3) const
       {
 if (el1>el2) return simple_000(el2,el3,el1);
@@ -184,25 +184,7 @@ auto term3_sq = Lambda_sq*0.25*simple_000_sq(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(J
 auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
 return res/eta_sq;
       }
-    Tsimd get_EB_el3(int el1, int el2, int el3) const
-      {  // eq 56
-      auto el2v = double(el2) + iota;
-      auto el3v = double(el3) + iota;
-      auto J = el1+el2v+el3v;
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2v;
-      auto Jppm = J-2*el3v;
-//MR_assert(J&1,"oops");
-      auto eta_sq = (el2v-1.)*(el2v+2.)*(el3v-1.)*el3v;
-      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-
-      auto termsumsq = (el2v+1.) + 2. + 1./(el2v+1.);
-      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
-      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
-      auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-      return res/eta_sq;
-      }
-
+#endif
     // ofs = (el3-el3min)/2
     Tsimd get_TT(int el1, int el2, int ofs) const
       {
@@ -262,28 +244,18 @@ int ofs = (el3-(el2-el1))/2;
       {  // eq 56
       auto el1v = double(el1) + iota;
       auto el3v = double(el3) + iota;
-      auto J = el11+el2+el3v;
+      auto J = el1v+el2+el3v;
       auto Jmpp = J-2*el1v;
       auto Jpmp = J-2*el2;
       auto Jppm = J-2*el3v;
 //MR_assert(J&1,"oops");
       auto eta_sq = (el2-1.)*(el2+2.)*(el3v-1.)*el3v;
       auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
+auto other = 1./(el2*(el3v+1.));
 
       auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
-      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
-      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
-#else
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2v;
-      auto Jppm = J-2*el3v;
-//MR_assert(J&1,"oops");
-      auto eta_sq = (el2v-1.)*(el2v+2.)*(el3v-1.)*el3v;
-      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-
-      auto termsumsq = (el2v+1.) + 2. + 1./(el2v+1.);
-      auto term25_sq = get_TT_el3(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3v+2.)/(el2v*(el3v+1.)) * termsumsq;
-      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2v*(el2v+1.)*(el3v+1.)*(el3v+2.));
+      auto term25_sq = get_TT_el3(el2,el3+1,el1)*Lambda_sq*(el3v+2.)*other * termsumsq;
+      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el2+1, el3+2, el1)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)*other/((el2+1.)*(el3v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
       return res/eta_sq;
       }

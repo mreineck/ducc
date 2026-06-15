@@ -260,11 +260,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wigEB_new
   for (int i=1; i<=max_i; i+=2)
     {
     int el3 = el3min+i;
-    Tsimd j3val = w3j.get_EB_el3(el1,el2,el3);
-//    Tsimd j3val;
-//    for (size_t x=0;x<vlen; ++x)
-//      j3val[x] = w3j.simple_0m2p2_sq(el3+x,el1,el2+x);
-//  //  j3val *= j3val;
+    Tsimd j3val = w3j.get_EB_el3(el3,el1,el2);
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
@@ -285,10 +281,6 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wigEB_ne
     {
     int el3 = el3min+i;
     Tsimd j3val = w3j.get_EB_el3(el1,el2,el3);
-//    Tsimd j3val;
-//    for (size_t x=0;x<vlen; ++x)
-//      j3val[x] = w3j.simple_0m2p2_sq(el3+x,el1,el2+x);
-// //   j3val *= j3val;
     for (size_t ispec=0; ispec<nspec; ++ispec)
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
