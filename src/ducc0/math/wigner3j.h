@@ -236,10 +236,10 @@ return res/eta_sq;
       return sqrt(threej_000_sq)*threej_0p2m2;
       }
 // el1+el2+el3 must be odd for this one
-    Tsimd get_EB_el3(int el1, int el2, int el3) const
+    Tsimd get_EB(int el1, int el2, int ofs) const
       {  // eq 56
-      auto el3v = double(el3) + iota;
       auto el2v = double(el2) + iota;
+      auto el3v = 2.*ofs+el2v+1-el1;
       auto J = el3v+el1+el2v;
       auto Jmpp = J-2*el3v;
       auto Jpmp = J-2*el1;
@@ -250,7 +250,6 @@ return res/eta_sq;
 auto other = el1*(el2v+1.);
 
       auto termsumsq = (el1+1.) + 2. + 1./(el1+1.);
-int ofs = (el3-(el2+1-el1))/2;
       auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
       auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/((el1+1.)*(el2v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
