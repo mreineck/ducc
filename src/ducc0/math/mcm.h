@@ -245,6 +245,52 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wig02_ne
       val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
     }
   }
+template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wigEB_new
+  (int el1, int el2, int lmax_spec, const Wigner3j_direct<Tsimd> &w3j, const vmav<double,2> &spec2)
+  {
+  constexpr size_t vlen = Tsimd::size();
+  array<Tsimd,nspec> val;
+  for (size_t ispec=0; ispec<nspec; ++ispec)
+    val[ispec]=0;
+  int el3min = el2-el1;
+  int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+  Tsimd el2v = 0;
+  for (size_t i=0; i<vlen; ++i)
+    el2v[i] = double(el2+i);
+  for (int i=1; i<=max_i; i+=2)
+    {
+    int el3 = el3min+i;
+    Tsimd j3val;
+    for (size_t x=0;x<vlen; ++x)
+      j3val[x] = w3j.simple_0m2p2(el3+x,el1,el2+x);
+    j3val *= j3val;
+    for (size_t ispec=0; ispec<nspec; ++ispec)
+      val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+    }
+  return val;
+  }
+template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wigEB_new
+  (int el1, int el2, int lmax_spec, size_t nspec, const Wigner3j_direct<Tsimd> &w3j, const Tspec &spec2, Tval &val)
+  {
+  constexpr size_t vlen = Tsimd::size();
+  for (size_t ispec=0; ispec<nspec; ++ispec)
+    val[ispec]=0;
+  int el3min = el2-el1;
+  int max_i = min(el1+el2, int(lmax_spec)) - el3min;
+  Tsimd el2v = 0;
+  for (size_t i=0; i<vlen; ++i)
+    el2v[i] = double(el2+i);
+  for (int i=1; i<=max_i; i+=2)
+    {
+    int el3 = el3min+i;
+    Tsimd j3val;
+    for (size_t x=0;x<vlen; ++x)
+      j3val[x] = w3j.simple_0m2p2(el3+x,el1,el2+x);
+    j3val *= j3val;
+    for (size_t ispec=0; ispec<nspec; ++ispec)
+      val[ispec] += j3val*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+    }
+  }
 
 template<typename Tsimd, typename Tout, size_t nspec> inline void store_mat
   (int el1, int el2, size_t s1_, size_t s2_, const vmav<Tout,3> &mat, const vmav<Tout,2> &diag, const array<Tsimd, nspec> &val)
@@ -612,6 +658,89 @@ else
     for (size_t imat=0; imat<mat.shape(0); ++imat)
       toeplitz_fill(subarray<2>(mat,{{imat},{},{}}), subarray<1>(diag,{{imat},{}}), l_exact, l_toeplitz, dl_band, nthreads);
   }
+template<typename Tout> void coupling_matrix_EB_rect_new(const cmav<double,2> &spec,
+  const vmav<Tout,3> &mat, int l_exact, int l_toeplitz, int dl_band, size_t nthreads)
+  {
+  size_t nspec=spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  auto lmax_spec = spec.shape(1)-1;
+  MR_assert(mat.shape(0)==nspec, "number of spectra and matrices mismatch");
+  MR_assert(mat.size()>0, "matrix must not be zero-sized");
+  size_t s1=mat.shape(1), s2=mat.shape(2);
+  size_t lmax = max(s1-1, s2-1);
+  size_t lsmall = min(s1-1, s2-1);
+  using Tsimd = native_simd<double>;
+  constexpr size_t vlen = Tsimd::size();
+  auto lmax_spec_used = min(2*lmax, lmax_spec);
+  auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, PAGE_IN(nthreads)));
+  for (size_t l=0; l<=lmax_spec_used; ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+  for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
+    for (size_t i=0; i<nspec; ++i)
+      spec2(i,l) = 0.;
+  auto diag(vmav<Tout,2>::build_noncritical({nspec, lmax+1}));
+
+  Wigner3j_direct<Tsimd> w3j(lmax);
+
+  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+    {
+    vmav<Tsimd,1> val_({nspec});
+    Tsimd * DUCC0_RESTRICT val = val_.data();
+    Tsimd lofs;
+    for (size_t k=0; k<vlen; ++k)
+      lofs[k]=double(k);
+
+    while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
+      {
+if (el1<2)
+  {
+  for (int el2=el1; el2<=((el1<=int(lsmall))?int(lmax):el1); el2+=vlen)
+    zero_mat<Tsimd>(el1, el2, s1, s2, mat, diag);
+  }
+else
+  {
+      for (int el2=el1; el2<=((el1<=int(lsmall))?int(lmax):el1); el2+=vlen)
+        {
+        bool necessary=false;
+        for (size_t i=0; i<vlen; ++i)
+          if (neededForToeplitz(el1, el2+i, l_exact, l_toeplitz, dl_band))
+            necessary=true;
+        if (!necessary) continue;
+
+        int el3min = el2-el1;
+        if (el3min<=int(lmax_spec))
+          {
+          if (nspec==1)
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wigEB_new<Tsimd,1>(el1, el2, lmax_spec, w3j, spec2));
+          else if (nspec==2)
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wigEB_new<Tsimd,2>(el1, el2, lmax_spec, w3j, spec2));
+          else if (nspec==3)
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wigEB_new<Tsimd,3>(el1, el2, lmax_spec, w3j, spec2));
+          else if (nspec==4)
+            store_mat(el1, el2, s1, s2, mat, diag, sum_wigEB_new<Tsimd,4>(el1, el2, lmax_spec, w3j, spec2));
+          else if (nspec<=50)
+            {
+            array<Tsimd,50> val;
+            sum_wigEB_new<Tsimd>(el1, el2, lmax_spec, nspec, w3j, spec2, val); 
+            store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
+            }
+          else
+            {
+            sum_wigEB_new<Tsimd>(el1, el2, lmax_spec, nspec, w3j, spec2, val); 
+            store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
+            }
+          }
+        else
+          zero_mat<Tsimd>(el1, el2, s1, s2, mat, diag);
+        }
+  }
+      }
+    });
+  if (l_exact>=0)
+    for (size_t imat=0; imat<mat.shape(0); ++imat)
+      toeplitz_fill(subarray<2>(mat,{{imat},{},{}}), subarray<1>(diag,{{imat},{}}), l_exact, l_toeplitz, dl_band, nthreads);
+  }
 
 template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4>,nspec> sum_wig02
   (int el1, int el2, size_t lmax_spec, const Tsimd * DUCC0_RESTRICT wp0,
@@ -842,6 +971,9 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
       l_exact, l_toeplitz, dl_band, nthreads);
   if constexpr (opmask==2)
     return coupling_matrix_02_rect_new(spec, mat,
+      l_exact, l_toeplitz, dl_band, nthreads);
+  if constexpr (opmask==8)
+    return coupling_matrix_EB_rect_new(spec, mat,
       l_exact, l_toeplitz, dl_band, nthreads);
 
   size_t nspec=spec.shape(0);

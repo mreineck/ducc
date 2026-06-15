@@ -86,6 +86,50 @@ template<typename Tsimd> class Wigner3j_direct
         iota[i] = double(i);
       }
 
+    double simple_000(int el1, int el2, int el3) const
+      {
+if (el1>el2) return simple_000(el2,el3,el1);
+auto J = el1+el2+el3;
+if (J&1) return 0;
+MR_assert((J&1)==0, "oops");
+double sign = (J&2) ? -1 : 1;
+      auto el3min = el2-el1;
+if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
+      auto ofs = (el3-el3min)/2;
+      return sign*sqrt(fct[el2+ofs] * g[el2-el1+ofs] * g[ofs] * g[el1-ofs]);
+      }
+    double simple_0m1p1(int el1, int el2, int el3) const
+      {
+      auto J = el1+el2+el3;
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2;
+      auto Jppm = J-2*el3;
+      if (J&1)  // odd
+        {
+// eq 25
+        return -0.5*simple_000(el1,el2,el3+1)*sqrt((J+2.)*(Jmpp+1.)*(Jpmp+1.)*Jppm/(el2*(el2+1.)*el3*(el3+1.)));
+        }
+      else
+        {
+// eq 34
+        return sqrt((el2+1.)*(el3+1.)/(el2*el3))*simple_000(el1,el2,el3)
+             + 0.5*simple_000(el1, el2+1, el3+1)*sqrt((J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.)));
+        }
+      }
+    double simple_0m2p2(int el1, int el2, int el3) const
+      {  // eq 56
+      auto J = el1+el2+el3;
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2;
+      auto Jppm = J-2*el3;
+      auto lambda = sqrt(el2*(el2+1.)*(el3+1.)*(el3+2.));
+      auto eta = sqrt((el2-1.)*(el2+2.)*(el3-1.)*el3);
+      auto Lambda = sqrt((J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm);
+      return (lambda * simple_000(el1,el2,el3)
+             + 2*sqrt(el3*(el3+2.))*simple_0m1p1(el1,el2,el3)
+             -Lambda*simple_0m1p1(el1,el2,el3+1))/eta;
+      }
+
     // ofs = (el3-el3min)/2
     Tsimd get_TT(int el1, int el2, int ofs) const
       {
