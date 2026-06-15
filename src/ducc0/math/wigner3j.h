@@ -251,13 +251,14 @@ int ofs = (el3-(el2-el1))/2;
 //MR_assert(J&1,"oops");
       auto eta_sq = (el2-1.)*(el2+2.)*(el3v-1.)*el3v;
       auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-auto other = 1./(el2*(el3v+1.));
+auto other = el2*(el3v+1.);
 
       auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
-      auto term25_sq = get_TT_el3(el2,el3+1,el1)*Lambda_sq*(el3v+2.)*other * termsumsq;
-      auto term3_sq = Lambda_sq*0.25*get_TT_el3(el2+1, el3+2, el1)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)*other/((el2+1.)*(el3v+2.));
+int ofs = (el1-(el3+1-el2))/2;
+      auto term25_sq = get_TT(el2,el3+1,ofs)*Lambda_sq*(el3v+2.)* termsumsq;
+      auto term3_sq = Lambda_sq*0.25*get_TT(el2+1, el3+2, ofs)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/((el2+1.)*(el3v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-      return res/eta_sq;
+      return res/(eta_sq*other);
       }
   };
 
