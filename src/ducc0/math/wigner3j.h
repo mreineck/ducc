@@ -188,6 +188,8 @@ return res/eta_sq;
     // ofs = (el3-el3min)/2
     Tsimd get_TT(int el1, int el2, int ofs) const
       {
+    // 2*ofs = el3-el2v+el1 = Jpmp
+//      return Tsimd(&fct[J/2], element_aligned_tag()) * Tsimd(&g[Jmpp/2], element_aligned_tag()) * g[Jpmp/2] * g[Jppm/2];
       return Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
       }
     // ofs = (el3-el3min)/2
@@ -211,6 +213,7 @@ return res/eta_sq;
       return inner_sq / eta_sq;
       }
     // ofs = (el3-el3min)/2
+    // 2*ofs = el3-el2v+el1 = Jpmp
     Tsimd get_TE(int el1, int el2, int ofs) const
       {
       auto el2v = double(el2) + iota;
@@ -222,10 +225,6 @@ return res/eta_sq;
 
       auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
       auto B_sq = pref_5_num_sq / lmbda_sq;
-
-//el3 = 2*ofs + el3min = 2*ofs + el2-el1
-//J = el1+el2+el2-el1+2*ofs == even
-// Note: the signs on the two roots don't matter, as long as we just get them both right or wrong together
       auto x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
       auto threej_000_sq = get_TT(el1, el2, ofs);
       auto tmp1 = sqrt(A_sq*threej_000_sq*x_eta_sq);
@@ -235,25 +234,24 @@ return res/eta_sq;
       auto threej_0p2m2 = tmp1+tmp2;
       return sqrt(threej_000_sq)*threej_0p2m2;
       }
+
 // el1+el2+el3 must be odd for this one
     Tsimd get_EB(int el1, int el2, int ofs) const
       {  // eq 56
       auto el2v = double(el2) + iota;
       auto el3v = 2.*ofs+el2v+1-el1;
       auto J = el3v+el1+el2v;
-      auto Jmpp = J-2*el3v;
-      auto Jpmp = J-2*el1;
-      auto Jppm = J-2*el2v;
-//MR_assert(J&1,"oops");
+      auto Jmpp = J-2*el1;
+      auto Jpmp = J-2*el2v;
+      auto Jppm = J-2*el3v;
       auto eta_sq = (el1-1.)*(el1+2.)*(el2v-1.)*el2v;
-      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-auto other = el1*(el2v+1.);
+      auto Lambda_sq = (J+2.)*(Jppm+1)*(Jmpp+1.)*Jpmp;
 
       auto termsumsq = (el1+1.) + 2. + 1./(el1+1.);
       auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
-      auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/((el1+1.)*(el2v+2.));
+      auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)/((el1+1.)*(el2v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-      return res*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq/(eta_sq*other);
+      return res*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq/(eta_sq*el1*(el2v+1.));
       }
   };
 

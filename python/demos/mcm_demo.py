@@ -84,6 +84,14 @@ def mcmEB_ducc_new(spec, l1, l2):
     out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
     ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(3,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
+def mcmall_ducc(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(0,1,2,3,)*(spec.shape[0]//4), nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
+def mcmall_ducc_new(spec, l1, l2):
+    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(0,1,2,3)*(spec.shape[0]//4), nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+    return out
 
 # lmax up to which the MCM will be computed
 l1=5000
@@ -96,7 +104,7 @@ l_toeplitz=170
 
 # number of spectra to process simultaneously
 
-nspec=1
+nspec=4
 
 print()
 print("Mode coupling matrix computation comparison")
@@ -107,54 +115,69 @@ print(f"nspec={nspec}, lmax={lmax}, nthreads={nthreads}")
 spec = np.random.normal(size=(nspec, 4, 2*lmax+1))
 spec = np.random.uniform(0.1,1.,size=(nspec, 4, 2*lmax+1))
 
+# print()
+# print("TT case:")
+
+# t0=time()
+# duccsq = mcm00_ducc(spec[:,0,:], l1, l2)
+# print(f"ducc square time: {time()-t0}s")
+# t0=time()
+# duccnewsq = mcm00_ducc_new(spec[:,0,:], l1, l2)
+# print(f"ducc square new time: {time()-t0}s")
+# print(ducc0.misc.l2error(duccsq,duccnewsq))
+# print()
+# print("EE case:")
+
+# t0=time()
+# duccsq = mcmpp_ducc(spec[:,0,:], l1, l2)
+# print(f"ducc square time: {time()-t0}s")
+# t0=time()
+# duccnewsq = mcmpp_ducc_new(spec[:,0,:], l1, l2)
+# print(f"ducc square new time: {time()-t0}s")
+# print(ducc0.misc.l2error(duccsq,duccnewsq))
+
+# print()
+# print("TE case:")
+
+# t0=time()
+# duccsq = mcm02_ducc(spec[:,0,:], l1, l2)
+# print(f"ducc square time: {time()-t0}s")
+# t0=time()
+# duccnewsq = mcm02_ducc_new(spec[:,0,:], l1, l2)
+# print(f"ducc square new time: {time()-t0}s")
+# print(ducc0.misc.l2error(duccsq,duccnewsq))
+
+# print()
+# print("EB case:")
+
+# t0=time()
+# duccsq = mcmEB_ducc(spec[:,0,:], l1, l2)
+# print(f"ducc square time: {time()-t0}s")
+# t0=time()
+# duccnewsq = mcmEB_ducc_new(spec[:,0,:], l1, l2)
+# print(f"ducc square new time: {time()-t0}s")
+# print(ducc0.misc.l2error(duccsq,duccnewsq))
+# import matplotlib.pyplot as plt
+# #print(duccsq)
+# #print(duccnewsq)
+# #plt.imshow((duccsq-duccnewsq)[0])
+# #plt.show()
+
 print()
-print("TT case:")
+print("all case:")
 
 t0=time()
-duccsq = mcm00_ducc(spec[:,0,:], l1, l2)
+duccsq = mcmall_ducc(spec[:,0,:], l1, l2)
 print(f"ducc square time: {time()-t0}s")
 t0=time()
-duccnewsq = mcm00_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-
-print()
-print("EE case:")
-
-t0=time()
-duccsq = mcmpp_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcmpp_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-
-print()
-print("TE case:")
-
-t0=time()
-duccsq = mcm02_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcm02_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-
-print()
-print("EB case:")
-
-t0=time()
-duccsq = mcmEB_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcmEB_ducc_new(spec[:,0,:], l1, l2)
+duccnewsq = mcmall_ducc_new(spec[:,0,:], l1, l2)
 print(f"ducc square new time: {time()-t0}s")
 print(ducc0.misc.l2error(duccsq,duccnewsq))
 import matplotlib.pyplot as plt
-print(duccsq)
-print(duccnewsq)
-plt.imshow((duccsq-duccnewsq)[0])
-plt.show()
+#print(duccsq)
+#print(duccnewsq)
+#plt.imshow((duccsq-duccnewsq)[0])
+#plt.show()
 
 exit()
 # compare the results
