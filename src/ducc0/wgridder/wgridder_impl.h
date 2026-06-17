@@ -369,7 +369,7 @@ class Baselines
     void prefetchRow(size_t irow) const
       {
       DUCC0_PREFETCH_R(&coord[irow]);
-      DUCC0_PREFETCH_R(&id[irow]);
+      if (nfreqs==0) DUCC0_PREFETCH_R(&id[irow]);
       } // FIXME: prefetch channels?
     size_t Nrows() const { return coord.size(); }
     size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
