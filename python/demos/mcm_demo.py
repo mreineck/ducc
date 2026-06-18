@@ -94,8 +94,8 @@ def mcmall_ducc_new(spec, l1, l2):
     return out
 
 # lmax up to which the MCM will be computed
-l1=5000
-l2=5000
+l1=10000
+l2=10000
 lmax=max(l1,l2)
 
 l_exact=-1
@@ -104,7 +104,7 @@ l_toeplitz=170
 
 # number of spectra to process simultaneously
 
-nspec=4
+nspec=1
 
 print()
 print("Mode coupling matrix computation comparison")
