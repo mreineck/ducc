@@ -69,7 +69,7 @@ template<typename Tsimd> class Wigner3j_direct
   private:
     vector<double> g, fct;
     Tsimd iota;
-    static constexpr size_t safety = 16; // safety margin beyond lmax
+    static constexpr size_t safety = 4*Tsimd::size(); // safety margin beyond lmax
     inline static Tsimd sqr(Tsimd arg) { return arg*arg; }
 
   public:
@@ -330,7 +330,7 @@ template<typename Tsimd> class wigcalc
     Tsimd el2v;
 
     // EE/TE
-    Tsimd lmbda_sq, x_eta_sq;
+    Tsimd lmbda, x_lmbda_sq, lmbda_t1, lmbda_t2, x_eta_sq;
 
     // EB
     Tsimd termsumsq;
@@ -351,10 +351,13 @@ template<typename Tsimd> class wigcalc
       el2v = double(el2) + iota;
 
       // EE/TE
-      lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
+      lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
+      x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
+      lmbda_t1 = lmbda *(1.+2./el1);
+      lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
       x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
       
-      //EB
+      // EB
       termsumsq = (el1+1.) + 2. + 1./(el1+1.);
       }
 
@@ -366,18 +369,19 @@ template<typename Tsimd> class wigcalc
       // EE/EB
       if constexpr (opmask&6)
         {
-//Tsimd Jpmp = 2.*ofs;
-//Tsimd J = Jpmp+2*el2v;
-//Tsimd Jmpp = J-2*el1;
-//Tsimd el3v = el2v-el1 + Jpmp;
-//Tsimd Jppm = J-2
-        auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
-//        auto lmbda2 = (J*0.5+1.) * (2.*(el1-ofs)+1.);
+Tsimd Jpmp = 2.*ofs;  // actually scalar
+Tsimd J = Jpmp+2*el2v;
+Tsimd Jmpp = J-2*el1;
+Tsimd el3v = el2v-el1 + Jpmp;
+Tsimd Jppm = J-2*el3v;  // actually scalar
+
+auto lmbda2 = (J+2.) * (Jppm+1.);
     
-        auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
-  
-        auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
-        auto B_sq = pref_5_num_sq / lmbda_sq;
+auto A = lmbda_t1 - lmbda2*lmbda_t2; // * (1. + 2./el1 - lmbda2/((el1+1.)*(el2v+1.)*el1));
+auto A_sq = A*A;
+
+auto pref_5_num_sq = lmbda2 * (Jmpp + 1.) * (Jmpp+2.) * 0.25*Jpmp * (J+3.) * (Jppm+2.) * (Jpmp-1.);
+        auto B_sq = pref_5_num_sq * x_lmbda_sq;
   
         auto threej_000_sq = res[0];
         auto threej_000_2_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
@@ -406,7 +410,7 @@ template<typename Tsimd> class wigcalc
         auto Jmpp = J-2*el1;
         auto Jpmp = J-2*el2v;
         auto Jppm = J-2*el3v;
-        auto Lambda_sq = (J+2.)*(Jppm+1)*(Jmpp+1.)*Jpmp;
+        auto Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
   
         auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
         auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)/((el1+1.)*(el2v+2.));
