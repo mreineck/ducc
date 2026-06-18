@@ -105,7 +105,7 @@ template<typename Tsimd> class Wigner3j_direct
     Tsimd lmbda, x_lmbda_sq, lmbda_t1, lmbda_t2, x_eta_sq, x_eta;
 
     // EB
-    Tsimd termsumsq;
+    Tsimd termsumsq, ebtmp1, ebtmp2;
 
     inline static Tsimd sqr(Tsimd arg) { return arg*arg; }
 
@@ -132,6 +132,8 @@ template<typename Tsimd> class Wigner3j_direct
       
       // EB
       termsumsq = (el1+1.) + 2. + 1./(el1+1.);
+      ebtmp1 = Tsimd(1.)/((el1+1.)*(el2v+2.));
+      ebtmp2 = Tsimd(1.)/(el1*(el2v+1.));
       }
 
     template<size_t opmask> std::array<Tsimd,4> calc(int ofs) const
@@ -155,14 +157,14 @@ template<typename Tsimd> class Wigner3j_direct
         auto A = lmbda_t1 - lmbda2*lmbda_t2;
         auto A_sq = A*A;
        
-        auto B_sq = lmbda2 * (Jmpp + 1.) * (Jmpp+2.) * 0.25*Jpmp * (J+3.) * (Jppm+2.) * (Jpmp-1.) * x_lmbda_sq;
+        auto B_sq = 0.25 * x_lmbda_sq * lmbda2 * (Jmpp+1.) * (Jmpp+2.) * (J+3.) * (Jppm+2.)  * Jpmp * (Jpmp-1.);
   
         auto threej_000_sq = res[0];
         auto threej_000_2_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
 
         if constexpr((opmask&4) && !(opmask&2))  // EE, but not TE
           {
-          auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
+          auto inner_sq = A_sq*threej_000_sq - 2.*sqrt(A_sq*B_sq*threej_000_sq*threej_000_2_sq) + B_sq*threej_000_2_sq;
           res[2] = inner_sq * x_eta_sq;
           }
         if constexpr(opmask&2)  // TE
@@ -188,9 +190,9 @@ template<typename Tsimd> class Wigner3j_direct
         auto Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
   
         auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
-        auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)/((el1+1.)*(el2v+2.));
-        auto tmp = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-        res[3] = tmp*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq*x_eta_sq/(el1*(el2v+1.));
+        auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
+        auto tmp = term25_sq+term3_sq-2.*sqrt(term25_sq*term3_sq);
+        res[3] = tmp*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq*x_eta_sq*ebtmp2;
         }
       return res;
       }

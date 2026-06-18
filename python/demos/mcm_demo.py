@@ -94,8 +94,8 @@ def mcmall_ducc_new(spec, l1, l2):
     return out
 
 # lmax up to which the MCM will be computed
-l1=10000
-l2=10000
+l1=5000
+l2=5000
 lmax=max(l1,l2)
 
 l_exact=-1
@@ -114,7 +114,7 @@ print(f"nspec={nspec}, lmax={lmax}, nthreads={nthreads}")
 # but this could also be lower.
 spec = np.random.normal(size=(nspec, 4, 2*lmax+1))
 spec = np.random.uniform(0.1,1.,size=(nspec, 4, 2*lmax+1))
-spec[3:] = 0
+#spec[3:] = 0
 print()
 print("TT case:")
 
