@@ -330,7 +330,7 @@ template<typename Tsimd> class wigcalc
     Tsimd el2v;
 
     // EE/TE
-    Tsimd lmbda, x_lmbda_sq, lmbda_t1, lmbda_t2, x_eta_sq;
+    Tsimd lmbda, x_lmbda_sq, lmbda_t1, lmbda_t2, x_eta_sq, x_eta;
 
     // EB
     Tsimd termsumsq;
@@ -356,6 +356,7 @@ template<typename Tsimd> class wigcalc
       lmbda_t1 = lmbda *(1.+2./el1);
       lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
       x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+      x_eta = sqrt(x_eta_sq);
       
       // EB
       termsumsq = (el1+1.) + 2. + 1./(el1+1.);
@@ -369,19 +370,18 @@ template<typename Tsimd> class wigcalc
       // EE/EB
       if constexpr (opmask&6)
         {
-Tsimd Jpmp = 2.*ofs;  // actually scalar
-Tsimd J = Jpmp+2*el2v;
-Tsimd Jmpp = J-2*el1;
-Tsimd el3v = el2v-el1 + Jpmp;
-Tsimd Jppm = J-2*el3v;  // actually scalar
-
-auto lmbda2 = (J+2.) * (Jppm+1.);
-    
-auto A = lmbda_t1 - lmbda2*lmbda_t2; // * (1. + 2./el1 - lmbda2/((el1+1.)*(el2v+1.)*el1));
-auto A_sq = A*A;
-
-auto pref_5_num_sq = lmbda2 * (Jmpp + 1.) * (Jmpp+2.) * 0.25*Jpmp * (J+3.) * (Jppm+2.) * (Jpmp-1.);
-        auto B_sq = pref_5_num_sq * x_lmbda_sq;
+        Tsimd Jpmp = 2.*ofs;  // actually scalar
+        Tsimd J = Jpmp+2*el2v;
+        Tsimd Jmpp = J-2*el1;
+        Tsimd el3v = el2v-el1 + Jpmp;
+        Tsimd Jppm = J-2*el3v;  // actually scalar
+        
+        auto lmbda2 = (J+2.) * (Jppm+1.);
+            
+        auto A = lmbda_t1 - lmbda2*lmbda_t2;
+        auto A_sq = A*A;
+       
+        auto B_sq = lmbda2 * (Jmpp + 1.) * (Jmpp+2.) * 0.25*Jpmp * (J+3.) * (Jppm+2.) * (Jpmp-1.) * x_lmbda_sq;
   
         auto threej_000_sq = res[0];
         auto threej_000_2_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
@@ -393,13 +393,14 @@ auto pref_5_num_sq = lmbda2 * (Jmpp + 1.) * (Jmpp+2.) * 0.25*Jpmp * (J+3.) * (Jp
           }
         if constexpr(opmask&2)  // TE
           {
-          auto tmp1 = sqrt(A_sq*threej_000_sq);
+          auto threej_000 = sqrt(threej_000_sq);
+          auto tmp1 = A*threej_000;
           auto tmp2 = -sqrt(B_sq*threej_000_2_sq);
   
-          auto threej_0p2m2 = tmp1+tmp2;
-          res[1] = sqrt(threej_000_sq*x_eta_sq)*threej_0p2m2;
+          auto threej_0p2m2 = (tmp1+tmp2)*x_eta;
+          res[1] = threej_000*threej_0p2m2;
           if constexpr(opmask&4)  // we also need EE
-            res[2] = threej_0p2m2*threej_0p2m2*x_eta_sq;
+            res[2] = threej_0p2m2*threej_0p2m2;
           }
         }
       if constexpr(opmask&8)  // EB
