@@ -605,7 +605,7 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
             necessary=true;
         if (!necessary) continue;
 
-        w3j.prep(el1,el2);
+        w3j.prep<opmask>(el1,el2);
         int el3min = el2-el1;
         if (el3min<=int(lmax_spec))
           {

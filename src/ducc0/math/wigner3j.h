@@ -65,6 +65,8 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 
 // Support class for direct evaluation of Wigner 3j symbols,
 // following https://arxiv.org/abs/2602.15605
+// NOTE: compared to the paper, this tabulates the square root of the
+// values, to save a sqrt() call in a few places.
 template<typename Tsimd> class Wigner3j_direct_tables
   {
   private:
@@ -77,11 +79,11 @@ template<typename Tsimd> class Wigner3j_direct_tables
     Wigner3j_direct_tables(size_t lmax)
       : g(2*lmax+1+safety), fct(2*lmax+1+safety)
       {
-      for (size_t i=0; i<g.size(); i++)
+      double gcur = 1.;
+      for (size_t i=0; i<g.size(); ++i, gcur*=(i-0.5)/i)
         {
-        // FIXME: it may be more accurate to do the g recurrence in logarithms.
-        g[i] = (i==0) ? 1. : g[i-1]*((i-0.5)/i);
-        fct[i] = 1./(g[i]*(2*i+1));
+        g[i] = sqrt(gcur);
+        fct[i] = sqrt(1./(gcur*(2*i+1)));
         }
       for (size_t i=0; i<Tsimd::size(); ++i)
         iota[i] = double(i);
@@ -116,33 +118,45 @@ template<typename Tsimd> class Wigner3j_direct
         iota[i] = double(i);
       }
 
-    void prep (int el1_, int el2_)
+    template<size_t opmask> void prep (int el1_, int el2_)
       {
       el1 = el1_;
       el2 = el2_;
       el2v = double(el2) + iota;
 
+      // EE/TE/EB
+      if constexpr (opmask&14)
+        x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+
       // EE/TE
-      lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
-      x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
-      lmbda_t1 = lmbda *(1.+2./el1);
-      lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
-      x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-      x_eta = sqrt(x_eta_sq);
-      
+      if constexpr(opmask&6)
+        {
+        lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
+        x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
+        lmbda_t1 = lmbda *(1.+2./el1);
+        lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
+        x_eta = sqrt(x_eta_sq);
+        }
+
       // EB
-      termsumsq = (el1+1.) + 2. + 1./(el1+1.);
-      ebtmp1 = Tsimd(1.)/((el1+1.)*(el2v+2.));
-      ebtmp2 = Tsimd(1.)/(el1*(el2v+1.));
+      if constexpr(opmask&8)
+        {
+        termsumsq = (el1+1.) + 2. + 1./(el1+1.);
+        ebtmp1 = Tsimd(1.)/((el1+1.)*(el2v+2.));
+        ebtmp2 = Tsimd(1.)/(el1*(el2v+1.));
+        }
       }
 
     template<size_t opmask> std::array<Tsimd,4> calc(int ofs) const
       {
       std::array<Tsimd,4> res;
-      // TT
-      // we re-use this for EE/TE
+      // we use this for TT/EE/TE
+      Tsimd threej_000;
       if constexpr (opmask&7)
-        res[0] = Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
+        threej_000 = Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
+      // TT
+      if constexpr (opmask&1)
+        res[0] = threej_000*threej_000;
       // EE/TE
       if constexpr (opmask&6)
         {
@@ -155,31 +169,21 @@ template<typename Tsimd> class Wigner3j_direct
         auto lmbda2 = (J+2.) * (Jppm+1.);
             
         auto A = lmbda_t1 - lmbda2*lmbda_t2;
-        auto A_sq = A*A;
-       
         auto B_sq = 0.25 * x_lmbda_sq * lmbda2 * (Jmpp+1.) * (Jmpp+2.) * (J+3.) * (Jppm+2.)  * Jpmp * (Jpmp-1.);
   
-        auto threej_000_sq = res[0];
-        auto threej_000_2_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
+        auto threej_000_2 = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
 
-        if constexpr((opmask&4) && !(opmask&2))  // EE, but not TE
-          {
-          auto inner_sq = A_sq*threej_000_sq - 2.*sqrt(A_sq*B_sq*threej_000_sq*threej_000_2_sq) + B_sq*threej_000_2_sq;
-          res[2] = inner_sq * x_eta_sq;
-          }
+        auto tmp1 = A*threej_000;
+        auto tmp2 = -sqrt(B_sq)*threej_000_2;
+
+        auto threej_0p2m2 = (tmp1+tmp2)*x_eta;
         if constexpr(opmask&2)  // TE
-          {
-          auto threej_000 = sqrt(threej_000_sq);
-          auto tmp1 = A*threej_000;
-          auto tmp2 = -sqrt(B_sq*threej_000_2_sq);
-  
-          auto threej_0p2m2 = (tmp1+tmp2)*x_eta;
           res[1] = threej_000*threej_0p2m2;
-          if constexpr(opmask&4)  // we also need EE
-            res[2] = threej_0p2m2*threej_0p2m2;
-          }
+        if constexpr(opmask&4)  // EE
+          res[2] = threej_0p2m2*threej_0p2m2;
         }
-      if constexpr(opmask&8)  // EB
+      // EB
+      if constexpr(opmask&8)
         {
         // Note the "+1" here, since we are shifted, and J will be odd
         auto el3v = 2.*ofs+el2v+1-el1;
@@ -188,11 +192,14 @@ template<typename Tsimd> class Wigner3j_direct
         auto Jpmp = J-2*el2v;
         auto Jppm = J-2*el3v;
         auto Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
-  
-        auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
-        auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
+
+        auto t1 = Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs];
+        auto t2 = sqr(Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*t1);
+        auto t3 = sqr(Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*t1);
+        auto term25_sq = t2*(el2v+2.)* termsumsq;
+        auto term3_sq = t3*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
         auto tmp = term25_sq+term3_sq-2.*sqrt(term25_sq*term3_sq);
-        res[3] = tmp*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq*x_eta_sq*ebtmp2;
+        res[3] = tmp*Lambda_sq*x_eta_sq*ebtmp2;
         }
       return res;
       }
