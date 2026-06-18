@@ -88,107 +88,7 @@ template<typename Tsimd> class Wigner3j_direct
 
     const vector<double> &G() const { return g; }
     const vector<double> &Fct() const { return fct; }
-#if 0
-    double simple_000(int el1, int el2, int el3) const
-      {
-if (el1>el2) return simple_000(el2,el3,el1);
-auto J = el1+el2+el3;
-if (J&1) return 0;
-MR_assert((J&1)==0, "oops");
-double sign = (J&2) ? -1 : 1;
-      auto el3min = el2-el1;
-if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
-      auto ofs = (el3-el3min)/2;
-      return sign*sqrt(fct[el2+ofs] * g[el2-el1+ofs] * g[ofs] * g[el1-ofs]);
-      }
-    double simple_000_sq(int el1, int el2, int el3) const
-      {
-if (el1>el2) return simple_000_sq(el2,el3,el1);
-auto J = el1+el2+el3;
-if (J&1) return 0;
-      auto el3min = el2-el1;
-if ((el3<abs(el3min)) || (el3>el2+el1)) return 0;
-      auto ofs = (el3-el3min)/2;
-      return fct[el2+ofs] * g[el2-el1+ofs] * g[ofs] * g[el1-ofs];
-      }
-    double simple_0m1p1(int el1, int el2, int el3) const
-      {
-      auto J = el1+el2+el3;
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2;
-      auto Jppm = J-2*el3;
-      if (J&1)  // odd
-        {
-// eq 25
-        return -0.5*simple_000(el1,el2,el3+1)*sqrt((J+2.)*(Jmpp+1.)*(Jpmp+1.)*Jppm/(el2*(el2+1.)*el3*(el3+1.)));
-        }
-      else
-        {
-// eq 34
-        return sqrt((el2+1.)*(el3+1.)/(el2*el3))*simple_000(el1,el2,el3)
-             + 0.5*simple_000(el1, el2+1, el3+1)*sqrt((J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.)));
-        }
-      }
-    double simple_0m1p1_sq(int el1, int el2, int el3) const
-      {
-      auto J = el1+el2+el3;
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2;
-      auto Jppm = J-2*el3;
-      if (J&1)  // odd
-        {
-// eq 25
-        return 0.25*simple_000_sq(el1,el2,el3+1)*(J+2.)*(Jmpp+1.)*(Jpmp+1.)*Jppm/(el2*(el2+1.)*el3*(el3+1.));
-        }
-      else
-        {
-// eq 34
-auto t1sq = (el2+1.)*(el3+1.)/(el2*el3)*simple_000_sq(el1,el2,el3);
-auto t2sq = 0.25*simple_000_sq(el1, el2+1, el3+1)*(J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.));
-return t1sq+t2sq-2.*sqrt(t1sq*t2sq);
-        auto tmp= sqrt((el2+1.)*(el3+1.)/(el2*el3))*simple_000(el1,el2,el3)
-             + 0.5*simple_000(el1, el2+1, el3+1)*sqrt((J+2.)*(J+3.)*(Jmpp+1.)*(Jmpp+2.)/(el2*(el2+1.)*el3*(el3+1.)));
-        return tmp*tmp;
-        }
-      }
-    double simple_0m2p2(int el1, int el2, int el3) const
-      {  // eq 56
-      auto J = el1+el2+el3;
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2;
-      auto Jppm = J-2*el3;
-      auto lambda = sqrt(el2*(el2+1.)*(el3+1.)*(el3+2.));
-      auto eta = sqrt((el2-1.)*(el2+2.)*(el3-1.)*el3);
-      auto Lambda = sqrt((J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm);
-      return (lambda * simple_000(el1,el2,el3)
-             + 2*sqrt(el3*(el3+2.))*simple_0m1p1(el1,el2,el3)
-             -Lambda*simple_0m1p1(el1,el2,el3+1))/eta;
-      }
 
-    double simple_0m2p2_sq(int el1, int el2, int el3) const
-      {  // eq 56
-      auto J = el1+el2+el3;
-      auto Jmpp = J-2*el1;
-      auto Jpmp = J-2*el2;
-      auto Jppm = J-2*el3;
-MR_assert(J&1,"oops");
-      auto eta_sq = (el2-1.)*(el2+2.)*(el3-1.)*el3;
-      auto Lambda_sq = (J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm;
-
-//auto term1 = -sqrt(1./(el2+1.));
-//auto term2 = -sqrt(el2+1.);
-auto termsumsq = (el2+1.) + 2. + 1./(el2+1.);
-//auto term25 = simple_000(el1,el2,el3+1)*sqrt((J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3+2.)/(el2*(el3+1.))) * (term1+term2);
-auto term25_sq = simple_000_sq(el1,el2,el3+1)*(J+2.)*(Jmpp+1)*(Jpmp+1)*Jppm*(el3+2.)/(el2*(el3+1.)) * termsumsq;
-//auto term3 = -Lambda*0.5*simple_000(el1, el2+1, el3+2)*sqrt((J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2*(el2+1.)*(el3+1.)*(el3+2.)));
-auto term3_sq = Lambda_sq*0.25*simple_000_sq(el1, el2+1, el3+2)*(J+3.)*(J+4.)*(Jmpp+2.)*(Jmpp+3.)/(el2*(el2+1.)*(el3+1.)*(el3+2.));
-// term25 and term 3 have opposite signs?
-//      auto res = term25 + term3;
-auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-return res/eta_sq;
-      }
-#endif
-    // ofs = (el3-el3min)/2
     Tsimd get_TT(int el1, int el2, int ofs) const
       {
     // 2*ofs = el3-el2v+el1 = Jpmp
@@ -258,64 +158,6 @@ return res/eta_sq;
       auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)/((el1+1.)*(el2v+2.));
       auto res = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
       return res*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq/(eta_sq*el1*(el2v+1.));
-      }
-    template<size_t opmask> std::array<Tsimd,4> get_flexible(int el1, int el2, int ofs) const
-      {
-      std::array<Tsimd,4> res;
-      // we always need TT, if only for the other components
-      res[0] = Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
-      // EE/EB
-      if constexpr (opmask&6)
-        {
-        auto el2v = double(el2) + iota;
-        auto lmbda_sq = el1*(el1+1.)*(el2v+1.)*(el2v+2.);
-    
-        auto lmbda2 = (el2v+ofs+1.) * (2.*(el1-ofs)+1.);
-    
-        auto A_sq = lmbda_sq * sqr(1. + 2./el1 * (1. - lmbda2/((el1+1.)*(el2v+1.))));
-  
-        auto pref_5_num_sq = 4.*lmbda2 * (2.*(el2v-el1+ofs+1) - 1.) * (el2v-el1+ofs+1) * ofs * (2*(el2v+ofs)+3.) * (el1-ofs+1.) * (2*ofs-1.);
-        auto B_sq = pref_5_num_sq / lmbda_sq;
-  
-        auto threej_000_sq = res[0];
-        auto threej_000_2_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
-
-        auto x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-
-        if constexpr((opmask&4) && !(opmask&2))  // EE, but not TE
-          {
-          auto inner_sq = A_sq * threej_000_sq - 2. * sqrt(A_sq*B_sq*threej_000_sq * threej_000_2_sq) + B_sq * threej_000_2_sq;
-          res[2] = inner_sq * x_eta_sq;
-          }
-        if constexpr(opmask&2)  // TE
-          {
-          auto tmp1 = sqrt(A_sq*threej_000_sq);
-          auto tmp2 = -sqrt(B_sq*threej_000_2_sq);
-  
-          auto threej_0p2m2 = tmp1+tmp2;
-          res[1] = sqrt(threej_000_sq*x_eta_sq)*threej_0p2m2;
-          if constexpr(opmask&4)  // we also need EE
-            res[2] = threej_0p2m2*threej_0p2m2*x_eta_sq;
-          }
-        }
-      if constexpr(opmask&8)  // EB
-        {
-        auto el2v = double(el2) + iota;
-        auto el3v = 2.*ofs+el2v+1-el1;
-        auto J = el3v+el1+el2v;
-        auto Jmpp = J-2*el1;
-        auto Jpmp = J-2*el2v;
-        auto Jppm = J-2*el3v;
-        auto eta_sq = (el1-1.)*(el1+2.)*(el2v-1.)*el2v;
-        auto Lambda_sq = (J+2.)*(Jppm+1)*(Jmpp+1.)*Jpmp;
-  
-        auto termsumsq = (el1+1.) + 2. + 1./(el1+1.);
-        auto term25_sq = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*(el2v+2.)* termsumsq;
-        auto term3_sq = Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)/((el1+1.)*(el2v+2.));
-        auto tmp = term25_sq+term3_sq-2*sqrt(term25_sq*term3_sq);
-        res[3] = tmp*Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs]*Lambda_sq/(eta_sq*el1*(el2v+1.));
-        }
-      return res;
       }
   };
 
@@ -405,7 +247,7 @@ template<typename Tsimd> class wigcalc
         }
       if constexpr(opmask&8)  // EB
         {
-        auto el2v = double(el2) + iota;
+        // Note the "+1" here, since we are shifted, and J will be odd
         auto el3v = 2.*ofs+el2v+1-el1;
         auto J = el3v+el1+el2v;
         auto Jmpp = J-2*el1;

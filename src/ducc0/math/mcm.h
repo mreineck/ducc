@@ -144,34 +144,34 @@ template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4
     for (size_t j=0; j<4; ++j)
       val[ispec][j]=0;
   wcalc.prep(el1,el2);
-if (el1>=2)
-  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-    {
-    array<Tsimd,4> wigval=wcalc.template calc<opmask>(ofs);
-    for (size_t ispec=0; ispec<nspec; ++ispec)
+  if (el1>=2)
+    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-      if constexpr (opmask&1)
-        val[ispec][0] += wigval[0]*sp;
-      if constexpr (opmask&2)
-        val[ispec][1] += wigval[1]*sp;
-      if constexpr (opmask&4)
-        val[ispec][2] += wigval[2]*sp;
-      if constexpr (opmask&8)
-        val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+      array<Tsimd,4> wigval=wcalc.template calc<opmask>(ofs);
+      for (size_t ispec=0; ispec<nspec; ++ispec)
+        {
+        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+        if constexpr (opmask&1)
+          val[ispec][0] += wigval[0]*sp;
+        if constexpr (opmask&2)
+          val[ispec][1] += wigval[1]*sp;
+        if constexpr (opmask&4)
+          val[ispec][2] += wigval[2]*sp;
+        if constexpr (opmask&8)
+          val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+        }
       }
-    }
-else
-  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-    {
-    array<Tsimd,4> wigval = wcalc.template calc<1>(ofs);
-    for (size_t ispec=0; ispec<nspec; ++ispec)
+  else
+    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-      if constexpr (opmask&1)
-        val[ispec][0] += wigval[0]*sp;
+      array<Tsimd,4> wigval = wcalc.template calc<1>(ofs);
+      for (size_t ispec=0; ispec<nspec; ++ispec)
+        {
+        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+        if constexpr (opmask&1)
+          val[ispec][0] += wigval[0]*sp;
+        }
       }
-    }
   return val;
   }
 template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig_general
@@ -185,34 +185,34 @@ template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig_gener
     for (size_t j=0; j<4; ++j)
       val[ispec][j]=0;
   wcalc.prep(el1,el2);
-if (el1>=2)
-  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-    {
-    array<Tsimd,4> wigval=wcalc.template calc<opmask>(ofs);
-    for (size_t ispec=0; ispec<nspec; ++ispec)
+  if (el1>=2)
+    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-      if constexpr (opmask&1)
-        val[ispec][0] += wigval[0]*sp;
-      if constexpr (opmask&2)
-        val[ispec][1] += wigval[1]*sp;
-      if constexpr (opmask&4)
-        val[ispec][2] += wigval[2]*sp;
-      if constexpr (opmask&8)
-        val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+      array<Tsimd,4> wigval=wcalc.template calc<opmask>(ofs);
+      for (size_t ispec=0; ispec<nspec; ++ispec)
+        {
+        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+        if constexpr (opmask&1)
+          val[ispec][0] += wigval[0]*sp;
+        if constexpr (opmask&2)
+          val[ispec][1] += wigval[1]*sp;
+        if constexpr (opmask&4)
+          val[ispec][2] += wigval[2]*sp;
+        if constexpr (opmask&8)
+          val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+        }
       }
-    }
-else
-  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-    {
-    array<Tsimd,4> wigval = wcalc.template calc<1>(ofs);
-    for (size_t ispec=0; ispec<nspec; ++ispec)
+  else
+    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-      if constexpr (opmask&1)
-        val[ispec][0] += wigval[0]*sp;
+      array<Tsimd,4> wigval = wcalc.template calc<1>(ofs);
+      for (size_t ispec=0; ispec<nspec; ++ispec)
+        {
+        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+        if constexpr (opmask&1)
+          val[ispec][0] += wigval[0]*sp;
+        }
       }
-    }
   }
 
 template<typename Tsimd, typename Tout, size_t nspec> inline void store_mat
@@ -593,9 +593,6 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
     wigcalc<Tsimd> wcalc(w3j);
     vmav<array<Tsimd,4>,1> val_({nspec});
     array<Tsimd,4> * DUCC0_RESTRICT val = val_.data();
-    Tsimd lofs;
-    for (size_t k=0; k<vlen; ++k)
-      lofs[k]=double(k);
     while (auto rng=sched.getNext()) for(int el1=int(rng.lo); el1<int(rng.hi); ++el1)
       {
       for (int el2=el1; el2<=((el1<=int(lsmall))?int(lmax):el1); el2+=vlen)
@@ -607,7 +604,6 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
         if (!necessary) continue;
 
         int el3min = el2-el1;
-        int el3max = el2+el1;
         if (el3min<=int(lmax_spec))
           {
           if (nspec==1)
