@@ -52,45 +52,19 @@ def mcm02_pspy(spec, lmax):
         res[i, :, 2:, 2:] = mcmtmp[:,:-2,:-2]
     return res
 
-def mcm00_ducc(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+def mcm_ducc(spec, optype, l1, l2):
+    nmap = 0
+    for op in optype:
+        nmap += 2 if op==4 else 1
+    out= np.empty((nmap,l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
-def mcm00_ducc_new(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(0,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmpp_ducc(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(2,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmpp_ducc_new(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(2,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcm02_ducc(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(1,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcm02_ducc_new(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(1,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmEB_ducc(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(3,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmEB_ducc_new(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(3,)*spec.shape[0], nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmall_ducc(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect(spec, optype=(0,1,2,3,)*(spec.shape[0]//4), nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
-def mcmall_ducc_new(spec, l1, l2):
-    out= np.empty((spec.shape[0],l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=(0,1,2,3)*(spec.shape[0]//4), nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
+def mcm_ducc_new(spec, optype, l1, l2):
+    nmap = 0
+    for op in optype:
+        nmap += 2 if op==4 else 1
+    out= np.empty((nmap,l1+1,l2+1),dtype=np.float64)
+    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
 
 # lmax up to which the MCM will be computed
@@ -104,7 +78,7 @@ l_toeplitz=170
 
 # number of spectra to process simultaneously
 
-nspec=1
+nspec=100
 
 print()
 print("Mode coupling matrix computation comparison")
@@ -112,73 +86,23 @@ print(f"nspec={nspec}, lmax={lmax}, nthreads={nthreads}")
 
 # we generate the spectra up to 2*lmax+1 to use all Wigner 3j symbols
 # but this could also be lower.
-spec = np.random.normal(size=(nspec, 4, 2*lmax+1))
-spec = np.random.uniform(0.1,1.,size=(nspec, 4, 2*lmax+1))
-#spec[3:] = 0
-print()
-print("TT case:")
+spec = np.random.normal(size=(nspec, 2*lmax+1))
+spec = np.random.uniform(0.1,1.,size=(nspec, 2*lmax+1))
 
-t0=time()
-duccsq = mcm00_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcm00_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-print()
-print("EE case:")
-
-t0=time()
-duccsq = mcmpp_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcmpp_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-
-print()
-print("TE case:")
-
-t0=time()
-duccsq = mcm02_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcm02_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-
-print()
-print("EB case:")
-
-t0=time()
-duccsq = mcmEB_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcmEB_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-import matplotlib.pyplot as plt
-#print(duccsq)
-#print(duccnewsq)
-#plt.imshow((duccsq-duccnewsq)[0])
-#plt.show()
-
-print()
-print("all case:")
-
-t0=time()
-duccsq = mcmall_ducc(spec[:,0,:], l1, l2)
-print(f"ducc square time: {time()-t0}s")
-t0=time()
-duccnewsq = mcmall_ducc_new(spec[:,0,:], l1, l2)
-print(f"ducc square new time: {time()-t0}s")
-print(ducc0.misc.l2error(duccsq,duccnewsq))
-import matplotlib.pyplot as plt
-#print(duccsq)
-#print(duccnewsq)
-#plt.imshow((duccsq-duccnewsq)[0])
-#plt.show()
-
+opname = ("TT", "TE", "EE", "EB", "EE/EB")
+opname = ("00", "02", "++", "--", "++/--")
+for ops in ((0,), (2,), (1,), (3,), (4,), (0,1,2,3,4), (0,0,0,0,0,0,0,0,0,0),(0,1,4,0,1,4,0,1,4,0,1,4,0,1,4)):
+    print()
+    opstring = tuple(opname[i] for i in ops)
+    print(f"{opstring} case:")
+    t0=time()
+    duccsq = mcm_ducc(spec[:len(ops)], ops, l1, l2)
+    print(f"ducc square time: {time()-t0}s")
+    t0=time()
+    duccnewsq = mcm_ducc_new(spec[:len(ops)], ops, l1, l2)
+    print(f"ducc square new time: {time()-t0}s")
+    print("L2 error:", ducc0.misc.l2error(duccsq,duccnewsq))
+ 
 exit()
 # compare the results
 print(f"L2 error between pspy and ducc solutions: {ducc0.misc.l2error(pspy[:,2:l1+1,2:l2+1],4*np.pi*duccsq[:,2:,2:])}")
