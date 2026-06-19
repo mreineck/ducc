@@ -110,8 +110,13 @@ template<typename T, typename Abi> inline stdx::simd<T,Abi> sin(stdx::simd<T,Abi
 template<typename T, typename Abi> inline stdx::simd<T,Abi> cos(stdx::simd<T,Abi> in)
   { return apply(in,[](T v){return cos(v);}); }
 
-template<typename M, typename T> T blend(M mask, T a, T b)
+template<typename M, typename T> inline T blend(M mask, T a, T b)
   { T res=b; where(mask, res) = a; return res; }
+
+template<typename Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
+  { return Tsimd(ptr, element_aligned_tag()); }
+template<typename Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
+  { v.copy_to(ptr, element_aligned_tag()); }
 
 }
 
@@ -121,6 +126,8 @@ using detail_simd::simd_select;
 using detail_simd::simd_exists;
 using detail_simd::vectorizable;
 using detail_simd::blend;
+using detail_simd::loadu;
+using detail_simd::storeu;
 
 }
 
@@ -850,6 +857,10 @@ template<typename T, size_t len> inline vtp<T,len> sin(vtp<T,len> in)
 template<typename T, size_t len> inline vtp<T,len> cos(vtp<T,len> in)
   { return apply(in,[](T v){return std::cos(v);}); }
 
+template<typename Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
+  { return Tsimd(ptr, element_aligned_tag()); }
+template<typename Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
+  { v.copy_to(ptr, element_aligned_tag()); }
 }
 
 using detail_simd::element_aligned_tag;
@@ -857,6 +868,8 @@ using detail_simd::native_simd;
 using detail_simd::simd_select;
 using detail_simd::simd_exists;
 using detail_simd::vectorizable;
+using detail_simd::loadu;
+using detail_simd::storeu;
 
 }
 #endif

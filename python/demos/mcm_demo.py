@@ -94,8 +94,8 @@ def mcmall_ducc_new(spec, l1, l2):
     return out
 
 # lmax up to which the MCM will be computed
-l1=10000
-l2=10000
+l1=5000
+l2=5000
 lmax=max(l1,l2)
 
 l_exact=-1

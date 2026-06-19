@@ -120,30 +120,41 @@ template<typename Tsimd> class Wigner3j_direct
 
     template<size_t opmask> void prep (int el1_, int el2_)
       {
+      MR_assert(el1_>=0, "el1 must not be negative");
+      MR_assert(el2_>=el1_, "el2 must not be smaller than el1");
       el1 = el1_;
       el2 = el2_;
       el2v = double(el2) + iota;
 
-      // EE/TE/EB
-      if constexpr (opmask&14)
-        x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-
-      // EE/TE
-      if constexpr(opmask&6)
+      // If el1<2, all the EE/TE/EB symbols are zero
+      // Initialize everything to 0, avoiding NaNs
+      if (el1<2)
         {
-        lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
-        x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
-        lmbda_t1 = lmbda *(1.+2./el1);
-        lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
-        x_eta = sqrt(x_eta_sq);
+        x_eta_sq = lmbda = x_lmbda_sq = lmbda_t1 = lmbda_t2 = x_eta = termsumsq = ebtmp1 = ebtmp2 = 0;
         }
-
-      // EB
-      if constexpr(opmask&8)
+      else
         {
-        termsumsq = (el1+1.) + 2. + 1./(el1+1.);
-        ebtmp1 = Tsimd(1.)/((el1+1.)*(el2v+2.));
-        ebtmp2 = Tsimd(1.)/(el1*(el2v+1.));
+        // EE/TE/EB
+        if constexpr (opmask&14)
+          x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
+  
+        // EE/TE
+        if constexpr(opmask&6)
+          {
+          lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
+          x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
+          lmbda_t1 = lmbda *(1.+2./el1);
+          lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
+          x_eta = sqrt(x_eta_sq);
+          }
+  
+        // EB
+        if constexpr(opmask&8)
+          {
+          termsumsq = (el1+1.) + 2. + 1./(el1+1.);
+          ebtmp1 = Tsimd(1.)/((el1+1.)*(el2v+2.));
+          ebtmp2 = Tsimd(1.)/(el1*(el2v+1.));
+          }
         }
       }
 
@@ -153,7 +164,7 @@ template<typename Tsimd> class Wigner3j_direct
       // we use this for TT/EE/TE
       Tsimd threej_000;
       if constexpr (opmask&7)
-        threej_000 = Tsimd(&fct[el2+ofs], element_aligned_tag()) * Tsimd(&g[el2-el1+ofs], element_aligned_tag()) * g[ofs] * g[el1-ofs];
+        threej_000 = loadu<Tsimd>(&fct[el2+ofs]) * loadu<Tsimd>(&g[el2-el1+ofs]) * g[ofs] * g[el1-ofs];
       // TT
       if constexpr (opmask&1)
         res[0] = threej_000*threej_000;
@@ -171,7 +182,7 @@ template<typename Tsimd> class Wigner3j_direct
         auto A = lmbda_t1 - lmbda2*lmbda_t2;
         auto B_sq = 0.25 * x_lmbda_sq * lmbda2 * (Jmpp+1.) * (Jmpp+2.) * (J+3.) * (Jppm+2.)  * Jpmp * (Jpmp-1.);
   
-        auto threej_000_2 = Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * Tsimd(&g[el2+1-el1+ofs], element_aligned_tag()) * g[ofs-1] * g[el1+1-ofs];
+        auto threej_000_2 = loadu<Tsimd>(&fct[el2+1+ofs]) * loadu<Tsimd>(&g[el2+1-el1+ofs]) * g[ofs-1] * g[el1+1-ofs];
 
         auto tmp1 = A*threej_000;
         auto tmp2 = -sqrt(B_sq)*threej_000_2;
@@ -193,9 +204,9 @@ template<typename Tsimd> class Wigner3j_direct
         auto Jppm = J-2*el3v;
         auto Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
 
-        auto t1 = Tsimd(&g[el2+1-el1+ofs], element_aligned_tag())*g[ofs];
-        auto t2 = sqr(Tsimd(&fct[el2+1+ofs], element_aligned_tag()) * g[el1-ofs]*t1);
-        auto t3 = sqr(Tsimd(&fct[el2+2+ofs], element_aligned_tag()) * g[el1+1-ofs]*t1);
+        auto t1 = loadu<Tsimd>(&g[el2+1-el1+ofs])*g[ofs];
+        auto t2 = sqr(loadu<Tsimd>(&fct[el2+1+ofs]) * g[el1-ofs]*t1);
+        auto t3 = sqr(loadu<Tsimd>(&fct[el2+2+ofs]) * g[el1+1-ofs]*t1);
         auto term25_sq = t2*(el2v+2.)* termsumsq;
         auto term3_sq = t3*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
         auto tmp = term25_sq+term3_sq-2.*sqrt(term25_sq*term3_sq);

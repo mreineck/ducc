@@ -114,7 +114,7 @@ template<typename Tsimd, size_t nspec> inline array<Tsimd,nspec> sum_wig00
     {
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
-      val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+      val[ispec] += res[i2]*loadu<Tsimd>(&spec2(ispec,el3));
     }
   return val;
   }
@@ -129,7 +129,7 @@ template<typename Tsimd, typename Tspec, typename Tval> inline void sum_wig00
     {
     int el3 = el3min+i;
     for (size_t ispec=0; ispec<nspec; ++ispec)
-      val[ispec] += res[i2]*Tsimd(&spec2(ispec,el3), element_aligned_tag());
+      val[ispec] += res[i2]*loadu<Tsimd>(&spec2(ispec,el3));
     }
   }
 
@@ -275,7 +275,7 @@ template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4
     const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
     for (size_t ispec=0; ispec<nspec; ++ispec)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+      Tsimd sp = loadu<Tsimd>(&spec2(ispec,el3));
       if constexpr (opmask&1)
         val[ispec][0] += w00*sp;
       if constexpr (opmask&2)
@@ -283,7 +283,7 @@ template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4
       if constexpr (opmask&4)
         val[ispec][2] += w11*sp;
       if constexpr (opmask&8)
-        val[ispec][3] += w11p1*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+        val[ispec][3] += w11p1*loadu<Tsimd>(&spec2(ispec,el3+1));
       }
     }
   return val;
@@ -305,7 +305,7 @@ template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig02
     const Tsimd w11p1=wp1[el3+1]*wp1[el3+1];
     for (size_t ispec=0; ispec<nspec; ++ispec)
       {
-      Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+      Tsimd sp = loadu<Tsimd>(&spec2(ispec,el3));
       if constexpr (opmask&1)
         val[ispec][0] += w00*sp;
       if constexpr (opmask&2)
@@ -313,7 +313,7 @@ template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig02
       if constexpr (opmask&4)
         val[ispec][2] += w11*sp;
       if constexpr (opmask&8)
-        val[ispec][3] += w11p1*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
+        val[ispec][3] += w11p1*loadu<Tsimd>(&spec2(ispec,el3+1));
       }
     }
   }
@@ -486,34 +486,25 @@ template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4
     for (size_t j=0; j<4; ++j)
       val[ispec][j]=0;
 
-  if (el1>=2)
-    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
+  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
+    {
+    array<Tsimd,4> wigval=w3j.template calc<opmask>(ofs);
+    for (size_t ispec=0; ispec<nspec; ++ispec)
       {
-      array<Tsimd,4> wigval=w3j.template calc<opmask>(ofs);
-      for (size_t ispec=0; ispec<nspec; ++ispec)
+      if constexpr(opmask&7)
         {
-        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
+        Tsimd sp = loadu<Tsimd>(&spec2(ispec,el3));
         if constexpr (opmask&1)
           val[ispec][0] += wigval[0]*sp;
         if constexpr (opmask&2)
           val[ispec][1] += wigval[1]*sp;
         if constexpr (opmask&4)
           val[ispec][2] += wigval[2]*sp;
-        if constexpr (opmask&8)
-          val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
         }
+      if constexpr (opmask&8)
+        val[ispec][3] += wigval[3]*loadu<Tsimd>(&spec2(ispec,el3+1));
       }
-  else
-    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-      {
-      array<Tsimd,4> wigval = w3j.template calc<1>(ofs);
-      for (size_t ispec=0; ispec<nspec; ++ispec)
-        {
-        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-        if constexpr (opmask&1)
-          val[ispec][0] += wigval[0]*sp;
-        }
-      }
+    }
   return val;
   }
 template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig_general
@@ -527,34 +518,22 @@ template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig_gener
     for (size_t j=0; j<4; ++j)
       val[ispec][j]=0;
 
-  if (el1>=2)
-    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
+  for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
+    {
+    array<Tsimd,4> wigval=w3j.template calc<opmask>(ofs);
+    for (size_t ispec=0; ispec<nspec; ++ispec)
       {
-      array<Tsimd,4> wigval=w3j.template calc<opmask>(ofs);
-      for (size_t ispec=0; ispec<nspec; ++ispec)
-        {
-        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-        if constexpr (opmask&1)
-          val[ispec][0] += wigval[0]*sp;
-        if constexpr (opmask&2)
-          val[ispec][1] += wigval[1]*sp;
-        if constexpr (opmask&4)
-          val[ispec][2] += wigval[2]*sp;
-        if constexpr (opmask&8)
-          val[ispec][3] += wigval[3]*Tsimd(&spec2(ispec,el3+1), element_aligned_tag());
-        }
+      Tsimd sp = loadu<Tsimd>(&spec2(ispec,el3));
+      if constexpr (opmask&1)
+        val[ispec][0] += wigval[0]*sp;
+      if constexpr (opmask&2)
+        val[ispec][1] += wigval[1]*sp;
+      if constexpr (opmask&4)
+        val[ispec][2] += wigval[2]*sp;
+      if constexpr (opmask&8)
+        val[ispec][3] += wigval[3]*loadu<Tsimd>(&spec2(ispec,el3+1));
       }
-  else
-    for (int el3=el3min, ofs=0; el3<=maxidx; el3+=2, ++ofs)
-      {
-      array<Tsimd,4> wigval = w3j.template calc<1>(ofs);
-      for (size_t ispec=0; ispec<nspec; ++ispec)
-        {
-        Tsimd sp = Tsimd(&spec2(ispec,el3), element_aligned_tag());
-        if constexpr (opmask&1)
-          val[ispec][0] += wigval[0]*sp;
-        }
-      }
+    }
   }
 
 template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
