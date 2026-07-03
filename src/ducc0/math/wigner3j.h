@@ -100,7 +100,7 @@ template<typename Tsimd> class Wigner3j_direct
     Tsimd el2v;
 
     // EE/TE
-    Tsimd lmbda, x_lmbda_sq, lmbda_t1, lmbda_t2, x_eta_sq, x_eta;
+    Tsimd lmbda, x_2lmbda, lmbda_t1, lmbda_t2, x_eta_sq, x_eta;
 
     // EB
     Tsimd termsumsq, ebtmp1, ebtmp2;
@@ -129,7 +129,7 @@ template<typename Tsimd> class Wigner3j_direct
         if constexpr (opmask&14)  // EE/TE/EB
           x_eta_sq = 0;
         if constexpr(opmask&6)  // EE/TE
-          lmbda = x_lmbda_sq = lmbda_t1 = lmbda_t2 = x_eta = 0;
+          lmbda = x_2lmbda = lmbda_t1 = lmbda_t2 = x_eta = 0;
         if constexpr(opmask&8)  // EB
           termsumsq = ebtmp1 = ebtmp2 = 0;
         }
@@ -137,16 +137,16 @@ template<typename Tsimd> class Wigner3j_direct
         {
         if constexpr (opmask&14)  // EE/TE/EB
           x_eta_sq = Tsimd(1.)/((el1-1.)*(el1+2.)*(el2v-1.)*el2v);
-  
+
         if constexpr(opmask&6)  // EE/TE
           {
           lmbda = sqrt(el1*(el1+1.)*(el2v+1.)*(el2v+2.));
-          x_lmbda_sq = Tsimd(1.)/(lmbda*lmbda);
+          x_2lmbda = Tsimd(1.)/(2.*lmbda);
           lmbda_t1 = lmbda *(1.+2./el1);
           lmbda_t2 = lmbda/(((el1+1.)*(el2v+1.)*el1));
           x_eta = sqrt(x_eta_sq);
           }
-  
+
         if constexpr(opmask&8)  // EB
           {
           termsumsq = (el1+1.) + 2. + 1./(el1+1.);
@@ -159,9 +159,20 @@ template<typename Tsimd> class Wigner3j_direct
     template<size_t opmask> std::array<Tsimd,4> calc(int ofs) const
       {
       std::array<Tsimd,4> res;
+
+      // preload some values which are potentially used more than once.
+      const double gofs=g[ofs], gel1mofs=g[el1-ofs];
+      double gel1p1mofs;
+      Tsimd s0, s1;
+      if constexpr(opmask &14)
+        {
+        s0 = loadu<Tsimd>(&fct[el2+1+ofs]);
+        s1 = loadu<Tsimd>(&g[el2+1-el1+ofs]);
+        gel1p1mofs = g[el1+1-ofs];
+        }
       if constexpr (opmask&7)  // TT/EE/TE
         {
-        Tsimd threej_000 = loadu<Tsimd>(&fct[el2+ofs]) * loadu<Tsimd>(&g[el2-el1+ofs]) * g[ofs] * g[el1-ofs];
+        Tsimd threej_000 = loadu<Tsimd>(&fct[el2+ofs]) * loadu<Tsimd>(&g[el2-el1+ofs]) * gofs * gel1mofs;
         if constexpr (opmask&1)  // TT
           res[0] = threej_000*threej_000;
         if constexpr (opmask&6)  // EE/TE
@@ -171,18 +182,18 @@ template<typename Tsimd> class Wigner3j_direct
           Tsimd Jmpp = J-2*el1;
           Tsimd el3v = el2v-el1 + Jpmp;
           Tsimd Jppm = J-2*el3v;  // actually scalar
-          
-          auto lmbda2 = (J+2.) * (Jppm+1.);
-              
-          auto A = lmbda_t1 - lmbda2*lmbda_t2;
-          auto B_sq = 0.25 * x_lmbda_sq * lmbda2 * (Jmpp+1.) * (Jmpp+2.) * (J+3.) * (Jppm+2.)  * Jpmp * (Jpmp-1.);
-    
-          auto threej_000_2 = loadu<Tsimd>(&fct[el2+1+ofs]) * loadu<Tsimd>(&g[el2+1-el1+ofs]) * g[ofs-1] * g[el1+1-ofs];
-  
-          auto tmp1 = A*threej_000;
-          auto tmp2 = -sqrt(B_sq)*threej_000_2;
-  
-          auto threej_0p2m2 = (tmp1+tmp2)*x_eta;
+
+          Tsimd lmbda2 = (J+2.) * (Jppm+1.);
+
+          Tsimd A = lmbda_t1 - lmbda2*lmbda_t2;
+          Tsimd B_sq = lmbda2 * (Jmpp+1.) * (Jmpp+2.) * (J+3.) * (Jppm+2.)  * Jpmp * (Jpmp-1.);
+
+          Tsimd threej_000_2 = s0 * s1 * g[ofs-1] * gel1p1mofs;
+
+          Tsimd tmp1 = A*threej_000;
+          Tsimd tmp2 = -sqrt(B_sq)*x_2lmbda*threej_000_2;
+
+          Tsimd threej_0p2m2 = (tmp1+tmp2)*x_eta;
           if constexpr(opmask&2)  // TE
             res[1] = threej_000*threej_0p2m2;
           if constexpr(opmask&4)  // EE
@@ -192,19 +203,19 @@ template<typename Tsimd> class Wigner3j_direct
       if constexpr(opmask&8)  // EB
         {
         // Note the "+1" here, since we are shifted, and J will be odd
-        auto el3v = 2.*ofs+el2v+1-el1;
-        auto J = el3v+el1+el2v;
-        auto Jmpp = J-2*el1;
-        auto Jpmp = J-2*el2v;
-        auto Jppm = J-2*el3v;
-        auto Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
+        Tsimd Jpmp = 2.*ofs + 1;  // actually scalar
+        Tsimd J = Jpmp+2*el2v;
+        Tsimd Jmpp = J-2*el1;
+        Tsimd el3v = el2v-el1 + Jpmp;
+        Tsimd Jppm = J-2*el3v;  // actually scalar
 
-        auto t1 = loadu<Tsimd>(&g[el2+1-el1+ofs])*g[ofs];
-        auto t2 = sqr(loadu<Tsimd>(&fct[el2+1+ofs]) * g[el1-ofs]*t1);
-        auto t3 = sqr(loadu<Tsimd>(&fct[el2+2+ofs]) * g[el1+1-ofs]*t1);
-        auto term25_sq = t2*(el2v+2.)* termsumsq;
-        auto term3_sq = t3*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
-        auto tmp = term25_sq+term3_sq-2.*sqrt(term25_sq*term3_sq);
+        Tsimd Lambda_sq = (J+2.)*(Jppm+1.)*(Jmpp+1.)*Jpmp;
+
+        Tsimd t1 = s1*gofs;
+        Tsimd t3 = sqr(loadu<Tsimd>(&fct[el2+2+ofs]) * gel1p1mofs);
+        Tsimd term25_sq = sqr(s0 * gel1mofs)*(el2v+2.)* termsumsq;
+        Tsimd term3_sq = t3*0.25*(J+3.)*(J+4.)*(Jppm+2.)*(Jppm+3.)*ebtmp1;
+        Tsimd tmp = t1*t1* (term25_sq+term3_sq-2.*sqrt(term25_sq*term3_sq));
         res[3] = tmp*Lambda_sq*x_eta_sq*ebtmp2;
         }
       return res;
