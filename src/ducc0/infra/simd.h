@@ -133,6 +133,8 @@ using detail_simd::blend;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
+template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+  { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 
 #else
@@ -875,6 +877,8 @@ using detail_simd::vectorizable;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
+template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+  { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 #endif
 #endif

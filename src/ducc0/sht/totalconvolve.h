@@ -223,7 +223,7 @@ template<typename T> class ConvolverPlan
               const T * DUCC0_RESTRICT ptr2 = ptr;
               Tsimd tres=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
-                tres += hlp.wtheta[itheta]*Tsimd(ptr2, element_aligned_tag());
+                tres += hlp.wtheta[itheta]*loadu<Tsimd>(ptr2);
               res += tres*hlp.wpsi[ipsic];
               if (++ipsi>=npsi_b) ipsi=0;
               ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
@@ -238,7 +238,7 @@ template<typename T> class ConvolverPlan
               Tsimd tres=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
                 for (size_t iphi=0; iphi<nvec; ++iphi)
-                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*Tsimd(ptr2+iphi*vlen,element_aligned_tag());
+                  tres += hlp.wtheta[itheta]*hlp.wphi[iphi]*loadu<Tsimd>(ptr2+iphi*vlen);
               res += tres*hlp.wpsi[ipsic];
               if (++ipsi>=npsi_b) ipsi=0;
               ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
@@ -319,11 +319,7 @@ template<typename T> class ConvolverPlan
                 auto ttmp=tmp*hlp.wpsi[ipsic];
                 T * DUCC0_RESTRICT ptr2 = ptr;
                 for (size_t itheta=0; itheta<supp; ++itheta, ptr2+=hlp.jumptheta)
-                  {
-                  Tsimd var=Tsimd(ptr2,element_aligned_tag());
-                  var += ttmp*hlp.wtheta[itheta];
-                  var.copy_to(ptr2,element_aligned_tag());
-                  }
+                  unaligned_add(ptr2, ttmp*hlp.wtheta[itheta]);
                 if (++ipsi>=npsi_b) ipsi=0;
                 ptr = &cube(ipsi,hlp.itheta,hlp.iphi);
                 }
@@ -338,11 +334,7 @@ template<typename T> class ConvolverPlan
                   {
                   auto tttmp=ttmp*hlp.wtheta[itheta];
                   for (size_t iphi=0; iphi<nvec; ++iphi)
-                    {
-                    Tsimd var=Tsimd(ptr2+iphi*vlen, element_aligned_tag());
-                    var += tttmp*hlp.wphi[iphi];
-                    var.copy_to(ptr2+iphi*vlen, element_aligned_tag());
-                    }
+                    unaligned_add(ptr2+iphi*vlen, tttmp*hlp.wphi[iphi]);
                   ptr2 += hlp.jumptheta;
                   }
                 if (++ipsi>=npsi_b) ipsi=0;

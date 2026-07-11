@@ -459,7 +459,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
     typename Tsimd::value_type tmp[vlen];
     for (size_t j=0; j<vlen; ++j)
       tmp[j] = ptr[it.iofs(j,i)];
-    dst[i] = Tsimd(&tmp[0], element_aligned_tag());
+    dst[i] = loadu<Tsimd>(&tmp[0]);
     }
   }
 
@@ -521,8 +521,8 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
         tmp[j1+vlen] = ptr[it.iofs(j0*vlen+j1,i)].i;
         }
 
-      dst[j0*vstr+i].r = Tsimd(&tmp[0], element_aligned_tag());
-      dst[j0*vstr+i].i = Tsimd(&tmp[vlen], element_aligned_tag());
+      dst[j0*vstr+i].r = loadu<Tsimd>(&tmp[0]);
+      dst[j0*vstr+i].i = loadu<Tsimd>(&tmp[vlen]);
       }
   }
 template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -545,7 +545,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
       typename Tsimd::value_type tmp[vlen];
       for (size_t j1=0; j1<vlen; ++j1)
         tmp[j1] = ptr[it.iofs(j0*vlen+j1,i)];
-      dst[j0*vstr+i] = Tsimd(&tmp[0],element_aligned_tag());
+      dst[j0*vstr+i] = loadu<Tsimd>(&tmp[0]);
       }
   }
 
