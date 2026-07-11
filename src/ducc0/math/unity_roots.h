@@ -62,15 +62,18 @@ namespace detail_unity_roots {
 
 using namespace std;
 
-template<typename T, typename Tc> class UnityRoots
+template<typename T, typename Tc> class RootCalc
   {
   private:
+    static constexpr const auto pi = 3.141592653589793238462643383279502884197L;
     using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
-    struct cmplx_ { Thigh r, i; };
-    size_t N, mask, shift;
-    vector<cmplx_> v1, v2;
+    size_t n;
+    Thigh ang;
 
-    static cmplx_ calc(size_t x, size_t n, Thigh ang)
+  public:
+    RootCalc(size_t n_) : n(n_), ang(Thigh(0.25L*pi/n)) {}
+#if 1
+    Tc calc(size_t x) const
       {
       x<<=3;
       if (x<4*n) // first half
@@ -103,8 +106,9 @@ template<typename T, typename Tc> class UnityRoots
           }
         }
       }
-#if 0  // alternative version, similar speed, but maybe a bit more accurate
-    static cmplx_ calc2(size_t x, size_t n)
+#else
+    // alternative version, similar speed, but maybe a bit more accurate
+    Tc calc(size_t x) const
       {
       static constexpr Thigh pi = Thigh(3.141592653589793238462643383279502884197L);
       Thigh n4 = Thigh(n<<2);
@@ -161,13 +165,21 @@ template<typename T, typename Tc> class UnityRoots
         }
       }
 #endif
+  };
+
+template<typename T, typename Tc> class UnityRoots
+  {
+  private:
+    using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
+    struct cmplx_ { Thigh r, i; };
+    size_t N, mask, shift;
+    vector<cmplx_> v1, v2;
 
   public:
     UnityRoots(size_t n)
       : N(n)
       {
-      constexpr auto pi = 3.141592653589793238462643383279502884197L;
-      Thigh ang = Thigh(0.25L*pi/n);
+      RootCalc<T, cmplx_> rc(n);
       size_t nval = (n+2)/2;
       shift = 1;
       while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
@@ -175,11 +187,11 @@ template<typename T, typename Tc> class UnityRoots
       v1.resize(mask+1);
       v1[0]={Thigh(1), Thigh(0)};
       for (size_t i=1; i<v1.size(); ++i)
-        v1[i]=calc(i,n,ang);
+        v1[i]=rc.calc(i);
       v2.resize((nval+mask)/(mask+1));
       v2[0]={Thigh(1), Thigh(0)};
       for (size_t i=1; i<v2.size(); ++i)
-        v2[i]=calc(i*(mask+1),n,ang);
+        v2[i]=rc.calc(i*(mask+1));
       }
 
     size_t size() const { return N; }
@@ -223,7 +235,7 @@ template<typename T> static tuple<int64_t, int64_t> rat_approx0(T f, int64_t md)
   int64_t sub = int64_t(floor(f))-1;
   f -= sub;
 
-  // Multiply number by a sufficiently large power of 2 to make it integer 
+  // Multiply number by a sufficiently large power of 2 to make it integer
   int64_t n = ((int64_t)1)<<53;
   f = ldexp(f,53);
   int64_t d = int64_t(f);
@@ -261,26 +273,35 @@ template<typename T, typename Tc> class MultiExp
     size_t N, mask, shift;
     vector<cmplx_> v1, v2;
 
-    unique_ptr<UnityRoots<T,Tc>> ur;
-    size_t num, den;
-
   public:
     MultiExp(T ang0, size_t n)
       : N(n)
       {
       // Check if ang0 is a clean fraction of 2*pi.
-      // If yes, use UnityRoots internally, because this will be
+      // If yes, use RootCalc internally, because this will be
       // more accurate.
       static constexpr T pi = T(3.141592653589793238462643383279502884197L);
       T frac = ang0/(2*pi);
       frac -= floor(frac);  // bring frac into [0;1] range
-      // limit denominator to 10*N, to avoid using too much memory
-      auto[num_,den_] = rat_approx0(frac, 10*N);
-      if (T(num_)==frac*T(den_))  // we found a clean fraction
+      // limit denominator to avoid spending too much time
+      auto[num,den] = rat_approx0(frac, 1000000);
+      auto ftden = frac*T(den), tnum = T(num);
+      if ((tnum==ftden) || (nextafter(tnum,ftden)==ftden))
         {
-        num = size_t(num_);
-        den = size_t(den_);
-        ur = make_unique<UnityRoots<T,Tc>>(den);
+        RootCalc<T,cmplx_> rc(den);
+        size_t nval = n+2;
+        shift = 1;
+        while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
+        mask = (size_t(1)<<shift)-1;
+        v1.resize(mask+1);
+        v1[0]={Thigh(1), Thigh(0)};
+        for (size_t i=1; i<v1.size(); ++i)
+          v1[i] = rc.calc((i*num)%den);
+        v2.resize((nval+mask)/(mask+1));
+        v2[0]={Thigh(1), Thigh(0)};
+        size_t inc = ((mask+1)*num)%den;
+        for (size_t i=1; i<v2.size(); ++i)
+          v2[i] = rc.calc((i*inc)%den);
         }
       else
         {
@@ -304,11 +325,6 @@ template<typename T, typename Tc> class MultiExp
 
     Tc operator[](size_t idx) const
       {
-      if (ur)
-        {
-        auto tmp = idx*num;
-        return (tmp<den) ? (*ur)[tmp] : (*ur)[tmp%den];
-        }
       auto x1=v1[idx&mask], x2=v2[idx>>shift];
       return Tc(T(x1.r*x2.r-x1.i*x2.i), T(x1.r*x2.i+x1.i*x2.r));
       }
