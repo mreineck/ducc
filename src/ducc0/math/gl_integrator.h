@@ -19,7 +19,7 @@
 /** \file ducc0/math/gl_integrator.h
  *  Functionality for Gauss-Legendre quadrature
  *
- *  \copyright Copyright (C) 2019-2023 Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2026 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -85,10 +85,7 @@ class GL_Integrator
       {
       vector<double> res(n_);
       for (size_t i=0; i<x.size(); ++i)
-        {
-        res[i]=-x[x.size()-1-i];
-        res[n_-1-i] = x[x.size()-1-i];
-        }
+        { res[i] = -(res[n_-1-i] = x[x.size()-1-i]); }
       return res;
       }
     /// Returns the non-negative Gauss-Legendre abscissas.
@@ -117,10 +114,7 @@ class GL_Integrator
       {
       vector<double> res(n_);
       for (size_t i=0; i<th.size(); ++i)
-        {
-        res[i]= pi-th[th.size()-1-i];
-        res[n_-1-i] = th[th.size()-1-i];
-        }
+        { res[i]= pi - (res[n_-1-i] = th[th.size()-1-i]); }
       return res;
       }
   };

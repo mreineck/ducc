@@ -1,3 +1,10 @@
+0.42.0:
+- misc:
+  - new (still experimental) implementation for computing Wigner 3j
+    symbols for |m|<=2, according to https://arxiv.org/abs/2602.15605v1,
+    can be tested via ducc0.misc.experimental.coupling_matrix_rect_new().
+
+
 0.41.1:
 - general:
   - changed the inclusion order of header files in some places to make

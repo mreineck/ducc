@@ -58,18 +58,6 @@ def irfftn(a, axes=None, lastsize=0, inorm=0, nthreads=1):
                    inorm=inorm, nthreads=nthreads)
 
 
-def rfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
-    return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=True,
-                           forward=True, inorm=inorm, out=out,
-                           nthreads=nthreads)
-
-
-def irfft_scipy(a, axis, inorm=0, out=None, nthreads=1):
-    return fft.r2r_fftpack(a, axes=(axis,), real2hermitian=False,
-                           forward=False, inorm=inorm, out=out,
-                           nthreads=nthreads)
-
-
 def hc2c_fftpack(inp, otype):
     n = inp.shape[0]
     n2 = (n-1)//2
@@ -174,16 +162,6 @@ def test_rfftn(shp):
     tmp2 = fftn(a)
     part = tuple(slice(0, tmp1.shape[i]) for i in range(tmp1.ndim))
     _assert_close(tmp1, tmp2[part], 5e-7)
-
-
-# @pmp("shp", shapes)
-# def test_rfft_scipy(shp):
-#     for i in range(len(shp)):
-#         a = rng.random(shp)-0.5
-#         _assert_close(pyfftw.interfaces.scipy_fftpack.rfft(a, axis=i),
-#                       rfft_scipy(a, axis=i), 1e-15)
-#         _assert_close(pyfftw.interfaces.scipy_fftpack.irfft(a, axis=i),
-#                       irfft_scipy(a, axis=i, inorm=2), 1e-15)
 
 
 @pmp("shp", shapes2D)

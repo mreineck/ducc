@@ -1498,6 +1498,63 @@ Returns
 numpy.ndarray((nmat, 11max+1, l2max+1), dtype=np.float32 or np.float64)
     The coupling matrices. Identical to `res`.
 )""";
+template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect_new
+  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
+   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
+  {
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  MR_assert(optype.size()==nspec, "bad optype size");
+  size_t nmat=0;
+  for (auto op: optype)
+    nmat += (op<4) ? 1 : 2;
+  auto mat = to_vmav<Tout,3>(mat_);
+  MR_assert(mat.shape(0)==nmat, "nmat mismatch");
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_rect_new<opmask, Tout>(spec, mat, optype,
+    l_exact, l_toeplitz, dl_band, nthreads);
+  }
+  return mat_;
+  }
+NpArr Py_coupling_matrix_rect_new
+  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
+   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
+  {
+  bool singleprec = isPyarr<float>(mat_);
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(optype.size()==nspec, "bad optype size");
+  size_t opmask=0;
+  for (auto op: optype)
+    {
+    MR_assert((op>=0) && (op<5), "bad optype entry");
+    opmask |= (op==4) ? 12 : (size_t(1)<<op);
+    }
+#define DUCC0_COUPLING_MACRO(mask) \
+  if (opmask==mask) \
+    return singleprec ? \
+      Py2_coupling_matrix_rect_new<mask,float>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band) : \
+      Py2_coupling_matrix_rect_new<mask,double>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band);
+  DUCC0_COUPLING_MACRO(1)
+  DUCC0_COUPLING_MACRO(2)
+  DUCC0_COUPLING_MACRO(3)
+  DUCC0_COUPLING_MACRO(4)
+  DUCC0_COUPLING_MACRO(5)
+  DUCC0_COUPLING_MACRO(6)
+  DUCC0_COUPLING_MACRO(7)
+  DUCC0_COUPLING_MACRO(8)
+  DUCC0_COUPLING_MACRO(9)
+  DUCC0_COUPLING_MACRO(10)
+  DUCC0_COUPLING_MACRO(11)
+  DUCC0_COUPLING_MACRO(12)
+  DUCC0_COUPLING_MACRO(13)
+  DUCC0_COUPLING_MACRO(14)
+  DUCC0_COUPLING_MACRO(15)
+#undef DUCC0_COUPLING_MACRO
+  MR_fail("should not get here");
+  }
 
 static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
@@ -1908,6 +1965,9 @@ void add_misc(py::module_ &msup)
 //  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
 //    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
+    "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
+    "l_toeplitz"_a=-1, "dl_band"_a=-1);
+  m2.def("coupling_matrix_rect_new", Py_coupling_matrix_rect_new, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
 

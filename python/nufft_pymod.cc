@@ -360,7 +360,7 @@ class Py_incremental_nu2u
       py::gil_scoped_release release;
       ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, uniform_shape,
         epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-      grid.assign(vfmav<complex<T>>(ptr->get_gridsize()));
+      grid.assign({ptr->get_gridsize()});
       }
       }
     template<typename T> void do_add_points(
@@ -452,7 +452,7 @@ class Py_incremental_u2nu
       py::gil_scoped_release release;
       ptr = make_unique<Nufft<T,T,T>> (true, npoints_estimate, shp,
         epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
-      grid.assign(vfmav<complex<T>>(ptr->get_gridsize()));
+      grid.assign({ptr->get_gridsize()});
       ptr->interp_prep(forward, grid, uniform);
       }
       }

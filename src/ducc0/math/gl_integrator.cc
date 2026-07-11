@@ -19,7 +19,7 @@
 /** \file ducc0/math/gl_integrator.cc
  *  Functionality for Gauss-Legendre quadrature
  *
- *  \copyright Copyright (C) 2019-2023 Max-Planck-Society, Ignace Bogaert
+ *  \copyright Copyright (C) 2019-2026 Max-Planck-Society, Ignace Bogaert
  *  \author Martin Reinecke
  */
 
@@ -211,6 +211,17 @@ static tuple<double,double,double> calc_gl_bogaert(size_t n, size_t k0)
                     (k==k0) ? theta : pi-theta);
   }
 
+static void get_arrays_unconditionally(size_t n, vector<double> &x, vector<double> &w, vector<double> &th)
+  {
+  size_t m = (n+1)>>1;
+  x.resize(m); w.resize(m); th.resize(m);
+  for (size_t i=0; i<m; ++i)
+    {
+    auto [xi, wi, thi] = (n<=100) ? calc_gl_iterative(n, m-i) : calc_gl_bogaert(n, m-i);
+    x[i]=xi; w[i]=wi; th[i]=thi;
+    }
+  }
+
 GL_Integrator::GL_Integrator(size_t n, size_t /*nthreads*/)
   : n_(n)
   {
@@ -220,43 +231,26 @@ GL_Integrator::GL_Integrator(size_t n, size_t /*nthreads*/)
     static array<vector<double>,100> xcache, wcache, thcache;
     static Mutex mut;
   
+    bool not_yet_computed = true;
     {
     LockGuard lock(mut);
-  
-    if (xcache[n-1].empty())
-      {
-      size_t m = (n+1)>>1;
-      xcache[n-1].resize(m);
-      wcache[n-1].resize(m);
-      thcache[n-1].resize(m);
-      for (size_t i=0; i<m; ++i)
-        {
-        auto [xi, wi, thi] = calc_gl_iterative(n, m-i);
-        xcache[n-1][i] = xi;
-        wcache[n-1][i] = wi;
-        thcache[n-1][i] = thi;
-        }
-      }
+    not_yet_computed = xcache[n-1].empty();
     }
-  
-    x = xcache[n-1];
-    w = wcache[n-1];
-    th = thcache[n-1];
+
+    if (not_yet_computed)
+      {
+      get_arrays_unconditionally(n, x, w, th);
+      {
+      LockGuard lock(mut);
+      if (xcache[n-1].empty())
+        { xcache[n-1]=x; wcache[n-1]=w; thcache[n-1]=th; }
+      }
+      }
+    else
+      { x=xcache[n-1]; w=wcache[n-1]; th=thcache[n-1]; }
     }
   else
-    {
-    size_t m = (n+1)>>1;
-    x.resize(m);
-    w.resize(m);
-    th.resize(m);
-    for (size_t i=0; i<m; ++i)
-      {
-      auto [xi, wi, thi] = calc_gl_bogaert(n, m-i);
-      x[i] = xi;
-      w[i] = wi;
-      th[i] = thi;
-      }
-    }
+    get_arrays_unconditionally(n, x, w, th);
   }
 
 }}
