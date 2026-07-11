@@ -25,10 +25,8 @@
  *  Author: Martin Reinecke
  */
 
-#include <vector>
-#include <cmath>
-#include <complex>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
@@ -37,8 +35,13 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/mcm.h"
+#include "ducc0/math/pswf_rokhlin.h"
 #include "ducc0/math/quaternion.h"
-#include "ducc0/bindings/pybind_utils.h"
+
+#include <vector>
+#include <cmath>
+#include <complex>
+
 
 namespace ducc0 {
 
@@ -875,89 +878,6 @@ To generate multiple independent noise streams, use different `OofaNoise`
 objects (and supply them with independent Gaussian noise streams)!
 )""";
 
-class PolynomialFunctionApproximator
-  {
-  private:
-    size_t W, D;
-    vector<double> coeff;
-
-    static vector<double> getCoeffs(size_t W, size_t D,
-      const function<vector<double>(const vector<double> &)> &func)
-      {
-      vector<double> coeff(W*(D+1));
-      vector<double> chebroot(D+1);
-      for (size_t i=0; i<=D; ++i)
-        chebroot[i] = cos((2*i+1.)*pi/(2*D+2));
-      vector<double> y(D+1), lcf(D+1), C((D+1)*(D+1)), lcf2(D+1);
-      vector<double> locations(W*(D+1));
-      for (size_t i=0; i<W; ++i)
-        {
-        double l = -1+2.*i/double(W);
-        double r = -1+2.*(i+1)/double(W);
-        for (size_t j=0; j<=D; ++j)
-          locations[i*(D+1)+j] = chebroot[j]*(r-l)*0.5 + (r+l)*0.5;
-        }
-      // function values at Chebyshev nodes
-      auto funcval(func(locations));
-
-      for (size_t i=0; i<W; ++i)
-        {
-        double avg = 0;
-        for (size_t j=0; j<=D; ++j)
-          {
-          y[j] = funcval[i*(D+1)+j];
-          avg += y[j];
-          }
-        avg/=(D+1);
-        for (size_t j=0; j<=D; ++j)
-          y[j] -= avg;
-        // Chebyshev coefficients
-        for (size_t j=0; j<=D; ++j)
-          {
-          lcf[j] = 0;
-          for (size_t k=0; k<=D; ++k)
-            lcf[j] += 2./(D+1)*y[k]*cos(j*(2*k+1)*pi/(2*D+2));
-          }
-        lcf[0] *= 0.5;
-        // Polynomial coefficients
-        fill(C.begin(), C.end(), 0.);
-        C[0] = 1.;
-        C[1*(D+1) + 1] = 1.;
-        for (size_t j=2; j<=D; ++j)
-          {
-          C[j*(D+1) + 0] = -C[(j-2)*(D+1) + 0];
-          for (size_t k=1; k<=j; ++k)
-            C[j*(D+1) + k] = 2*C[(j-1)*(D+1) + k-1] - C[(j-2)*(D+1) + k];
-          }
-        for (size_t j=0; j<=D; ++j) lcf2[j] = 0;
-        for (size_t j=0; j<=D; ++j)
-          for (size_t k=0; k<=D; ++k)
-            lcf2[k] += C[j*(D+1) + k]*lcf[j];
-        lcf2[0] += avg;
-        for (size_t j=0; j<=D; ++j)
-          coeff[j*W + i] = lcf2[D-j];
-        }
-      return coeff;
-      }
-  public:
-    PolynomialFunctionApproximator(size_t W_, size_t D_,
-      const function<vector<double>(const vector<double> &)> &func)
-      : W(W_), D(D_), coeff(getCoeffs(W_, D_, func)) {}
-
-    double operator()(double x) const
-      {
-      if (abs(x)>=1) return 0.;
-      double xrel = W*0.5*(x+1.);
-      size_t nth = size_t(xrel);
-      nth = min<size_t>(nth, W-1);
-      double locx = ((xrel-nth)-0.5)*2; // should be in [-1; 1]
-      double res = coeff[nth];
-      for (size_t i=1; i<=D; ++i)
-        res = res*locx+coeff[i*W+nth];
-      return res;
-      }
-  };
-
 static double get_max_kernel_error(const function<vector<double>(const vector<double> &,
     const vector<double> &)> &func_, const vector<double> &par, size_t W, size_t M,
   size_t N, double x0, size_t D, double mach_eps)
@@ -968,12 +888,12 @@ static double get_max_kernel_error(const function<vector<double>(const vector<do
   size_t nx = size_t(2*x0*N+0.9999)+1;
   vector<double> corr;
   vmav<double,2> Cr({M,W});
-  unique_ptr<PolynomialFunctionApproximator> lamptr;
+  unique_ptr<FunctionApproximator<double>> lamptr;
   {
   py::gil_scoped_acquire acquire;
   function<vector<double>(const vector<double> &)> lam_
     = [&par,&func_](const vector<double> &v){ return func_(v, par); };
-  lamptr = make_unique<PolynomialFunctionApproximator>(W, W+3, lam_);
+  lamptr = make_unique<FunctionApproximator<double>>(-1., 1., W, W+3, lam_);
   }
   const auto &lam(*lamptr);
 
@@ -1578,6 +1498,63 @@ Returns
 numpy.ndarray((nmat, 11max+1, l2max+1), dtype=np.float32 or np.float64)
     The coupling matrices. Identical to `res`.
 )""";
+template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect_new
+  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
+   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
+  {
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
+  MR_assert(optype.size()==nspec, "bad optype size");
+  size_t nmat=0;
+  for (auto op: optype)
+    nmat += (op<4) ? 1 : 2;
+  auto mat = to_vmav<Tout,3>(mat_);
+  MR_assert(mat.shape(0)==nmat, "nmat mismatch");
+  {
+  py::gil_scoped_release release;
+  coupling_matrix_rect_new<opmask, Tout>(spec, mat, optype,
+    l_exact, l_toeplitz, dl_band, nthreads);
+  }
+  return mat_;
+  }
+NpArr Py_coupling_matrix_rect_new
+  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
+   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
+  {
+  bool singleprec = isPyarr<float>(mat_);
+  auto spec = to_cmav<double,2>(spec_);
+  auto nspec = spec.shape(0);
+  MR_assert(optype.size()==nspec, "bad optype size");
+  size_t opmask=0;
+  for (auto op: optype)
+    {
+    MR_assert((op>=0) && (op<5), "bad optype entry");
+    opmask |= (op==4) ? 12 : (size_t(1)<<op);
+    }
+#define DUCC0_COUPLING_MACRO(mask) \
+  if (opmask==mask) \
+    return singleprec ? \
+      Py2_coupling_matrix_rect_new<mask,float>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band) : \
+      Py2_coupling_matrix_rect_new<mask,double>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band);
+  DUCC0_COUPLING_MACRO(1)
+  DUCC0_COUPLING_MACRO(2)
+  DUCC0_COUPLING_MACRO(3)
+  DUCC0_COUPLING_MACRO(4)
+  DUCC0_COUPLING_MACRO(5)
+  DUCC0_COUPLING_MACRO(6)
+  DUCC0_COUPLING_MACRO(7)
+  DUCC0_COUPLING_MACRO(8)
+  DUCC0_COUPLING_MACRO(9)
+  DUCC0_COUPLING_MACRO(10)
+  DUCC0_COUPLING_MACRO(11)
+  DUCC0_COUPLING_MACRO(12)
+  DUCC0_COUPLING_MACRO(13)
+  DUCC0_COUPLING_MACRO(14)
+  DUCC0_COUPLING_MACRO(15)
+#undef DUCC0_COUPLING_MACRO
+  MR_fail("should not get here");
+  }
 
 static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
@@ -1785,6 +1762,85 @@ numpy.ndarray((nval, 4), same dtype as `ptg`) : the output quaternions
     Identical to `out` if it was provided.
 )""";
 
+static NpArr Py_pswf0(double c, const CNpArr &x_, const OptNpArr &out__)
+  {
+  const auto x = to_cmav<double,1>(x_);
+  const auto [out_, out] = get_OptNpArr_and_vmav<double,1>(out__, {x.shape(0)});
+  {
+  py::gil_scoped_release release;
+  PSWF0 pswf(c);
+
+  pswf.multi_eval(x, out);
+  }
+  return out_;
+  }
+const char *Py_pswf0_DS = R"""(
+Evaluates the Prolate Spheroidal Wave Function of order zero (Psi_0^c)
+inside the interval [-1,1], for arbitrary frequency parameter c.
+
+Parameters
+----------
+c : float > 0
+    the frequency parameter
+x : numpy.ndarray((nval,), dtype=numpy.float64)
+    The abscissas where the function should be evaluated.
+    Must lie in [-1;1].
+out : numpy.ndarray((nval,), dtype=numpy.float64)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval,), dtype=numpy.float64) : the computed function values
+    Identical to `out` if it was provided.
+)""";
+
+class Py_PSWF0: protected PSWF0
+  {
+  public:
+    Py_PSWF0(double c) : PSWF0(c) {}
+
+    NpArr Py_eval(const CNpArr &x_, const OptNpArr &out__) const
+      {
+      const auto x = to_cmav<double,1>(x_);
+      const auto [out_, out] = get_OptNpArr_and_vmav<double,1>(out__, {x.shape(0)});
+        {
+        py::gil_scoped_release release;
+        multi_eval(x, out);
+        }
+      return out_;
+      }
+  };
+constexpr const char *Py_PSWF0_DS = R"""(
+Class for efficient evaluation of the Prolate Spheroidal Wave Function
+of order zero (Psi_0^c) inside the interval [-1,1],
+for a fixed frequency parameter c.
+)""";
+constexpr const char *Py_PSWF0_init_DS = R"""(
+PSWF0 constructor
+
+Parameters
+----------
+c : float > 0
+    the frequency parameter to use for this object
+)""";
+
+constexpr const char *Py_PSWF0_eval_DS = R"""(
+Compute the PSWF0 for the frequency parameter given to the constructor
+at the provided abscissas
+
+Parameters
+----------
+x : numpy.ndarray((nval,), dtype=numpy.float64)
+    The abscissas where the function should be evaluated.
+    Must lie in [-1;1].
+out : numpy.ndarray((nval,), dtype=numpy.float64)
+    optional array for storing the output
+
+Returns
+-------
+numpy.ndarray((nval,), dtype=numpy.float64) : the computed function values
+    Identical to `out` if it was provided.
+)""";
 
 static void print_diagnostics()
   {
@@ -1858,6 +1914,7 @@ to adjust your code at some point in the future!
 void add_misc(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("misc");
   m.doc() = misc_DS;
 
@@ -1910,6 +1967,14 @@ void add_misc(py::module_ &msup)
   m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
+  m2.def("coupling_matrix_rect_new", Py_coupling_matrix_rect_new, Py_coupling_matrix_rect_DS,
+    "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
+    "l_toeplitz"_a=-1, "dl_band"_a=-1);
+
+  m2.def("pswf0", Py_pswf0, Py_pswf0_DS, "c"_a, "x"_a, "out"_a=None);
+  py::class_<Py_PSWF0> (m2, "PSWF0", Py_PSWF0_DS)
+    .def(py::init<double>(), Py_PSWF0_init_DS, "c"_a)
+    .def ("eval", &Py_PSWF0::Py_eval, Py_PSWF0_eval_DS, "x"_a, "out"_a=None);
 
   m.def("available_hardware_threads", available_hardware_threads, available_hardware_threads_DS);
   m.def("thread_pool_size", thread_pool_size, thread_pool_size_DS);

@@ -19,9 +19,10 @@
  *  Author: Martin Reinecke
  */
 
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/threading.h"
-#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/math/quaternion.h"
 
 namespace ducc0 {

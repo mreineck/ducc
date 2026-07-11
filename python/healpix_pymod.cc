@@ -23,20 +23,21 @@
  */
 
 /*
- *  Copyright (C) 2017-2025 Max-Planck-Society
+ *  Copyright (C) 2017-2026 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <iostream>
-#include <vector>
-#include <string>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/healpix/healpix_base.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/math/geom_utils.h"
-#include "ducc0/bindings/pybind_utils.h"
+
+#include <iostream>
+#include <vector>
+#include <string>
 
 namespace ducc0 {
 
@@ -535,6 +536,7 @@ The employed algorithm is highly accurate, even for angles close to 0 or pi.
 void add_healpix(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("healpix");
   m.doc() = healpix_DS;
 

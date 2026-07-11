@@ -15,12 +15,13 @@
  */
 
 /*
- *  Copyright (C) 2020-2025 Max-Planck-Society
+ *  Copyright (C) 2020-2026 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include "ducc0/../../python/module_adders.h"
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/totalconvolve.h"
 
 namespace ducc0 {

@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_H
@@ -635,6 +635,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       auto krn2 = selectKernel(kidx);
       const auto &corr(krn2->Corr());
       fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
+      FunctionApproximator<double> corfunc2(-0.01,1./krn.ofactor+0.01,krn.W,krn.W+3,[&](double x) { return corr.template corfunc<double>(x); });
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
         while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -642,7 +643,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
           double phihat=1, phase=0;
           for (size_t d=0; d<ndim; ++d)
             {
-            phihat *= corr.template corfunc<Tpoints>(Tpoints((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]));
+            phihat *= Tpoints(corfunc2(double(abs((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]))));
             phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
             }
           fact_out(i) = complex<Tpoints>(polar(phihat, phase));
@@ -794,6 +795,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   }
 
   timers.poppush("output post-phasing and deconvolution");
+  FunctionApproximator<double> corfunc2(-0.01,1./krn.ofactor+0.01,krn.W,krn.W+3,[&](double x) { return corr.template corfunc<double>(x); });
   execStatic(points_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out,dims=dims](auto &sched)
     {
     while (auto rng=sched.getNext()) for (auto i=rng.lo; i<rng.hi; ++i)
@@ -801,7 +803,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
       double phihat=1, phase=0;
       for (size_t d=0; d<ndim; ++d)
         {
-        phihat *= corr.template corfunc<Tpoints>(Tpoints((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]));
+        phihat *= Tpoints(corfunc2(double(abs((coord_out(i,d)-mid_out[d])*gamma[d]/dims[d]))));
         phase += (coord_out(i,d)-mid_out[d])*mid_in[d];
         }
       points_out(i) *= complex<Tpoints>(polar(phihat, psign*phase));

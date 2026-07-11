@@ -118,14 +118,13 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
-# PSWF kernel (m=n=0)
+# Rokhlin PSWF kernel (m=n=0)
 def kernel(x, par):
-    import scipy
     x=np.array(x)
     c = par[0]
-    return scipy.special.pro_ang1(0,0,c,x)[0]
+    return ducc0.misc.experimental.pswf0(c,x)
 
-print("Table for PSWF(m=n=0) kernels")
+print("Table for Rokhlin PSWF(m=n=0) kernels")
 for ofactor in ofactors:
     for W in Ws:
         par_min=[0]
@@ -133,3 +132,11 @@ for ofactor in ofactors:
         res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
         print(W, ofactor, err, res)
 
+print("Table for Rokhlin PSWF(m=n=0) kernels, FINUFFT heuristic for c parameter")
+for ofactor in ofactors:
+    for W in Ws:
+        beta_cutoff = np.pi * W * (1.0 - 1.0 / (2.0 * ofactor)) - 0.05
+        par_min=[beta_cutoff*0.999999]
+        par_max=[beta_cutoff*1.000001]
+        res, err = get_best_kernel(kernel, D, mach_eps, W, ofactor, par_min, par_max, nthreads)
+        print(W, ofactor, err, res)

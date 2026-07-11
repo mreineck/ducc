@@ -36,11 +36,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *  Python interface.
  */
 
-#include <complex>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/fft/fft.h"
-#include "ducc0/bindings/pybind_utils.h"
+#include <complex>
 
 namespace ducc0 {
 
@@ -935,6 +935,7 @@ out : int
 void add_fft(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("fft");
   m.doc() = fft_DS;
   m.def("c2c", c2c, c2c_DS, "a"_a, "axes"_a=None, "forward"_a=true,

@@ -172,7 +172,7 @@ template<typename Tidx, typename Tkey> void bucket_sort2
    size_t nthreads)
   {
   auto nval = keys.size();
-  idx.resize(nval);
+  idx.realloc(nval);
   nthreads = min(nthreads, thread_pool_size());
   auto sizelimit = max<Tidx>(1, nval/nthreads);
   // align members with cache lines

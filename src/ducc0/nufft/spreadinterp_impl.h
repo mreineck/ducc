@@ -633,7 +633,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       {
       MR_assert(coords.shape(1)==ndim, "ndim mismatch");
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
@@ -1023,6 +1023,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr auto vlen=hlp.vlen;
           const auto vdata = [&xkv,v]()
             {
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+#endif
             array<mysimd<Tacc>,nvec2> res;
 #if 0
             Tsimd vr=v.real(), vi=v.imag();
@@ -1169,6 +1173,10 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr size_t lookahead=10;
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+#endif
             if (ix+lookahead<npoints)
               {
               auto nextidx = coord_idx[ix+lookahead];
@@ -1207,7 +1215,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
       {
       size_t ntiles_u = (nover[0]>>log2tile) + 3;
       size_t ntiles_v = (nover[1]>>log2tile) + 3;
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {
@@ -1664,12 +1672,16 @@ if constexpr(SUPP<=8)
   {
           using Tsimd=mysimd<Tacc>;
           constexpr size_t vlen=Tsimd::size();
-          constexpr size_t nvec=(SUPP+vlen-1)/vlen;
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
           Tacc * DUCC0_RESTRICT fptr2=reinterpret_cast<Tacc *>(hlp.p0);
           const array<Tsimd, nvec2> xdata = [&]() {
+#if defined(_MSC_VER) // MSVC bug workaround ... aargh
+            constexpr size_t vlen=Tsimd::size();
+            constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
+#endif
             array<Tsimd, nvec2> xdata;
-            for (size_t cw=0; cw<nvec*vlen; ++cw)
+            for (size_t i=0; i<nvec2; ++i) xdata[i]=0;
+            for (size_t cw=0; cw<SUPP; ++cw)
               {
               xdata[(2*cw  )/vlen][(2*cw  )%vlen] = kw[cw]*v.real();
               xdata[(2*cw+1)/vlen][(2*cw+1)%vlen] = kw[cw]*v.imag();
@@ -1900,7 +1912,7 @@ else
       auto ssmall = log2tile-lsq2;
       auto msmall = (size_t(1)<<ssmall) - 1;
 
-      coord_idx.resize(coords.shape(0));
+      coord_idx.realloc(coords.shape(0));
       quick_array<Tidx> key(coords.shape(0));
       execParallel(coords.shape(0), nthreads, [&](size_t lo, size_t hi)
         {

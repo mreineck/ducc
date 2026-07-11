@@ -1,6 +1,33 @@
+0.42.0:
+- misc:
+  - new (still experimental) implementation for computing Wigner 3j
+    symbols for |m|<=2, according to https://arxiv.org/abs/2602.15605v1,
+    can be tested via ducc0.misc.experimental.coupling_matrix_rect_new().
+
+
+0.41.1:
+- general:
+  - changed the inclusion order of header files in some places to make
+    sure "Python.h" always comes first
+    (see https://docs.python.org/3.15/c-api/intro.html#include-files)
+
+
 0.41.0:
+- general:
+  - fixed a bug in Python wrapping code which could lead to segfaults at
+    library loading time
+
 - nufft:
-  - performance improvements
+  - significant speedup in Type 3 planning stage, by using polynomial
+    approximation for the deconvolution function.
+  - various small performance improvements
+
+- misc:
+  - implementation of PSWF functions of order zero, mainly for use
+    in NUFFT experiments.
+  - INTERFACE CHANGE (in experimental code):
+    more flexible mode-coupling matrix implementation
+
 
 0.40.0:
 - general:

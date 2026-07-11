@@ -21,13 +21,12 @@
  */
 
 /*
- *  Copyright (C) 2017-2025 Max-Planck-Society
+ *  Copyright (C) 2017-2026 Max-Planck-Society
  *  Author: Martin Reinecke
  */
 
-#include <vector>
-#include <complex>
-
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
+#include "ducc0/bindings/pybind_utils.h"
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
@@ -35,7 +34,9 @@
 #include "ducc0/infra/string_utils.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
-#include "ducc0/bindings/pybind_utils.h"
+
+#include <vector>
+#include <complex>
 
 namespace ducc0 {
 
@@ -2315,6 +2316,7 @@ to adjust your code at some point ion the future!
 void add_pythonfuncs(py::module_ &m)
   {
   using namespace py::literals;
+  auto None = py::none();
 
   m.def("alm2leg", &Py_alm2leg, alm2leg_DS, py::kw_only(), "alm"_a, "lmax"_a,
     "theta"_a, "spin"_a=0, "mval"_a=None, "mstart"_a=None, "lstride"_a=1,
@@ -2400,6 +2402,7 @@ void add_pythonfuncs(py::module_ &m)
 void add_sht(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("sht");
   m.doc() = sht_DS;
   auto m2 = m.def_submodule("experimental");

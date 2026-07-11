@@ -18,7 +18,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = ["numpy>=1.17.0"]
-version = "0.40.0"
+version = "0.41.1"
 
 [project_urls]
 "Bug Tracker" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/issues"
@@ -72,6 +72,7 @@ sdist.include = [
     "src/ducc0/math/mcm.h",
     "src/ducc0/math/pointing.cc",
     "src/ducc0/math/pointing.h",
+    "src/ducc0/math/pswf_rokhlin.h",
     "src/ducc0/math/quaternion.h",
     "src/ducc0/math/rangeset.h",
     "src/ducc0/math/solvers.h",

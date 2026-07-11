@@ -14,13 +14,14 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_NUFFT_COMMON_H
 #define DUCC0_NUFFT_COMMON_H
 
 #include <algorithm>
+#include <cstring>
 #include "ducc0/infra/simd.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/fft/fft.h"

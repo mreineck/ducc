@@ -16,11 +16,12 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
-#include "ducc0/../../python/module_adders.h"
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
+#include "ducc0/../../python/module_adders.h"
 #include "ducc0/wgridder/wgridder.h"
 
 namespace ducc0 {
@@ -584,6 +585,7 @@ to adjust your code at some point ion the future!
 void add_pythonfuncs(py::module_ &m)
   {
   using namespace py::literals;
+  auto None = py::none();
 
   m.def("vis2dirty", &Py_vis2dirty, vis2dirty_DS, py::kw_only(), "uvw"_a, "freq"_a, "vis"_a,
     "wgt"_a=None, "npix_x"_a=0, "npix_y"_a=0, "pixsize_x"_a, "pixsize_y"_a,
@@ -601,6 +603,7 @@ void add_pythonfuncs(py::module_ &m)
 void add_wgridder(py::module_ &msup)
   {
   using namespace py::literals;
+  auto None = py::none();
   auto m = msup.def_submodule("wgridder");
   auto m2 = m.def_submodule("experimental", wgridder_experimental_DS);
 
