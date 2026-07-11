@@ -493,12 +493,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                 {
                 auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*hlp.vlen;
                 auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*hlp.vlen;
-                auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                tr += vr*ku[cu];
-                tr.copy_to(pxr,element_aligned_tag());
-                auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                ti += vi*ku[cu];
-                ti.copy_to(pxi,element_aligned_tag());
+                unaligned_add(pxr, vr*ku[cu]);
+                unaligned_add(pxi, vi*ku[cu]);
                 }
               }
             }
@@ -522,12 +518,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               {
               auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*hlp.vlen;
               auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*hlp.vlen;
-              auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-              tr += vr*ku[cu];
-              tr.copy_to(pxr,element_aligned_tag());
-              auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-              ti += vi*ku[cu];
-              ti.copy_to(pxi,element_aligned_tag());
+              unaligned_add(pxr, vr*ku[cu]);
+              unaligned_add(pxi, vi*ku[cu]);
               }
             }
           }
@@ -595,8 +587,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                 {
                 const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*hlp.vlen;
                 const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*hlp.vlen;
-                rr += ku[cu]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                ri += ku[cu]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                rr += ku[cu]*loadu<mysimd<Tcalc>>(pxr);
+                ri += ku[cu]*loadu<mysimd<Tcalc>>(pxi);
                 }
               points(row) = hsum_cmplx<Tcalc>(rr,ri);
               }
@@ -620,8 +612,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               {
               const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*hlp.vlen;
               const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*hlp.vlen;
-              rr += ku[cu]*mysimd<Tcalc>(pxr,element_aligned_tag());
-              ri += ku[cu]*mysimd<Tcalc>(pxi,element_aligned_tag());
+              rr += ku[cu]*loadu<mysimd<Tcalc>>(pxr);
+              ri += ku[cu]*loadu<mysimd<Tcalc>>(pxi);
               }
             points(row) = hsum_cmplx<Tcalc>(rr,ri);
             }
@@ -1060,19 +1052,14 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             Tacc tmpx=ku[cu];
             Tacc * DUCC0_RESTRICT px0 = xpx+cu*2*jump;
             for (size_t cv=0; cv<nvec2; ++cv)
-              (mysimd<Tacc>(px0+cv*hlp.vlen,element_aligned_tag()) + tmpx*vdata[cv]).copy_to(px0+cv*hlp.vlen,element_aligned_tag());
+              unaligned_add(px0+cv*hlp.vlen, tmpx*vdata[cv]);
             }
 #else
           for (size_t cv=0; cv<nvec2; ++cv)
             {
             auto tmpx=vdata[cv];
             for (size_t cu=0; cu<SUPP; ++cu)
-              {
-              auto * DUCC0_RESTRICT px = xpx+cu*2*jump+cv*hlp.vlen;
-              auto tval = mysimd<Tacc>(px,element_aligned_tag());
-              tval += tmpx*xku[cu];
-              tval.copy_to(px,element_aligned_tag());
-              }
+              unaligned_add(xpx+cu*2*jump+cv*hlp.vlen, tmpx*xku[cu]);
             }
 #endif
           }
@@ -1107,7 +1094,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr int jump = hlp.lineJump();
           const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
           const auto * DUCC0_RESTRICT kv = hlp.buf.simd+nvec;
-  
+
           constexpr size_t lookahead=10;
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
@@ -1134,8 +1121,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                 {
                 const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                 const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
-                ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
+                rr += loadu<mysimd<Tcalc>>(pxr)*ku[cu];
+                ri += loadu<mysimd<Tcalc>>(pxi)*ku[cu];
                 }
               rr *= kv[0];
               ri *= kv[0];
@@ -1150,8 +1137,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
                   {
                   const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + vlen*cv;
                   const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + vlen*cv;
-                  tmpr += xkv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                  tmpi += xkv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                  tmpr += xkv[cv]*loadu<mysimd<Tcalc>>(pxr);
+                  tmpi += xkv[cv]*loadu<mysimd<Tcalc>>(pxi);
                   }
                 rr += ku[cu]*tmpr;
                 ri += ku[cu]*tmpi;
@@ -1169,7 +1156,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
           constexpr int jump = hlp.lineJump();
           const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
           const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+vlen*nvec;
-  
+
           constexpr size_t lookahead=10;
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
@@ -1199,7 +1186,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               {
               const Tcalc * DUCC0_RESTRICT p1 = reinterpret_cast<const Tcalc *>(hlp.p0 + cu*jump);
               for (size_t cv=0; cv<nvec2; ++cv)
-                arr[cv] += xku[cu]*mysimd<Tcalc>(p1+vlen*cv,element_aligned_tag());
+                arr[cv] += xku[cu]*loadu<mysimd<Tcalc>>(p1+vlen*cv);
               }
             complex<Tcalc> tres=0;
             for (size_t i=0; i<SUPP; ++i)
@@ -1658,11 +1645,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               const Tsimd fct = ku[cu]*xkv[cv];
               Tacc * const DUCC0_RESTRICT ptr2 = ptr + 2*cu*pjump + 2*cv*ljump;
               for (size_t cw=0; cw<nvec2; ++cw)
-                {
-                Tsimd tmp(ptr2+cw*vlen, element_aligned_tag());
-                tmp += fct*xdata[cw];
-                tmp.copy_to(ptr2+cw*vlen, element_aligned_tag());
-                }
+                unaligned_add(ptr2+cw*vlen, fct*xdata[cw];
               }
 #else
 
@@ -1694,11 +1677,7 @@ if constexpr(SUPP<=8)
               {
               auto tmp2x=ku[cu]*xdata[cw];
               for (size_t cv=0; cv<SUPP; ++cv)
-                {
-                Tsimd tmp(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
-                tmp += tmp2x*xkv[cv];
-                tmp.copy_to(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, element_aligned_tag());
-                }
+                unaligned_add(fptr2+cw*vlen+cv*2*ljump + cu*2*pjump, tmp2x*xkv[cv]);
               }
   }
 else
@@ -1758,7 +1737,7 @@ else
           const auto * DUCC0_RESTRICT ku = hlp.buf.scalar;
           const auto * DUCC0_RESTRICT kv = hlp.buf.scalar+hlp.vlen*hlp.nvec;
           const auto * DUCC0_RESTRICT kw = hlp.buf.simd+2*hlp.nvec;
-  
+
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
             constexpr size_t lookahead=6;
@@ -1794,8 +1773,8 @@ else
                   {
                   const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*pjump + cv*ljump;
                   const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*pjump + cv*ljump;
-                  r2r += mysimd<Tcalc>(pxr,element_aligned_tag())*kv[cv];
-                  r2i += mysimd<Tcalc>(pxi,element_aligned_tag())*kv[cv];
+                  r2r += loadu<mysimd<Tcalc>>(pxr)*kv[cv];
+                  r2i += loadu<mysimd<Tcalc>>(pxi)*kv[cv];
                   }
                 rr += r2r*ku[cu];
                 ri += r2i*ku[cu];
@@ -1816,8 +1795,8 @@ else
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*pjump + cv*ljump + hlp.vlen*cw;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*pjump + cv*ljump + hlp.vlen*cw;
-                    tmp2r += xkw[cw]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                    tmp2i += xkw[cw]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                    tmp2r += xkw[cw]*loadu<mysimd<Tcalc>>(pxr);
+                    tmp2i += xkw[cw]*loadu<mysimd<Tcalc>>(pxi);
                     }
                   tmpr += xkv[cv]*tmp2r;
                   tmpi += xkv[cv]*tmp2i;
@@ -1843,7 +1822,7 @@ else
           using Tsimd = mysimd<Tcalc>;
           constexpr size_t vlen=hlp.vlen;
           constexpr size_t nvec2 = (2*SUPP+vlen-1)/vlen;
-  
+
           while (auto rng=sched.getNext()) for(auto ix=rng.lo; ix<rng.hi; ++ix)
             {
             constexpr size_t lookahead=6;
@@ -1866,7 +1845,7 @@ else
                 {
                 auto fct = ku[cu]*kv[cv];
                 for (size_t cw=0; cw<nvec2; ++cw)
-                  arr[cw] += fct * Tsimd(reinterpret_cast<const Tcalc*>(hlp.p0+cu*pjump + cv*ljump) + cw*hlp.vlen, element_aligned_tag());
+                  arr[cw] += fct * loadu<Tsimd>(reinterpret_cast<const Tcalc*>(hlp.p0+cu*pjump + cv*ljump) + cw*hlp.vlen);
                 }
               }
             complex<Tcalc> tres=0;
