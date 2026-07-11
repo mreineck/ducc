@@ -276,11 +276,14 @@ class Baselines
     vector<double> f_over_c;
     size_t nrows, nchan;
     double umax, vmax;
+public:
+  double r_l, r_m;
 
   public:
     Baselines() = default;
     template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool flip_u=false, bool flip_v=false, bool flip_w=false)
+      const cmav<T,1> &freq, bool flip_u=false, bool flip_v=false, bool flip_w=false, double r_l_=0, double r_m_=0)
+      : r_l(r_l_), r_m(r_m_)
       {
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
@@ -304,7 +307,10 @@ class Baselines
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(ufac*coord_(i,0), vfac*coord_(i,1), wfac*coord_(i,2));
+double tu = ufac*coord_(i,0);
+double tv = vfac*coord_(i,1);
+double tw = wfac*coord_(i,2);
+        coord[i] = UVW(tu-r_l*tw, tv-r_m*tw, tw);
         umax = max(umax, abs(coord_(i,0)));
         vmax = max(vmax, abs(coord_(i,1)));
         }
@@ -380,12 +386,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
 
-    static double phase(double xsq, double ysq, double w, bool adjoint, double nshift)
+    double phase(double xsq, double ysq, double w, bool adjoint, double nshift, double x, double y)
       {
       double tmp = 1.-xsq-ysq;
       // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
       double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
       double phs = w*(nm1+nshift);
+// re-centering
+phs += bl.r_l*x + bl.r_m*y;
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
         return twopi*phs;
@@ -428,11 +436,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for (auto i=lo; i<hi; ++i)
           {
+double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift, x, y0+i*pixsize_y)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
@@ -572,11 +581,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for(auto i=lo; i<hi; ++i)
           {
+double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift, x, y0+i*pixsize_y)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
@@ -1507,9 +1517,30 @@ timers.pop();
           {
           double tmp = xc*xc+yc*yc;
           double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
+//nval += bl.r_l*xc + bl.r_m*yc;
           nm1min = min(nm1min, nval);
           nm1max = max(nm1max, nval);
           }
+double nm1minb = 1e300, nm1maxb = -1e300;
+xext.push_back(0.5*(xmin+xmax));
+yext.push_back(0.5*(ymin+ymax));
+      for (auto xc: xext)
+        for (auto yc: yext)
+          {
+          double tmp = xc*xc+yc*yc;
+          double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
+nval += bl.r_l*xc + bl.r_m*yc;
+          nm1minb = min(nm1minb, nval);
+          nm1maxb = max(nm1maxb, nval);
+          }
+cout << "bla" << endl;
+cout << xmin <<" " << xmax << endl;
+cout << ymin <<" " << ymax << endl;
+cout << nm1min <<" " << nm1max << endl;
+cout << nm1minb <<" " << nm1maxb << endl;
+nm1min = nm1minb;
+nm1max = nm1maxb;
+
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
@@ -1643,7 +1674,10 @@ timers.pop();
         no_nshift(!allow_nshift)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uvw, freq, flip_u, flip_v, flip_w);
+double r_l = lshift / sqrt(1. - lshift*lshift - mshift*mshift);
+double r_m = mshift / sqrt(1. - lshift*lshift - mshift*mshift);
+//r_l=r_m=0;
+      bl = Baselines(uvw, freq, flip_u, flip_v, flip_w, r_l, r_m);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
       MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
