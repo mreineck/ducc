@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2020-2025 Max-Planck-Society
+# Copyright(C) 2020-2026 Max-Planck-Society
 
 from itertools import product
 
@@ -136,12 +136,10 @@ def vis2dirty_with_faceting(*, nfacets_x=1, nfacets_y=1, npix_x, npix_y,
             cy = center_y + kwargs["pixsize_y"]*0.5*((2*j+1)*jstep-npix_y)
             jmax = min((j+1)*jstep, dirty.shape[1])
             if imax == (i+1)*istep and jmax == (j+1)*jstep:
-                tmp = np.ascontiguousarray(dirty[i*istep:imax, j*jstep:jmax])  # TEMPORARY until fixed in sycl-wgridder
                 _ = wgridder.vis2dirty(**kwargs,
                                        center_x=cx, center_y=cy,
                                        npix_x=istep, npix_y=jstep,
-                                       dirty=tmp)
-                dirty[i*istep:imax, j*jstep:jmax] = tmp  # TEMPORARY until fixed in sycl-wgridder
+                                       dirty=dirty[i*istep:imax, j*jstep:jmax])
             else:
                 tdirty = wgridder.vis2dirty(
                     **kwargs, center_x=cx, center_y=cy,
@@ -168,7 +166,6 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
             jmax = min((j+1)*jstep, dirty.shape[1])
             if imax == (i+1)*istep and jmax == (j+1)*jstep:
                 tdirty = dirty[i*istep:imax, j*jstep:jmax]
-                tdirty = np.ascontiguousarray(tdirty)  # TEMPORARY until fixed in sycl-wgridder
             else:
                 tdirty = np.zeros((istep, jstep), dtype=dirty.dtype)
                 tdirty[:imax-i*istep, :jmax-j*jstep] = dirty[i*istep:imax, j*jstep:jmax]
@@ -390,10 +387,19 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
         pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon,
         do_wgridding=wstacking, nthreads=nthreads, verbosity=0, mask=mask,
         divide_by_n=False).astype("f8")
+    ms_bda = ms.reshape((-1,))
+    wgt_bda = None if wgt is None else wgt.reshape((-1,))
+    freqlist_id = np.broadcast_to(np.array([0]),(nrow,)).astype(np.uint64)
+    freqlist_nfreqs = np.array([nchan]).astype(np.uint64)
+    dirty2 = ng.experimental.vis2dirty_bda(
+        uvw=uvw, freqlist_id=freqlist_id, freqlist_nfreqs=freqlist_nfreqs, freqlist_freqs=freq, vis=ms_bda, wgt=wgt_bda, npix_x=nxdirty, npix_y=nydirty,
+        pixsize_x=pixsizex, pixsize_y=pixsizey, epsilon=epsilon,
+        do_wgridding=wstacking, nthreads=nthreads, verbosity=0, mask=mask,
+        divide_by_n=False).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask, divide_by_n=False)
-    dirty[0,0]=ref[0,0]
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
+    assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
 
 
 @pmp('nxdirty', [2, 16, 64])
@@ -423,13 +429,9 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
         ms = ms.astype("c8")
         if wgt is not None:
             wgt = wgt.astype("f4")
-    try:
-        dirty = ng.ms2dirty(
-            uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-            pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
-    except:
-        # no matching kernel was found
-        pytest.skip()
+    dirty = ng.ms2dirty(
+        uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
+        pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=2*epsilon)

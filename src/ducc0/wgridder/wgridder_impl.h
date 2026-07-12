@@ -378,18 +378,24 @@ class Baselines
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,1>> class Wgridder
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
+  typename Tms_in=cmav<complex<Tms>,1>, typename Tms2d_in=cmav<complex<Tms>,2>> class Wgridder
   {
   private:
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
+    bool bda;
     TimerHierarchy timers;
-    const Tms_in &ms_in;
-    const vmav<complex<Tms>,1> &ms_out;
+    const Tms_in *ms_in=nullptr;
+    const Tms2d_in *ms2d_in=nullptr;
+    const vmav<complex<Tms>,1> *ms_out=nullptr;
+    const vmav<complex<Tms>,2> *ms2d_out=nullptr;
     const cmav<Timg,2> &dirty_in;
     const vmav<Timg,2> &dirty_out;
-    const cmav<Tms,1> &wgt;
-    const cmav<uint8_t,1> &mask;
+    const cmav<Tms,1> *wgt=nullptr;
+    const cmav<Tms,2> *wgt2d=nullptr;
+    const cmav<uint8_t,1> *mask=nullptr;
+    const cmav<uint8_t,2> *mask2d=nullptr;
     vmav<uint8_t,1> lmask;
     double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
@@ -741,9 +747,13 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tm
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
- //     checkShape(wgt.shape(),{nrow,nchan});
- //     checkShape(ms_in.shape(), {nrow,nchan});
- //     checkShape(mask.shape(), {nrow,nchan});
+      if (!bda)
+        {
+        size_t nchan = bl.Nchannels(0);
+        checkShape(wgt2d->shape(),{nrow,nchan});
+        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(mask2d->shape(), {nrow,nchan});
+        }
 
       size_t ntiles_u = (nu>>log2tile) + 3;
       size_t ntiles_v = (nv>>log2tile) + 3;
@@ -1216,8 +1226,16 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                wgt.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
-                ms_in.prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+                if (bda)
+                  {
+                  wgt->prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+                  ms_in->prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+                  }
+                else
+                  {
+                  wgt2d->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_in->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  }
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1230,10 +1248,10 @@ timers.pop();
                 {
                 auto coord = bcoord*bl.ffact(rcr.row, ch);
                 hlp.prep(coord, nth);
-                auto v(ms_in(idx0+ch));
+                auto v = bda ? (*ms_in)(idx0+ch) : (*ms2d_in)(row,ch);
                 if (shifting)
                   v*=phases[ch-rcr.ch_begin];
-                v*=wgt(idx0+ch);
+                v *= bda ? (*wgt)(idx0+ch) : (*wgt2d)(row,ch);
 
                 if constexpr (NVEC==1)
                   {
@@ -1320,10 +1338,19 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                auto idx = bl.ofs_ms(nextrcr.row, nextrcr.ch_begin);
-                wgt.prefetch_r(idx);
-                ms_out.prefetch_r(idx);
-                ms_out.prefetch_w(idx);
+                if (bda)
+                  {
+                  auto idx = bl.ofs_ms(nextrcr.row, nextrcr.ch_begin);
+                  wgt->prefetch_r(idx);
+                  ms_out->prefetch_r(idx);
+                  ms_out->prefetch_w(idx);
+                  }
+                else
+                  {
+                  wgt2d->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_out->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_out->prefetch_w(nextrcr.row, nextrcr.ch_begin);
+                  }
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1367,12 +1394,14 @@ timers.pop();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx<Tcalc>(rr,ri);
-                if (!firstplane) r += ms_out(idx0+ch);
+                if (!firstplane) r += bda ? (*ms_out)(idx0+ch) : (*ms2d_out)(row,ch);
                 if (lastplane)
+                  {
+                  auto twgt = bda ? (*wgt)(idx0+ch) : (*wgt2d)(row,ch);
                   r *= shifting ?
-                    complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(wgt(idx0+ch))) :
-                    wgt(idx0+ch);
-                ms_out(idx0+ch) = r;
+                    complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(twgt)) : twgt;
+                  }
+                bda ? (*ms_out)(idx0+ch) = r : (*ms2d_out)(row,ch) = r;
                 }
               }
             }
@@ -1630,9 +1659,13 @@ timers.pop();
       {
       timers.push("Initial scan");
       size_t nrow=bl.Nrows();
-//      checkShape(wgt.shape(),{nrow,nchan});
- //     checkShape(ms_in.shape(), {nrow,nchan});
-//      checkShape(mask.shape(), {nrow,nchan});
+      if (!bda)
+        {
+        size_t nchan = bl.Nchannels(0);
+        checkShape(wgt2d->shape(), {nrow,nchan});
+        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(mask2d->shape(), {nrow,nchan});
+        }
 
       nvis=0;
       wmin_d=1e300;
@@ -1647,7 +1680,10 @@ timers.pop();
 {
 //            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
             auto idx = bl.ofs_ms(irow,ichan);
-            if (norm(ms_in(idx))*wgt(idx)*mask(idx) != 0)
+            auto tnorm = gridding ? norm(bda ? (*ms_in)(idx) : (*ms2d_in)(irow,ichan)) : 1.;
+            auto twgt = bda ? (*wgt)(idx) : (*wgt2d)(irow,ichan);
+            auto tmask = bda ? (*mask)(idx) : (*mask2d)(irow,ichan);
+            if (tnorm*twgt*tmask != 0)
               {
               lmask(idx)=1;
               ++lnvis;
@@ -1657,7 +1693,7 @@ timers.pop();
               }
             else
               {
-              if (!gridding) ms_out(idx)=0;
+              if (!gridding) bda ? (*ms_out)(idx)=0 : (*ms2d_out)(irow, ichan)=0;
               }
 }
         {
@@ -1675,20 +1711,24 @@ timers.pop();
            const cmav<size_t,1> &freqlist_id,                // (nrows),
            const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
            const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
-           const Tms_in &ms_in_, const vmav<complex<Tms>,1> &ms_out_,
+           const Tms_in *ms_in_, const Tms2d_in *ms2d_in_,
+           const vmav<complex<Tms>,1> *ms_out_,
+           const vmav<complex<Tms>,2> *ms2d_out_,
            const cmav<Timg,2> &dirty_in_, const vmav<Timg,2> &dirty_out_,
-           const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_,
+           const cmav<Tms,1> *wgt_, const cmav<Tms,2> *wgt2d_,
+           const cmav<uint8_t,1> *mask_, const cmav<uint8_t,2> *mask2d_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool flip_u, bool flip_v, bool flip_w, bool divide_by_n_,
            double sigma_min_, double sigma_max_,
            double center_x, double center_y, bool allow_nshift)
-      : gridding(ms_out_.size()==0),
+      : gridding(ms_in_||ms2d_in_),
+        bda(ms_out_||ms_in_),
         timers(gridding ? "gridding" : "degridding"),
-        ms_in(ms_in_), ms_out(ms_out_),
+        ms_in(ms_in_), ms2d_in(ms2d_in_), ms_out(ms_out_), ms2d_out(ms2d_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
-        wgt(wgt_), mask(mask_),
-        lmask(gridding ? ms_in.shape() : ms_out.shape()),
+        wgt(wgt_), wgt2d(wgt2d_), mask(mask_), mask2d(mask2d_),
+        lmask(bda ? wgt->shape() : typename cmav<Tms,1>::shape_t({wgt2d->size()})),
         pixsize_x(pixsize_x_), pixsize_y(pixsize_y_),
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
@@ -1764,11 +1804,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
     bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
     double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
-  auto ms_out(vmav<complex<Tms>,1>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Wgridder<Tcalc, Tacc, Tms, Timg, Tms_in> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg, Tms_in, cmav<complex<Tms>,2>> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, &ms, nullptr, nullptr, nullptr, dirty_in, dirty, &wgt, nullptr, &mask, nullptr, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
@@ -1779,17 +1818,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
+  auto dirty_in(vmav<Timg,2>::build_empty());
   auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
   auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
-  MR_assert(ms.contiguous(), "oops");
-  cmav<complex<Tms>,1> msnew(&ms(0,0),{ms.size()});
-  MR_assert(wgt_.contiguous()||(wgt_.size()==0), "oops2");
-  auto wgt(wgt_.size()!=0 ? cmav<Tms,1>(&wgt_(0,0), msnew.shape()) : cmav<Tms,1>::build_uniform(msnew.shape(), 1.));
-  MR_assert(mask_.contiguous()||(mask_.size()==0), "oops3");
-  auto mask(mask_.size()!=0 ? cmav<uint8_t,1>(&mask_(0,0), msnew.shape()) : cmav<uint8_t,1>::build_uniform(msnew.shape(), 1));
-  ms2dirty_bda<Tcalc, Tacc, Tms, cmav<complex<Tms>,1>, Timg>(uvw, freqlist_id, freqlist_nfreqs, freq, msnew, wgt, mask,  pixsize_x, pixsize_y, epsilon,
-do_wgridding, nthreads, dirty, verbosity, flip_u, flip_v, flip_w,divide_by_n, sigma_min,
-     sigma_max, center_x, center_y, allow_nshift);
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Wgridder<Tcalc, Tacc, Tms, Timg, cmav<complex<Tms>,1>, Tms_in> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, &ms, nullptr, nullptr, dirty_in, dirty, nullptr, &wgt, nullptr, &mask, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
@@ -1805,11 +1841,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
     double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
-  auto ms_in(ms.build_uniform(ms.shape(),1.));
   auto dirty_out(vmav<Timg,2>::build_empty());
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, nullptr, nullptr, &ms, nullptr, dirty, dirty_out, &wgt, nullptr, &mask, nullptr, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
@@ -1821,17 +1856,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
+  auto dirty_out(vmav<Timg,2>::build_empty());
   auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
   auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
-  MR_assert(ms.contiguous(), "oops");
-  vmav<complex<Tms>,1> msnew(&ms(0,0),{ms.size()});
-  MR_assert(wgt_.contiguous()||(wgt_.size()==0), "oops2");
-  auto wgt(wgt_.size()!=0 ? cmav<Tms,1>(&wgt_(0,0), msnew.shape()) : cmav<Tms,1>::build_uniform(msnew.shape(), 1.));
-  MR_assert(mask_.contiguous()||(mask_.size()==0), "oops3");
-  auto mask(mask_.size()!=0 ? cmav<uint8_t,1>(&mask_(0,0), msnew.shape()) : cmav<uint8_t,1>::build_uniform(msnew.shape(), 1));
-  dirty2ms_bda<Tcalc, Tacc, Tms, Timg>(uvw, freqlist_id, freqlist_nfreqs, freq, dirty, wgt, mask,  pixsize_x, pixsize_y, epsilon,
-do_wgridding, nthreads, msnew, verbosity, flip_u, flip_v, flip_w,divide_by_n, sigma_min,
-     sigma_max, center_x, center_y, allow_nshift);
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, nullptr, nullptr, &ms, dirty, dirty_out, nullptr, &wgt, nullptr, &mask, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
 } // namespace detail_gridder
