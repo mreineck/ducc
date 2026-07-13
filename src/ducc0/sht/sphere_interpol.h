@@ -221,8 +221,8 @@ template<typename T> class SphereInterpol
               Tsimd tres0=0, tres1=0;
               for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
                 {
-                tres0 += hlp.wtheta[itheta]*Tsimd(ptr0, element_aligned_tag());
-                tres1 += hlp.wtheta[itheta]*Tsimd(ptr1, element_aligned_tag());
+                tres0 += hlp.wtheta[itheta]*loadu<Tsimd>(ptr0);
+                tres1 += hlp.wtheta[itheta]*loadu<Tsimd>(ptr1);
                 }
               signal(0, i) = reduce(tres0*hlp.wphi[0], std::plus<>());
               signal(1, i) = reduce(tres1*hlp.wphi[0], std::plus<>());
@@ -237,8 +237,8 @@ template<typename T> class SphereInterpol
                 Tsimd ttres0=0, ttres1=0;
                 for (size_t iphi=0; iphi<nvec; ++iphi)
                   {
-                  ttres0 += hlp.wphi[iphi]*Tsimd(ptr0+iphi*vlen,element_aligned_tag());
-                  ttres1 += hlp.wphi[iphi]*Tsimd(ptr1+iphi*vlen,element_aligned_tag());
+                  ttres0 += hlp.wphi[iphi]*loadu<Tsimd>(ptr0+iphi*vlen);
+                  ttres1 += hlp.wphi[iphi]*loadu<Tsimd>(ptr1+iphi*vlen);
                   }
                 tres0 += ttres0*hlp.wtheta[itheta];
                 tres1 += ttres1*hlp.wtheta[itheta];
@@ -255,7 +255,7 @@ template<typename T> class SphereInterpol
                 const T * DUCC0_RESTRICT ptr = &cube(icomp, hlp.itheta,hlp.iphi);
                 Tsimd tres=0;
                 for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
-                  tres += hlp.wtheta[itheta]*Tsimd(ptr, element_aligned_tag());
+                  tres += hlp.wtheta[itheta]*loadu<Tsimd>(ptr);
                 signal(icomp, i) = reduce(tres*hlp.wphi[0], std::plus<>());
                 }
             else
@@ -267,7 +267,7 @@ template<typename T> class SphereInterpol
                   {
                   Tsimd tres2=0;
                   for (size_t iphi=0; iphi<nvec; ++iphi)
-                    tres2 += hlp.wphi[iphi]*Tsimd(ptr+iphi*vlen,element_aligned_tag());
+                    tres2 += hlp.wphi[iphi]*loadu<Tsimd>(ptr+iphi*vlen);
                   tres += tres2*hlp.wtheta[itheta];
                   }
                 signal(icomp, i) = reduce(tres, std::plus<>());
@@ -348,12 +348,8 @@ template<typename T> class SphereInterpol
               T * DUCC0_RESTRICT ptr1 = &cube(1,hlp.itheta,hlp.iphi);
               for (size_t itheta=0; itheta<supp; ++itheta, ptr0+=hlp.jumptheta, ptr1+=hlp.jumptheta)
                 {
-                Tsimd var0=Tsimd(ptr0,element_aligned_tag());
-                Tsimd var1=Tsimd(ptr1,element_aligned_tag());
-                var0 += tmp0*hlp.wtheta[itheta];
-                var1 += tmp1*hlp.wtheta[itheta];
-                var0.copy_to(ptr0,element_aligned_tag());
-                var1.copy_to(ptr1,element_aligned_tag());
+                unaligned_add(ptr0, tmp0*hlp.wtheta[itheta]);
+                unaligned_add(ptr1, tmp1*hlp.wtheta[itheta]);
                 }
               }
             else
@@ -368,12 +364,8 @@ template<typename T> class SphereInterpol
                 auto ttmp1=tmp1*hlp.wtheta[itheta];
                 for (size_t iphi=0; iphi<nvec; ++iphi)
                   {
-                  Tsimd var0=Tsimd(ptr0+iphi*vlen, element_aligned_tag());
-                  Tsimd var1=Tsimd(ptr1+iphi*vlen, element_aligned_tag());
-                  var0 += ttmp0*hlp.wphi[iphi];
-                  var1 += ttmp1*hlp.wphi[iphi];
-                  var0.copy_to(ptr0+iphi*vlen, element_aligned_tag());
-                  var1.copy_to(ptr1+iphi*vlen, element_aligned_tag());
+                  unaligned_add(ptr0+iphi*vlen, ttmp0*hlp.wphi[iphi]);
+                  unaligned_add(ptr1+iphi*vlen, ttmp1*hlp.wphi[iphi]);
                   }
                 }
               }
@@ -386,11 +378,7 @@ template<typename T> class SphereInterpol
                 Tsimd tmp=signal(icomp, i)*hlp.wphi[0];
                 T * DUCC0_RESTRICT ptr = &cube(icomp,hlp.itheta,hlp.iphi);
                 for (size_t itheta=0; itheta<supp; ++itheta, ptr+=hlp.jumptheta)
-                  {
-                  Tsimd var=Tsimd(ptr,element_aligned_tag());
-                  var += tmp*hlp.wtheta[itheta];
-                  var.copy_to(ptr,element_aligned_tag());
-                  }
+                  unaligned_add(ptr, tmp*hlp.wtheta[itheta]);
                 }
             else
               for (size_t icomp=0; icomp<ncomp; ++icomp)
@@ -401,11 +389,7 @@ template<typename T> class SphereInterpol
                   {
                   auto ttmp=tmp*hlp.wtheta[itheta];
                   for (size_t iphi=0; iphi<nvec; ++iphi)
-                    {
-                    Tsimd var=Tsimd(ptr+iphi*vlen, element_aligned_tag());
-                    var += ttmp*hlp.wphi[iphi];
-                    var.copy_to(ptr+iphi*vlen, element_aligned_tag());
-                    }
+                    unaligned_add(ptr+iphi*vlen, ttmp*hlp.wphi[iphi]);
                   }
                 }
             }
