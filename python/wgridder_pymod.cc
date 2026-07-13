@@ -530,6 +530,8 @@ numpy.ndarray((npix_x, npix_y), dtype=float of same precision as `ms`)
 
 Notes
 -----
+This function is obsolescent, please switch to vis2dirty!
+
 The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";
@@ -583,6 +585,8 @@ numpy.ndarray((nrows, nchan), dtype=complex of same precision as `dirty`)
 
 Notes
 -----
+This function is obsolescent, please switch to dirty2vis!
+
 The input arrays should be contiguous and in C memory order.
 Other strides will work, but can degrade performance significantly.
 )""";

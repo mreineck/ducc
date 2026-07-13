@@ -190,9 +190,9 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2))
-def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
-                              singleprec, wstacking, use_wgt, nthreads,
-                              use_mask):
+def test_adjointness_vis2dirty(nx, ny, nrow, nchan, epsilon,
+                               singleprec, wstacking, use_wgt, nthreads,
+                               use_mask):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
     if singleprec and epsilon < 1e-6:
         pytest.skip()
@@ -207,7 +207,6 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
         if use_mask else None
     dirty = rng.random((nxdirty, nydirty))-0.5
-    nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         dirty = dirty.astype("f4")
@@ -220,11 +219,15 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
         tol = 3e-5*ref if singleprec else 2e-13*ref
         assert_allclose(vdot(ms, m2).real, vdot(d2, dirty), rtol=3*tol)
 
-    dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
-                         mask).astype("f8")
-    ms2 = ng.dirty2ms(uvw, freq, dirty, wgt, pixsizex, pixsizey, nu, nv,
-                      epsilon, wstacking, nthreads, 0, mask).astype("c16")
+    dirty2 = ng.vis2dirty(
+        uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty,
+        npix_y=nydirty, pixsize_x=pixsizex, pixsize_y=pixsizey,
+        epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads,
+        verbosity=0, mask=mask).astype("f8")
+    ms2 = ng.dirty2vis(
+        uvw=uvw, freq=freq, dirty=dirty, wgt=wgt, pixsize_x=pixsizex,
+        pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking,
+        nthreads=nthreads, verbosity=0, mask=mask).astype("c16")
     check(dirty2, ms2)
 
     dirty2 = vis2dirty_with_faceting(nfacets_x=nxfacets, nfacets_y=nyfacets,
@@ -254,7 +257,7 @@ def test_adjointness_ms2dirty(nx, ny, nrow, nchan, epsilon,
 @pmp("use_mask", (True,))
 @pmp("nthreads", (1, 2))
 @pmp("fov", (0.001, 0.1, 20.))
-def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
+def test_vis2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, use_mask, fov,
                                 nthreads):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
@@ -270,14 +273,13 @@ def test_ms2dirty_against_wdft2(nx, ny, nrow, nchan, epsilon,
     wgt = rng.uniform(0.9, 1.1, (nrow, nchan)) if use_wgt else None
     mask = (rng.uniform(0, 1, (nrow, nchan)) > 0.5).astype(np.uint8) \
         if use_mask else None
-    nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         if wgt is not None:
             wgt = wgt.astype("f4")
-    dirty = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                        pixsizey, nu, nv, epsilon, wstacking, nthreads,
-                        0, mask).astype("f8")
+    dirty = ng.vis2dirty(uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex,
+                        pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads,
+                        verbosity=0, mask=mask).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, mask)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
@@ -412,7 +414,7 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
 @pmp("use_wgt", (True,))
 @pmp("nthreads", (1, 10))
 @pmp("fov", (10.,))
-def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
+def test_vis2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
                                 singleprec, wstacking, use_wgt, fov, nthreads):
     if singleprec and epsilon < 5e-5:
         return
@@ -429,16 +431,16 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
         ms = ms.astype("c8")
         if wgt is not None:
             wgt = wgt.astype("f4")
-    dirty = ng.ms2dirty(
-        uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-        pixsizey, 0, 0, epsilon, wstacking, nthreads, 0).astype("f8")
+    dirty = ng.vis2dirty(
+        uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex,
+        pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0).astype("f8")
     ref = explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
                            pixsizey, wstacking, None)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=2*epsilon)
     x1 = explicit_degridder(uvw, freq, ref, wgt, pixsizex,
                            pixsizey, wstacking, None)
-    x2 = ng.dirty2ms(uvw, freq, ref, wgt, pixsizex, pixsizey, 0, 0,
-                      epsilon, wstacking, nthreads, 0).astype("c16")
+    x2 = ng.dirty2vis(uvw=uvw, freq=freq, dirty=ref, wgt=wgt, pixsize_x=pixsizex, pixsize_y=pixsizey,
+                      epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0).astype("c16")
     assert_allclose(ducc0.misc.l2error(x1,x2), 0, atol=epsilon)
 
 
@@ -452,7 +454,7 @@ def test_ms2dirty_against_wdft3(nxdirty, nydirty, nrow, nchan, epsilon,
 @pmp("use_wgt", (True, False))
 @pmp("use_mask", (False, True))
 @pmp("nthreads", (1, 2))
-def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
+def test_adjointness_vis2dirty_complex(nx, ny, nrow, nchan, epsilon,
                               singleprec, wstacking, use_wgt, nthreads,
                               use_mask):
     (nxdirty, nxfacets), (nydirty, nyfacets) = nx, ny
@@ -470,7 +472,6 @@ def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
         if use_mask else None
     dirty = rng.random((nxdirty, nydirty))-0.5
     dirty = dirty +  1j*(rng.random((nxdirty, nydirty))-0.5)
-    nu = nv = 0
     if singleprec:
         ms = ms.astype("c8")
         dirty = dirty.astype("c8")
@@ -483,14 +484,14 @@ def test_adjointness_ms2dirty_complex(nx, ny, nrow, nchan, epsilon,
         tol = 3e-5*ref if singleprec else 2e-13*ref
         assert_allclose(vdot(ms, m2), vdot(d2, dirty), rtol=tol)
 
-    dirty2 = ng.ms2dirty(uvw, freq, ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
-                         mask).astype("f8") \
-            +1j * ng.ms2dirty(uvw, freq, -1j*ms, wgt, nxdirty, nydirty, pixsizex,
-                         pixsizey, nu, nv, epsilon, wstacking, nthreads, 0,
-                         mask).astype("f8")
-    ms2 = ng.dirty2ms(uvw, freq, dirty.real, wgt, pixsizex, pixsizey, nu, nv,
-                       epsilon, wstacking, nthreads, 0, mask).astype("c16") \
-          +1j*ng.dirty2ms(uvw, freq, dirty.imag, wgt, pixsizex, pixsizey, nu, nv,
-                       epsilon, wstacking, nthreads, 0, mask).astype("c16")
+    dirty2 = ng.vis2dirty(uvw=uvw, freq=freq, vis=ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex,
+                         pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0,
+                         mask=mask).astype("f8") \
+            +1j * ng.vis2dirty(uvw=uvw, freq=freq, vis=-1j*ms, wgt=wgt, npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex,
+                         pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0,
+                         mask=mask).astype("f8")
+    ms2 = ng.dirty2vis(uvw=uvw, freq=freq, dirty=dirty.real, wgt=wgt, pixsize_x=pixsizex, pixsize_y=pixsizey,
+                       epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0, mask=mask).astype("c16") \
+          +1j*ng.dirty2vis(uvw=uvw, freq=freq, dirty=dirty.imag, wgt=wgt, pixsize_x=pixsizex, pixsize_y=pixsizey,
+                       epsilon=epsilon, do_wgridding=wstacking, nthreads=nthreads, verbosity=0, mask=mask).astype("c16")
     check(dirty2, ms2)
