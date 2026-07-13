@@ -1,8 +1,20 @@
 0.42.0:
+- general:
+  - MultiExp now detects whether a given angle is a fraction of 2pi.
+    If so, the generated twiddle factors will be computed in a more
+    accurate fashion.
+    This is specifically relevant for shifted rings in Healpix and
+    internal resampling in theta direction during SHTs.
+
 - misc:
   - new (still experimental) implementation for computing Wigner 3j
     symbols for |m|<=2, according to https://arxiv.org/abs/2602.15605v1,
     can be tested via ducc0.misc.experimental.coupling_matrix_rect_new().
+
+- wgridder:
+  - new "bda" interface allowing more flexible channel frequencies.
+  - removed the experimental "tuning" methods, which did not provide the
+    expected performance gain.
 
 
 0.41.1:
@@ -227,7 +239,7 @@
 
 0.31.0:
 - general:
-  - potentially more efficient handling of parallel regions 
+  - potentially more efficient handling of parallel regions
   - updated pyproject.toml to be compatible with new Python versions
 
 - fft:
@@ -336,7 +348,7 @@
   - start of a Julia wrapper, currently focused on FFT, NUFFT and SHT support
 
 - math:
-  - computations involving Peano-Hilbert indices are now much faster 
+  - computations involving Peano-Hilbert indices are now much faster
 
 - misc:
   - new function `roll_resize_roll`, which allows efficient combined
