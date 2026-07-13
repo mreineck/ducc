@@ -9,7 +9,8 @@ using namespace std;
 #define Tacc float
 #define Tms float
 #define Timg float
-#define Tms_in cmav<complex<Tms>,2>
+#define Tms_in cmav<complex<Tms>,1>
+#define Tms2d_in cmav<complex<Tms>,2>
 #include "ducc0/wgridder/wgridder_inst_inc.h"
 #undef Tms_in
 #undef Timg

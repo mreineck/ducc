@@ -244,7 +244,7 @@ struct ft_partial_sph_isometry_plan
             vk[i] = Tv(1);
             vkp1[i] = Tv(0);
             nrm[i] = Tv(1);
-            X[i] = Tv(&lambda[j+i*Tv::size()], element_aligned_tag());
+            X[i] = loadu<Tv>(&lambda[j+i*Tv::size()]);
             for (size_t icomp=0; icomp<Ncomp; ++icomp)
               fj[i*Ncomp+icomp] = Tv(c[(n-1)*Ncomp+icomp]);
             }

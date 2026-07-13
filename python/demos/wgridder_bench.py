@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2019-2020 Max-Planck-Society
+# Copyright(C) 2019-2026 Max-Planck-Society
 
 import os
 from os.path import join
@@ -64,10 +64,6 @@ def main():
     do_wgridding = True
     verbosity = 1
 
-    do_sycl = False #True
-    do_cng = False #True
-    do_cufinufft = False #True
-
     ntries = 1
 
     npixdirty = get_npixdirty(uvw, freq, fov_deg, mask)
@@ -85,7 +81,7 @@ def main():
             uvw=uvw, freq=freq, vis=vis, wgt=wgt,
             mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
             pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
-            nthreads=nthreads, verbosity=verbosity, flip_v=False, gpu=False,
+            nthreads=nthreads, verbosity=verbosity, flip_v=False,
             double_precision_accumulation=False)
         mintime = min(mintime, time()-t0)
     print()
@@ -96,38 +92,6 @@ def main():
 #    import matplotlib.pyplot as plt
 #    plt.imshow(dirty)
 #    plt.show()
-
-    if do_sycl:
-        print('SYCL gridding...')
-        mintime=1e300
-        for _ in range(ntries):
-            t0 = time()
-            dirty_g = wgridder.vis2dirty(
-                uvw=uvw, freq=freq, vis=vis, wgt=wgt,
-                mask=mask, npix_x=npixdirty, npix_y=npixdirty, pixsize_x=pixsize,
-                pixsize_y=pixsize, epsilon=epsilon, do_wgridding=do_wgridding,
-                nthreads=nthreads, verbosity=verbosity, flip_v=False, gpu=True,
-                double_precision_accumulation=False)
-            mintime = min(mintime, time()-t0)
-        print("Best time: {:.4f} s".format(mintime))
-        print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
-        print("L2 error compared to CPU: {:.2e}".format(ducc0.misc.l2error(dirty,dirty_g)))
-        print()
-    if do_cng:
-        import cuda_nifty_gridder as cng
-        print('ska-gridder-nifty-cuda gridding...')
-        print()
-        mintime=1e300
-        for _ in range(ntries):
-            t0 = time()
-            dirty_cng = cng.ms2dirty(uvw, freq, vis, wgt, npixdirty, npixdirty,
-              pixsize, pixsize, 0, 0, epsilon, do_wgridding, verbosity=verbosity)
-            mintime = min(mintime, time()-t0)
-        print()
-        print("Best time: {:.4f} s".format(mintime))
-        print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
-        print("L2 error compared to CPU: {:.2e}".format(ducc0.misc.l2error(dirty,dirty_cng)))
-        print()
 
     vis_out = vis.copy()
     print('CPU degridding...')
@@ -145,44 +109,6 @@ def main():
     print("Best time: {:.4f} s".format(mintime))
     print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
     print()
-    if do_sycl:
-        vis_out_g = vis.copy()
-        print('SYCL degridding...')
-        print()
-        mintime=1e300
-        for _ in range(ntries):
-            t0 = time()
-            vis_out_g = wgridder.dirty2vis(
-                uvw=uvw, freq=freq, dirty=dirty, wgt=wgt,
-                mask=mask, pixsize_x=pixsize, pixsize_y=pixsize, epsilon=epsilon,
-                do_wgridding=do_wgridding,
-                nthreads=nthreads, verbosity=verbosity,
-                flip_v=False,
-                gpu=True, vis=vis_out_g)
-            mintime = min(mintime, time()-t0)
-        print()
-        print("Best time: {:.4f} s".format(mintime))
-        print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
-        print("L2 error compared to CPU: {:.2e}".format(ducc0.misc.l2error(vis_out,vis_out_g)))
-        print()
-        del vis_out_g
-    if do_cng:
-        import cuda_nifty_gridder as cng
-        print('ska-gridder-nifty-cuda degridding...')
-        print()
-        mintime=1e300
-        for _ in range(ntries):
-            t0 = time()
-            vis_out_cng = cng.dirty2ms(uvw, freq, dirty, wgt, pixsize, pixsize, 0, 0, epsilon, do_wgridding, verbosity=verbosity)
-            mintime = min(mintime, time()-t0)
-            vis_out_cng *= wgt
-        print()
-        print("Best time: {:.4f} s".format(mintime))
-        print("{:.2f} Mvis/s".format(np.sum(wgt != 0)/mintime/1e6))
-        print("L2 error compared to CPU: {:.2e}".format(ducc0.misc.l2error(vis_out,vis_out_cng)))
-        print()
-        del vis_out_cng
-
 
 if __name__ == "__main__":
     main()

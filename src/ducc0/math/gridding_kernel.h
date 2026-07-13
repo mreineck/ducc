@@ -192,10 +192,7 @@ class KernelCorrection
           {
           auto i = rng.lo;
           for (; i+vlen<=rng.hi; i+=vlen)
-            {
-            auto v = corfunc(itimesdx+i*dx);
-            v.copy_to(&res[i],element_aligned_tag());
-            }
+            storeu(corfunc(itimesdx+i*dx), &res[i]);
           for(; i<rng.hi; ++i)
             res[i] = corfunc(i*dx);
           }

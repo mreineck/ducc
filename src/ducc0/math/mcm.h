@@ -238,12 +238,12 @@ template<typename Tout> void coupling_matrix_spin0_rect(const cmav<double,2> &sp
           else if (nspec<=50)
             {
             array<Tsimd,50> val;
-            sum_wig00<Tsimd>(el1, el2, lmax_spec, nspec, res, spec2, val); 
+            sum_wig00<Tsimd>(el1, el2, lmax_spec, nspec, res, spec2, val);
             store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
             }
           else
             {
-            sum_wig00<Tsimd>(el1, el2, lmax_spec, nspec, res, spec2, val); 
+            sum_wig00<Tsimd>(el1, el2, lmax_spec, nspec, res, spec2, val);
             store_mat<Tsimd>(el1, el2, s1, s2, nspec, mat, diag, val);
             }
           }
@@ -704,14 +704,14 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
           int maxidx = min(el3max, int(lmax_spec));
           for (int el3=el3min; el3<=maxidx; el3+=2)
             {
-            Tsimd fac_b = Tsimd(&nom1[el3],element_aligned_tag())*xdenom1,
-                  fac_c = Tsimd(&nom2[el3],element_aligned_tag())*xdenom2,
-                  xfac_b = Tsimd(&nom1[el3],element_aligned_tag())*xxdenom1,
-                  xfac_c = Tsimd(&nom2[el3],element_aligned_tag())*xxdenom2;
-//                  fac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xdenom1,
-//                  fac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xdenom2,
-//                  xfac_b2 = Tsimd(&nom1[el3+1],element_aligned_tag())*xxdenom1,
-//                  xfac_c2 = Tsimd(&nom2[el3+1],element_aligned_tag())*xxdenom2;
+            Tsimd fac_b = loadu<Tsimd>(&nom1[el3])*xdenom1,
+                  fac_c = loadu<Tsimd>(&nom2[el3])*xdenom2,
+                  xfac_b = loadu<Tsimd>(&nom1[el3])*xxdenom1,
+                  xfac_c = loadu<Tsimd>(&nom2[el3])*xxdenom2;
+//                  fac_b2 = loadu<Tsimd>(&nom1[el3+1])*xdenom1,
+//                  fac_c2 = loadu<Tsimd>(&nom2[el3+1])*xdenom2,
+//                  xfac_b2 = loadu<Tsimd>(&nom1[el3+1])*xxdenom1,
+//                  xfac_c2 = loadu<Tsimd>(&nom2[el3+1])*xxdenom2;
             for (size_t ispec=0; ispec<nspec; ++ispec)
               {
               const Tsimd s0(&spec2(ispec,0,el3), element_aligned_tag()),
@@ -722,15 +722,15 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
               auto combin = wig(1,el3) + fac_b*wig(2,el3) + fac_c*wig(3,el3);
               val[ispec][1] += wig(0,el3)*combin*s1;
               val[ispec][2] += wig(0,el3)*combin*s2;
-              val[ispec][3] += combin*combin*Tsimd(&spec2(ispec,3,el3), element_aligned_tag());
+              val[ispec][3] += combin*combin*loadu<Tsimd>(&spec2(ispec,3,el3));
               auto xcombin = wig(1,el3) + xfac_b*wig(4,el3) + xfac_c*wig(5,el3);
               val[ispec][4] += wig(0,el3)*xcombin*s1;
               val[ispec][5] += wig(0,el3)*xcombin*s2;
               val[ispec][6] += xcombin*xcombin*s3;
 //              auto combin2 = wig(1,el3+1) + fac_b2*wig(2,el3+1) + fac_c2*wig(3,el3+1);
-//              val[ispec][7] += combin2*combin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+//              val[ispec][7] += combin2*combin2*loadu<Tsimd>(&spec2(ispec,3,el3+1));
 //              auto  xcombin2 = wig(1,el3+1) + xfac_b2*wig(4,el3+1) + xfac_c2*wig(5,el3+1);
-//              val[ispec][8] += xcombin2*xcombin2*Tsimd(&spec2(ispec,3,el3+1), element_aligned_tag());
+//              val[ispec][8] += xcombin2*xcombin2*loadu<Tsimd>(&spec2(ispec,3,el3+1));
               }
             }
           for (size_t ispec=0; ispec<nspec; ++ispec)

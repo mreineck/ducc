@@ -14,7 +14,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-/* Copyright (C) 2019-2025 Max-Planck-Society
+/* Copyright (C) 2019-2026 Max-Planck-Society
    Author: Martin Reinecke */
 
 #ifndef DUCC0_WGRIDDER_IMPL_H
@@ -101,7 +101,7 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   size_t i=0;
   for (; i+vlen-1<n; i+=vlen)
     {
-    auto vang = Tsimd(&buf[i],element_aligned_tag());
+    auto vang = loadu<Tsimd>(&buf[i]);
     auto vcos = cos(vang);
     auto vsin = sin(vang);
     for (size_t ii=0; ii<vlen; ++ii)
@@ -273,32 +273,67 @@ class Baselines
   {
   protected:
     vector<UVW> coord;
+    size_t nfreqs = 0;   // if 0, data set is "ragged", and we need
+                         // more complicated address calculations
+    vector<size_t> id;        // only allocated if nfreqs == 0
+    vector<size_t> ms_ofs;    // only allocated if nfreqs == 0
+    vector<size_t> freq_ofs;
     vector<double> f_over_c;
-    size_t nrows, nchan;
     double umax, vmax;
 public:
   double r_l, r_m;
 
   public:
     Baselines() = default;
-    template<typename T> Baselines(const cmav<T,2> &coord_,
-      const cmav<T,1> &freq, bool flip_u=false, bool flip_v=false, bool flip_w=false, double r_l_=0, double r_m_=0)
+    template<typename T> Baselines(
+      const cmav<T,2> &coord_,
+      const cmav<size_t,1> &freqlist_id,
+      const cmav<size_t,1> &freqlist_nfreqs,
+      const cmav<double,1> &freqlist_freqs,
+      bool flip_u=false, bool flip_v=false, bool flip_w=false, double r_l_=0, double r_m_=0)
       : r_l(r_l_), r_m(r_m_)
       {
+      size_t nrows = coord_.shape(0);
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
-      nrows = coord_.shape(0);
-      nchan = freq.shape(0);
-      f_over_c.resize(nchan);
-      double fcmax = 0;
-      for (size_t i=0; i<nchan; ++i)
+      MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
+      size_t max_id = 0;
+      for (size_t i=0; i<nrows; ++i)
+        max_id = max(max_id, freqlist_id(i));
+      MR_assert(max_id+1<=freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
+      freq_ofs.resize(max_id+2);
+      freq_ofs[0] = 0;
+      for (size_t i=0; i<=max_id; ++i)
+        freq_ofs[i+1] = freq_ofs[i] + freqlist_nfreqs(i);
+      MR_assert(freqlist_freqs.shape(0)>=freq_ofs.back(), "freqlist_freqs array is too small");
+      if (max_id==0)  // simple case, we only have one frequency list
         {
-        MR_assert(freq(i)>0, "negative channel frequency encountered");
-        if (i>0)
-          MR_assert(freq(i)>=freq(i-1),
-            "channel frequencies must be sorted in ascending order");
-        f_over_c[i] = freq(i)/speedOfLight;
-        fcmax = max(fcmax, abs(f_over_c[i]));
+        nfreqs = freqlist_nfreqs(0);
+        }
+      else
+        {
+        id.resize(nrows);
+        for (size_t i=0; i<nrows; ++i)
+          id[i] = freqlist_id(i);
+        ms_ofs.resize(nrows+1);
+        ms_ofs[0] = 0;
+        for (size_t i=0; i<nrows; ++i)
+          ms_ofs[i+1] = ms_ofs[i] + freqlist_nfreqs(id[i]);
+        }
+
+      f_over_c.resize(freq_ofs.back());
+      double fcmax = 0;
+      for (size_t i=0; i<=max_id; ++i)
+        {
+        MR_assert(freqlist_freqs(freq_ofs[i])>0, "negative channel frequency encountered");
+        for (size_t j=freq_ofs[i]; j<freq_ofs[i+1]; ++j)
+          {
+          if (j>freq_ofs[i])
+            MR_assert(freqlist_freqs(j)>=freqlist_freqs(j-1),
+              "channel frequencies must be sorted in ascending order");
+          f_over_c[j] = freqlist_freqs(j)/speedOfLight;
+          fcmax = max(fcmax, f_over_c[j]);
+          }
         }
       coord.resize(nrows);
       double ufac = flip_u ? -1 : 1;
@@ -318,36 +353,58 @@ double tw = wfac*coord_(i,2);
       vmax *= fcmax;
       }
 
-    UVW effectiveCoord(size_t row, size_t chan) const
-      { return coord[row]*f_over_c[chan]; }
-    double absEffectiveW(size_t row, size_t chan) const
-      { return abs(coord[row].w*f_over_c[chan]); }
-    UVW baseCoord(size_t row) const
-      { return coord[row]; }
-    void prefetchRow(size_t row) const
-      { DUCC0_PREFETCH_R(&coord[row]); }
-    double ffact(size_t chan) const
-      { return f_over_c[chan];}
-    size_t Nrows() const { return nrows; }
-    size_t Nchannels() const { return nchan; }
+    size_t ofs_ms(size_t irow) const
+      { return nfreqs==0 ? ms_ofs[irow] : irow*nfreqs; }
+    size_t ofs_ms(size_t irow, size_t ichan) const
+      { return ofs_ms(irow) + ichan; }
+  private:
+    size_t ofs_freq(size_t irow) const
+      { return nfreqs==0 ? freq_ofs[id[irow]] : 0; }
+    size_t ofs_freq(size_t irow, size_t ichan) const
+      { return ofs_freq(irow) + ichan; }
+
+  public:
+    double ffact(size_t irow, size_t ichan) const
+      { return f_over_c[ofs_freq(irow, ichan)]; }
+    UVW effectiveCoord(size_t irow, size_t ichan) const
+      { return coord[irow]*ffact(irow,ichan); }
+    double absEffectiveW(size_t irow, size_t ichan) const
+      { return abs(coord[irow].w*ffact(irow,ichan)); }
+    UVW baseCoord(size_t irow) const
+      { return coord[irow]; }
+    void prefetchRow(size_t irow) const
+      {
+      DUCC0_PREFETCH_R(&coord[irow]);
+      if (nfreqs==0) DUCC0_PREFETCH_R(&id[irow]);
+      } // FIXME: prefetch channels?
+    size_t Nrows() const { return coord.size(); }
+    size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
+    size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
+    bool BDA() const { return nfreqs==0; }
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in=cmav<complex<Tms>,2>> class Wgridder
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
+  typename Tms_in=cmav<complex<Tms>,1>, typename Tms2d_in=cmav<complex<Tms>,2>> class Wgridder
   {
   private:
     constexpr static int log2tile=is_same<Tacc,float>::value ? 5 : 4;
     bool gridding;
+    bool bda;
     TimerHierarchy timers;
-    const Tms_in &ms_in;
-    const vmav<complex<Tms>,2> &ms_out;
+    const Tms_in *ms_in=nullptr;
+    const Tms2d_in *ms2d_in=nullptr;
+    const vmav<complex<Tms>,1> *ms_out=nullptr;
+    const vmav<complex<Tms>,2> *ms2d_out=nullptr;
     const cmav<Timg,2> &dirty_in;
     const vmav<Timg,2> &dirty_out;
-    const cmav<Tms,2> &wgt;
-    const cmav<uint8_t,2> &mask;
-    vmav<uint8_t,2> lmask;
+    const cmav<Tms,1> *wgt=nullptr;
+    const cmav<Tms,2> *wgt2d=nullptr;
+    const cmav<uint8_t,1> *mask=nullptr;
+    const cmav<uint8_t,2> *mask2d=nullptr;
+    vmav<uint8_t,1> lmask;
     double pixsize_x, pixsize_y;
     size_t nxdirty, nydirty;
     double epsilon;
@@ -669,9 +726,9 @@ double x = x0+i*pixsize_x;
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t ch)
+    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t row, uint32_t ch)
       {
-      auto uvw = uvwbase*bl.ffact(ch);
+      auto uvw = uvwbase*bl.ffact(row, ch);
       double udum, vdum;
       int iu0, iv0, iw;
       getpix(uvw.u, uvw.v, udum, vdum, iu0, iv0);
@@ -684,8 +741,7 @@ double x = x0+i*pixsize_x;
     void countRanges()
       {
       timers.push("building index");
-      size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
+      size_t nrow=bl.Nrows();
 
       if (do_wgridding)
         {
@@ -703,9 +759,19 @@ double x = x0+i*pixsize_x;
       constexpr double max_asymm = 0.01;
       size_t max_allowed = size_t(nvis/double(nbunch*nthreads)*max_asymm);
 
-      checkShape(wgt.shape(),{nrow,nchan});
-      checkShape(ms_in.shape(), {nrow,nchan});
-      checkShape(mask.shape(), {nrow,nchan});
+      if (!bda)
+        {
+        size_t nchan = bl.Nchannels(0);
+        checkShape(wgt2d->shape(),{nrow,nchan});
+        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(mask2d->shape(), {nrow,nchan});
+        }
+      else
+        {
+        checkShape(wgt->shape(),{bl.Nvis()});
+        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(mask->shape(), {bl.Nvis()});
+        }
 
       size_t ntiles_u = (nu>>log2tile) + 3;
       size_t ntiles_v = (nv>>log2tile) + 3;
@@ -723,12 +789,14 @@ timers.push("counting");
           auto uvwbase = bl.baseCoord(irow);
           uvwbase.FixW();
 
+          uint32_t nchan = bl.Nchannels(irow);
           uint32_t ch0=0;
           while(ch0<nchan)
             {
-            while((ch0<nchan) && (!lmask(irow,ch0))) ++ch0;
+            auto idx0 = bl.ofs_ms(irow);
+            while((ch0<nchan) && (!lmask(idx0+ch0))) ++ch0;
             uint32_t ch1=min<uint32_t>(nchan,ch0+1);
-            while( (ch1<nchan) && (lmask(irow,ch1))) ++ch1;
+            while( (ch1<nchan) && (lmask(idx0+ch1))) ++ch1;
             // now [ch0;ch1[ contains an active range or we are at end
             auto inc0 = [&](Uvwidx idx)
               {
@@ -737,7 +805,7 @@ timers.push("counting");
             auto inc = [&](Uvwidx idx, uint32_t ch)
               {
               inc0(idx);
-              lmask(irow,ch)=2;
+              lmask(idx0+ch)=2;
               };
             auto recurse=[&](uint32_t ch_lo, uint32_t ch_hi, Uvwidx uvw_lo, Uvwidx uvw_hi, auto &&recurse) -> void
               {
@@ -749,7 +817,7 @@ timers.push("counting");
               else
                 {
                 auto ch_mid = ch_lo+(ch_hi-ch_lo)/2;
-                auto uvw_mid = get_uvwidx(uvwbase, ch_mid);
+                auto uvw_mid = get_uvwidx(uvwbase, irow, ch_mid);
                 if (uvw_lo!=uvw_mid)
                   recurse(ch_lo, ch_mid, uvw_lo, uvw_mid, recurse);
                 if (uvw_mid!=uvw_hi)
@@ -759,10 +827,10 @@ timers.push("counting");
 
             if (ch0!=ch1)
               {
-              auto uvw0 = get_uvwidx(uvwbase,ch0);
+              auto uvw0 = get_uvwidx(uvwbase,irow,ch0);
               inc0(uvw0);
               if (ch0+1<ch1)
-                recurse(ch0,ch1-1,uvw0,get_uvwidx(uvwbase,ch1-1),recurse);
+                recurse(ch0,ch1-1,uvw0,get_uvwidx(uvwbase,irow,ch1-1),recurse);
               }
             ch0 = ch1;
             }
@@ -796,6 +864,7 @@ timers.poppush("filling");
           {
           bool on=false;
           Uvwidx uvwlast(0,0,0);
+          uint32_t nchan = bl.Nchannels(irow);
           size_t chan0=0;
 
           auto flush=[&]()
@@ -814,12 +883,13 @@ timers.poppush("filling");
           uvwbase.FixW();
           for (size_t ichan=0; ichan<nchan; ++ichan)
             {
-            auto xmask = lmask(irow,ichan);
+            auto idx = bl.ofs_ms(irow, ichan);
+            auto xmask = lmask(idx);
             if (xmask)
               {
               if ((!on)||(xmask==2))
                 {
-                auto uvwcur = get_uvwidx(uvwbase, ichan);
+                auto uvwcur = get_uvwidx(uvwbase, irow, ichan);
                 if (!on) // new active region
                   {
                   on=true;
@@ -1128,7 +1198,7 @@ timers.pop();
       buf.resize(rcr.ch_end-rcr.ch_begin);
       double fct = imflip*(bcoord.u*lshift + bcoord.v*mshift + bcoord.w*nshift);
       expi(phases, buf, [&](size_t i) {
-                      auto tmp = fct*bl.ffact(rcr.ch_begin+i);
+                      auto tmp = fct*bl.ffact(rcr.row, rcr.ch_begin+i);
                       if constexpr (is_same<double, Tcalc>::value)
                         return Tcalc(twopi*tmp);
                       // we are reducing accuracy,
@@ -1174,8 +1244,16 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
-                ms_in.prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                if (bda)
+                  {
+                  wgt->prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+                  ms_in->prefetch_r(bl.ofs_ms(nextrcr.row, nextrcr.ch_begin));
+                  }
+                else
+                  {
+                  wgt2d->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_in->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  }
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1183,14 +1261,15 @@ timers.pop();
               auto imflip = Tcalc(bcoord.FixW());
               if (shifting)
                 compute_phases(phases, buf, imflip, bcoord, rcr);
+              auto idx0 = bl.ofs_ms(row);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                auto coord = bcoord*bl.ffact(ch);
+                auto coord = bcoord*bl.ffact(rcr.row, ch);
                 hlp.prep(coord, nth);
-                auto v(ms_in(row, ch));
+                auto v = bda ? (*ms_in)(idx0+ch) : (*ms2d_in)(row,ch);
                 if (shifting)
                   v*=phases[ch-rcr.ch_begin];
-                v*=wgt(row, ch);
+                v *= bda ? (*wgt)(idx0+ch) : (*wgt2d)(row,ch);
 
                 if constexpr (NVEC==1)
                   {
@@ -1199,12 +1278,8 @@ timers.pop();
                     {
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                    auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
-                    tr += vr*ku[cu];
-                    ti += vi*ku[cu];
-                    tr.copy_to(pxr,element_aligned_tag());
-                    ti.copy_to(pxi,element_aligned_tag());
+                    unaligned_add(pxr, vr*ku[cu]);
+                    unaligned_add(pxi, vi*ku[cu]);
                     }
                   }
                 else
@@ -1217,12 +1292,8 @@ timers.pop();
                       {
                       auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
                       auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                      tr += tmpr*kv[cv];
-                      tr.copy_to(pxr,element_aligned_tag());
-                      auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                      ti += tmpi*kv[cv];
-                      ti.copy_to(pxi,element_aligned_tag());
+                      unaligned_add(pxr, tmpr*kv[cv]);
+                      unaligned_add(pxi, tmpi*kv[cv]);
                       }
                     }
                   }
@@ -1277,9 +1348,19 @@ timers.pop();
               if (cnt+1<iend)
                 {
                 const auto &nextrcr(ranges[cnt+1]);
-                wgt.prefetch_r(nextrcr.row, nextrcr.ch_begin);
-                ms_out.prefetch_r(nextrcr.row, nextrcr.ch_begin);
-                ms_out.prefetch_w(nextrcr.row, nextrcr.ch_begin);
+                if (bda)
+                  {
+                  auto idx = bl.ofs_ms(nextrcr.row, nextrcr.ch_begin);
+                  wgt->prefetch_r(idx);
+                  ms_out->prefetch_r(idx);
+                  ms_out->prefetch_w(idx);
+                  }
+                else
+                  {
+                  wgt2d->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_out->prefetch_r(nextrcr.row, nextrcr.ch_begin);
+                  ms2d_out->prefetch_w(nextrcr.row, nextrcr.ch_begin);
+                  }
                 bl.prefetchRow(nextrcr.row);
                 }
               size_t row = rcr.row;
@@ -1287,9 +1368,10 @@ timers.pop();
               auto imflip = Tcalc(bcoord.FixW());
               if (shifting&&lastplane)
                 compute_phases(phases, buf, -imflip, bcoord, rcr);
+              auto idx0 = bl.ofs_ms(rcr.row);
               for (size_t ch=rcr.ch_begin; ch<rcr.ch_end; ++ch)
                 {
-                auto coord = bcoord*bl.ffact(ch);
+                auto coord = bcoord*bl.ffact(rcr.row, ch);
                 hlp.prep(coord, nth);
                 mysimd<Tcalc> rr=0, ri=0;
                 if constexpr (NVEC==1)
@@ -1298,8 +1380,8 @@ timers.pop();
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
-                    ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
+                    rr += loadu<mysimd<Tcalc>>(pxr)*ku[cu];
+                    ri += loadu<mysimd<Tcalc>>(pxi)*ku[cu];
                     }
                   rr *= kv[0];
                   ri *= kv[0];
@@ -1313,8 +1395,8 @@ timers.pop();
                       {
                       const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
                       const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                      tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                      tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                      tmpr += kv[cv]*loadu<mysimd<Tcalc>>(pxr);
+                      tmpi += kv[cv]*loadu<mysimd<Tcalc>>(pxi);
                       }
                     rr += ku[cu]*tmpr;
                     ri += ku[cu]*tmpi;
@@ -1322,12 +1404,14 @@ timers.pop();
                   }
                 ri *= imflip;
                 auto r = hsum_cmplx<Tcalc>(rr,ri);
-                if (!firstplane) r += ms_out(row, ch);
+                if (!firstplane) r += bda ? (*ms_out)(idx0+ch) : (*ms2d_out)(row,ch);
                 if (lastplane)
+                  {
+                  auto twgt = bda ? (*wgt)(idx0+ch) : (*wgt2d)(row,ch);
                   r *= shifting ?
-                    complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(wgt(row, ch))) :
-                    wgt(row, ch);
-                ms_out(row, ch) = r;
+                    complex<Tms>(phases[ch-rcr.ch_begin]*Tcalc(twgt)) : twgt;
+                  }
+                bda ? (*ms_out)(idx0+ch) = r : (*ms2d_out)(row,ch) = r;
                 }
               }
             }
@@ -1409,8 +1493,10 @@ timers.pop();
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  nrow=" << bl.Nrows() << ", nchan=" << bl.Nchannels()
-           << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      cout << "  nrow=" << bl.Nrows();
+      if (!bl.BDA())
+        cout << ", nchan=" << bl.Nchannels(0);
+      cout << ", nvis=" << nvis << "/" << bl.Nvis() << endl;
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
              << ", dw=" << dw << ", (wmax-wmin)/dw=" << (wmax_d-wmin_d)/dw << endl;
@@ -1605,11 +1691,20 @@ nm1max = nm1maxb;
     void scanData()
       {
       timers.push("Initial scan");
-      size_t nrow=bl.Nrows(),
-             nchan=bl.Nchannels();
-      checkShape(wgt.shape(),{nrow,nchan});
-      checkShape(ms_in.shape(), {nrow,nchan});
-      checkShape(mask.shape(), {nrow,nchan});
+      size_t nrow=bl.Nrows();
+      if (!bda)
+        {
+        size_t nchan = bl.Nchannels(0);
+        checkShape(wgt2d->shape(), {nrow,nchan});
+        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(mask2d->shape(), {nrow,nchan});
+        }
+      else
+        {
+        checkShape(wgt->shape(),{bl.Nvis()});
+        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(mask->shape(), {bl.Nvis()});
+        }
 
       nvis=0;
       wmin_d=1e300;
@@ -1620,11 +1715,16 @@ nm1max = nm1maxb;
         double lwmin_d=1e300, lwmax_d=-1e300;
         size_t lnvis=0;
         for(auto irow=lo; irow<hi; ++irow)
-          for (size_t ichan=0; ichan<nchan; ++ichan)
+          for (size_t ichan=0; ichan<bl.Nchannels(irow); ++ichan)
+{
 //            if (mask(irow,ichan) && (wgt(irow, ichan)!=0) && (norm(ms_in(irow,ichan)!=0)))
-            if (norm(ms_in(irow,ichan))*wgt(irow,ichan)*mask(irow,ichan) != 0)
+            auto idx = bl.ofs_ms(irow,ichan);
+            auto tnorm = gridding ? norm(bda ? (*ms_in)(idx) : (*ms2d_in)(irow,ichan)) : 1.;
+            auto twgt = bda ? (*wgt)(idx) : (*wgt2d)(irow,ichan);
+            auto tmask = bda ? (*mask)(idx) : (*mask2d)(irow,ichan);
+            if (tnorm*twgt*tmask != 0)
               {
-              lmask(irow, ichan)=1;
+              lmask(idx)=1;
               ++lnvis;
               double w = bl.absEffectiveW(irow, ichan);
               lwmin_d = min(lwmin_d, w);
@@ -1632,8 +1732,9 @@ nm1max = nm1maxb;
               }
             else
               {
-              if (!gridding) ms_out(irow, ichan)=0;
+              if (!gridding) bda ? (*ms_out)(idx)=0 : (*ms2d_out)(irow, ichan)=0;
               }
+}
         {
         LockGuard lock(mut);
         wmin_d = min(wmin_d, lwmin_d);
@@ -1645,21 +1746,28 @@ nm1max = nm1maxb;
       }
 
   public:
-    Wgridder(const cmav<double,2> &uvw, const cmav<double,1> &freq,
-           const Tms_in &ms_in_, const vmav<complex<Tms>,2> &ms_out_,
+    Wgridder(const cmav<double,2> &uvw,
+           const cmav<size_t,1> &freqlist_id,                // (nrows),
+           const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+           const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
+           const Tms_in *ms_in_, const Tms2d_in *ms2d_in_,
+           const vmav<complex<Tms>,1> *ms_out_,
+           const vmav<complex<Tms>,2> *ms2d_out_,
            const cmav<Timg,2> &dirty_in_, const vmav<Timg,2> &dirty_out_,
-           const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_,
+           const cmav<Tms,1> *wgt_, const cmav<Tms,2> *wgt2d_,
+           const cmav<uint8_t,1> *mask_, const cmav<uint8_t,2> *mask2d_,
            double pixsize_x_, double pixsize_y_, double epsilon_,
            bool do_wgridding_, size_t nthreads_, size_t verbosity_,
            bool flip_u, bool flip_v, bool flip_w, bool divide_by_n_,
            double sigma_min_, double sigma_max_,
            double center_x, double center_y, bool allow_nshift)
-      : gridding(ms_out_.size()==0),
+      : gridding(ms_in_||ms2d_in_),
+        bda(ms_out_||ms_in_),
         timers(gridding ? "gridding" : "degridding"),
-        ms_in(ms_in_), ms_out(ms_out_),
+        ms_in(ms_in_), ms2d_in(ms2d_in_), ms_out(ms_out_), ms2d_out(ms2d_out_),
         dirty_in(dirty_in_), dirty_out(dirty_out_),
-        wgt(wgt_), mask(mask_),
-        lmask(gridding ? ms_in.shape() : ms_out.shape()),
+        wgt(wgt_), wgt2d(wgt2d_), mask(mask_), mask2d(mask2d_),
+        lmask(bda ? wgt->shape() : typename cmav<Tms,1>::shape_t({wgt2d->size()})),
         pixsize_x(pixsize_x_), pixsize_y(pixsize_y_),
         nxdirty(gridding ? dirty_out.shape(0) : dirty_in.shape(0)),
         nydirty(gridding ? dirty_out.shape(1) : dirty_in.shape(1)),
@@ -1676,10 +1784,10 @@ nm1max = nm1maxb;
       timers.push("Baseline construction");
 double r_l = lshift / sqrt(1. - lshift*lshift - mshift*mshift);
 double r_m = mshift / sqrt(1. - lshift*lshift - mshift*mshift);
-//r_l=r_m=0;
-      bl = Baselines(uvw, freq, flip_u, flip_v, flip_w, r_l, r_m);
+r_l=r_m=0;
+      bl = Baselines(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, flip_u, flip_v, flip_w, r_l, r_m);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
-      MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
+ //     MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
       scanData();
       if (nvis==0)
@@ -1724,6 +1832,27 @@ double r_m = mshift / sqrt(1. - lshift*lshift - mshift*mshift);
       }
   };
 
+template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg>
+  void ms2dirty_bda(
+    const cmav<double,2> &uvw,                        // (nrows,3)
+    const cmav<size_t,1> &freqlist_id,                // (nrows),
+    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
+    const Tms_in &ms,                                 // concatenated array of visibilities, shape (sum_i(freqlist_nfreq[freqlist_id[i]))
+    const cmav<Tms,1> &wgt_,                          // same shape as above
+    const cmav<uint8_t,1> &mask_,                     // same shape as above
+    double pixsize_x, double pixsize_y, double epsilon,
+    bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
+    bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
+    double sigma_max, double center_x, double center_y, bool allow_nshift)
+  {
+  auto dirty_in(vmav<Timg,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Wgridder<Tcalc, Tacc, Tms, Timg, Tms_in, cmav<complex<Tms>,2>> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, &ms, nullptr, nullptr, nullptr, dirty_in, dirty, &wgt, nullptr, &mask, nullptr, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+  }
 template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
@@ -1731,15 +1860,36 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
-  auto ms_out(vmav<complex<Tms>,2>::build_empty());
   auto dirty_in(vmav<Timg,2>::build_empty());
+  auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
+  auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Wgridder<Tcalc, Tacc, Tms, Timg, Tms_in> par(uvw, freq, ms, ms_out, dirty_in, dirty, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg, cmav<complex<Tms>,1>, Tms_in> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, &ms, nullptr, nullptr, dirty_in, dirty, nullptr, &wgt, nullptr, &mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
+template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+  void dirty2ms_bda(
+    const cmav<double,2> &uvw,
+    const cmav<size_t,1> &freqlist_id,                // (nrows),
+    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
+    const cmav<Timg,2> &dirty,
+    const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,
+    double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,1> &ms,
+    size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
+    double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
+  {
+  if (ms.size()==0) return;  // nothing to do
+  auto dirty_out(vmav<Timg,2>::build_empty());
+  auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
+  auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, nullptr, nullptr, &ms, nullptr, dirty, dirty_out, &wgt, nullptr, &mask, nullptr, pixsize_x,
+    pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
+    divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
+  }
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
@@ -1748,166 +1898,21 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   if (ms.size()==0) return;  // nothing to do
-  auto ms_in(ms.build_uniform(ms.shape(),1.));
   auto dirty_out(vmav<Timg,2>::build_empty());
+  auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
+  auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freq, ms_in, ms, dirty, dirty_out, wgt, mask, pixsize_x,
+  Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, nullptr, nullptr, &ms, dirty, dirty_out, nullptr, &wgt, nullptr, &mask, pixsize_x,
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in> void ms2dirty_faceted(size_t nfx, size_t nfy, const cmav<double,2> &uvw, const cmav<double,1> &freq, const Tms_in &ms,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
-  double sigma_max, double center_x, double center_y)
-  {
-  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
-  for (size_t i=0; i<nfx; ++i)
-    for (size_t j=0; j<nfy; ++j)
-      {
-      auto [startx, starty, stopx, stopy, cx, cy] = get_facet_data(npix_x, npix_y, nfx, nfy, i, j, pixsize_x, pixsize_y, center_x, center_y);
-      auto subdirty=subarray<2>(dirty, {{startx, stopx}, {starty, stopy}});
-      ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, subdirty, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-      }
-  }
-
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_faceted(size_t nfx,size_t nfy, const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  double sigma_min, double sigma_max, double center_x, double center_y)
-  {
-  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
-  size_t istep = (npix_x+nfx-1) / nfx;
-  istep += istep%2;  // make even
-  size_t jstep = (npix_y+nfy-1) / nfy;
-  jstep += jstep%2;  // make even
-
-  vmav<complex<Tms>,2> ms2(ms.shape(), PAGE_IN(nthreads));
-  mav_apply([](complex<Tms> &v){v=complex<Tms>(0);},nthreads,ms);
-  for (size_t i=0; i<nfx; ++i)
-    for (size_t j=0; j<nfy; ++j)
-      {
-      auto [startx, starty, stopx, stopy, cx, cy] = get_facet_data(npix_x, npix_y, nfx, nfy, i, j, pixsize_x, pixsize_y, center_x, center_y);
-      auto subdirty=subarray<2>(dirty, {{startx, stopx}, {starty, stopy}});
-      dirty2ms<Tcalc,Tacc>(uvw, freq, subdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms2, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, cx, cy, true);
-      mav_apply([](complex<Tms> &v1, const complex<Tms> &v2){v1+=v2;},nthreads,ms,ms2);
-      }
-  }
-
-tuple<vmav<uint8_t,2>,size_t,size_t, size_t>  get_tuning_parameters(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<uint8_t,2> &mask_,
-  size_t npix_x, size_t npix_y, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads,
-  size_t verbosity, double center_x, double center_y);
-
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg, typename Tms_in> void ms2dirty_tuning(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const Tms_in &ms,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
-  bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
-  bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
-  double sigma_max, double center_x, double center_y)
-  {
-  {
-  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
-  bool xodd=npix_x&1, yodd=npix_y&1;
-  if (xodd || yodd)  // odd image size
-    {
-    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd}, PAGE_IN(nthreads));
-    ms2dirty_tuning<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon,
-               do_wgridding, nthreads, tdirty, verbosity, flip_u, flip_v, flip_w, divide_by_n,
-               sigma_min, sigma_max, center_x+0.5*pixsize_x*xodd, center_y+0.5*pixsize_y*yodd);
-    for (size_t i=0; i<npix_x; ++i)
-      for (size_t j=0; j<npix_y; ++j)
-        dirty(i,j) = tdirty(i,j);
-    return;
-    }
-  }
-  auto [bin, icut, nfx, nfy] = get_tuning_parameters(uvw, freq, mask_,
-    dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, epsilon,
-    do_wgridding, nthreads, verbosity, center_x, center_y);
-  if (bin.size()==0)
-    {
-    if (nfx==0)  // traditional algorithm
-      ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon,
-               do_wgridding, nthreads, dirty, verbosity, flip_u, flip_v, flip_w, divide_by_n,
-               sigma_min, sigma_max, center_x, center_y, true);
-    else
-      ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask_, pixsize_x, pixsize_y, epsilon,
-               do_wgridding, nthreads, dirty, verbosity, flip_u, flip_v, flip_w, divide_by_n,
-               sigma_min, sigma_max, center_x, center_y);
-    }
-  else
-    {
-    auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)}, PAGE_IN(nthreads));
-    auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
-    ms2dirty_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
-             do_wgridding, nthreads, dirty, verbosity, flip_u, flip_v, flip_w, divide_by_n,
-             sigma_min, sigma_max, center_x, center_y);
-    vmav<Timg,2> dirty2(dirty.shape(), PAGE_IN(nthreads));
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
-    ms2dirty<Tcalc,Tacc>(uvw, freq, ms, wgt_, mask2, pixsize_x, pixsize_y, epsilon,
-               do_wgridding, nthreads, dirty2, verbosity, flip_u, flip_v, flip_w, divide_by_n,
-               sigma_min, sigma_max, center_x, center_y, true);
-    mav_apply([&](Timg &v1, Timg v2) {v1+=v2;}, nthreads, dirty, dirty2);
-    }
-  }
-
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms_tuning(const cmav<double,2> &uvw,
-  const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
-  const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
-  double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
-  size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
-  double sigma_min, double sigma_max, double center_x, double center_y)
-  {
-  {
-  size_t npix_x=dirty.shape(0), npix_y=dirty.shape(1);
-  bool xodd=npix_x&1, yodd=npix_y&1;
-  if (xodd || yodd)  // odd image size
-    {
-    vmav<Timg,2> tdirty({npix_x+xodd, npix_y+yodd}, PAGE_IN(nthreads));
-    for (size_t i=0; i<npix_x+xodd; ++i)
-      for (size_t j=0; j<npix_y+yodd; ++j)
-        tdirty(i,j) = ((i<npix_x)&&(j<npix_y)) ? dirty(i,j) : Timg(0);
-    dirty2ms_tuning<Tcalc,Tacc>(uvw, freq, tdirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, center_x, center_y);
-    return;
-    }
-  }
-  auto [bin, icut, nfx, nfy] = get_tuning_parameters(uvw, freq, mask_,
-    dirty.shape(0), dirty.shape(1), pixsize_x, pixsize_y, epsilon,
-    do_wgridding, nthreads, verbosity, center_x, center_y);
-  if (bin.size()==0)
-    {
-    if (nfx==0)  // traditional algorithm
-      dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
-    else
-      dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask_, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, center_x, center_y);
-    }
-  else
-    {
-    auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
-    vmav<uint8_t,2> mask2({uvw.shape(0),freq.shape(0)}, PAGE_IN(nthreads));
-    auto icut_local = icut; // FIXME: stupid hack to work around an oversight in the standard(?)
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2>=icut_local); }, nthreads, mask, bin, mask2);
-    dirty2ms_faceted<Tcalc,Tacc>(nfx, nfy, uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, ms, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, center_x, center_y);
-    mav_apply([&](uint8_t i1, uint8_t i2, uint8_t &out) { out = (i1!=0) && (i2<icut_local); }, nthreads, mask, bin, mask2);
-    vmav<complex<Tms>,2> tms(ms.shape(), PAGE_IN(nthreads));
-    dirty2ms<Tcalc,Tacc>(uvw, freq, dirty, wgt_, mask2, pixsize_x, pixsize_y, epsilon, do_wgridding, nthreads, tms, verbosity, flip_u, flip_v, flip_w, divide_by_n, sigma_min, sigma_max, center_x, center_y, true);
-    mav_apply([&](complex<Tms> &v1, complex<Tms> v2) {v1+=v2;}, nthreads, ms, tms);
-    }
-  }
 } // namespace detail_gridder
 
 // public names
 using detail_gridder::ms2dirty;
 using detail_gridder::dirty2ms;
-using detail_gridder::ms2dirty_tuning;
-using detail_gridder::dirty2ms_tuning;
 
 } // namespace ducc0
 

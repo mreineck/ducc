@@ -55,6 +55,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_SIMD_H
 #define DUCC0_SIMD_H
 
+// NOTE: this header is only there to potentially #define __GLIBCXX__
+// Do not delete this #include or move it farther below!
+#include <cstdint>
+
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
 // so we don't use the standard library SIMD support on MacOS.
 // In fact, we only trust libstdc++ at the moment to implement this fully.
@@ -129,6 +133,8 @@ using detail_simd::blend;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
+template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+  { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 
 #else
@@ -871,6 +877,8 @@ using detail_simd::vectorizable;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
+template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+  { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 #endif
 #endif
