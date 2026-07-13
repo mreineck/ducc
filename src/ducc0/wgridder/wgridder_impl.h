@@ -375,6 +375,8 @@ class Baselines
     size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
+    size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
+    bool BDA() const { return nfreqs==0; }
   };
 
 
@@ -753,6 +755,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         checkShape(wgt2d->shape(),{nrow,nchan});
         checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
         checkShape(mask2d->shape(), {nrow,nchan});
+        }
+      else
+        {
+        checkShape(wgt->shape(),{bl.Nvis()});
+        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(mask->shape(), {bl.Nvis()});
         }
 
       size_t ntiles_u = (nu>>log2tile) + 3;
@@ -1483,8 +1491,10 @@ timers.pop();
       cout << "), supp=" << supp
            << ", eps=" << epsilon
            << endl;
-      cout << "  nrow=" << bl.Nrows() <<endl;// << ", nchan=" << bl.Nchannels()
-           // << ", nvis=" << nvis << "/" << (bl.Nrows()*bl.Nchannels()) << endl;
+      cout << "  nrow=" << bl.Nrows();
+      if (!bl.BDA())
+        cout << ", nchan=" << bl.Nchannels(0);
+      cout << ", nvis=" << nvis << "/" << bl.Nvis() << endl;
       if (do_wgridding)
         cout << "  w=[" << wmin_d << "; " << wmax_d << "], min(n-1)=" << nm1min
              << ", dw=" << dw << ", (wmax-wmin)/dw=" << (wmax_d-wmin_d)/dw << endl;
@@ -1665,6 +1675,12 @@ timers.pop();
         checkShape(wgt2d->shape(), {nrow,nchan});
         checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
         checkShape(mask2d->shape(), {nrow,nchan});
+        }
+      else
+        {
+        checkShape(wgt->shape(),{bl.Nvis()});
+        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(mask->shape(), {bl.Nvis()});
         }
 
       nvis=0;
