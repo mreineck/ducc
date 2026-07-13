@@ -101,7 +101,7 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   size_t i=0;
   for (; i+vlen-1<n; i+=vlen)
     {
-    auto vang = Tsimd(&buf[i],element_aligned_tag());
+    auto vang = loadu<Tsimd>(&buf[i]);
     auto vcos = cos(vang);
     auto vsin = sin(vang);
     for (size_t ii=0; ii<vlen; ++ii)
@@ -1268,12 +1268,8 @@ timers.pop();
                     {
                     auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump;
                     auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump;
-                    auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                    auto ti = mysimd<Tacc>(pxi,element_aligned_tag());
-                    tr += vr*ku[cu];
-                    ti += vi*ku[cu];
-                    tr.copy_to(pxr,element_aligned_tag());
-                    ti.copy_to(pxi,element_aligned_tag());
+                    unaligned_add(pxr, vr*ku[cu]);
+                    unaligned_add(pxi, vi*ku[cu]);
                     }
                   }
                 else
@@ -1286,12 +1282,8 @@ timers.pop();
                       {
                       auto * DUCC0_RESTRICT pxr = hlp.p0r+cu*jump+cv*hlp.vlen;
                       auto * DUCC0_RESTRICT pxi = hlp.p0i+cu*jump+cv*hlp.vlen;
-                      auto tr = mysimd<Tacc>(pxr,element_aligned_tag());
-                      tr += tmpr*kv[cv];
-                      tr.copy_to(pxr,element_aligned_tag());
-                      auto ti = mysimd<Tacc>(pxi, element_aligned_tag());
-                      ti += tmpi*kv[cv];
-                      ti.copy_to(pxi,element_aligned_tag());
+                      unaligned_add(pxr, tmpr*kv[cv]);
+                      unaligned_add(pxi, tmpi*kv[cv]);
                       }
                     }
                   }
@@ -1378,8 +1370,8 @@ timers.pop();
                     {
                     const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump;
                     const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump;
-                    rr += mysimd<Tcalc>(pxr,element_aligned_tag())*ku[cu];
-                    ri += mysimd<Tcalc>(pxi,element_aligned_tag())*ku[cu];
+                    rr += loadu<mysimd<Tcalc>>(pxr)*ku[cu];
+                    ri += loadu<mysimd<Tcalc>>(pxi)*ku[cu];
                     }
                   rr *= kv[0];
                   ri *= kv[0];
@@ -1393,8 +1385,8 @@ timers.pop();
                       {
                       const auto * DUCC0_RESTRICT pxr = hlp.p0r + cu*jump + hlp.vlen*cv;
                       const auto * DUCC0_RESTRICT pxi = hlp.p0i + cu*jump + hlp.vlen*cv;
-                      tmpr += kv[cv]*mysimd<Tcalc>(pxr,element_aligned_tag());
-                      tmpi += kv[cv]*mysimd<Tcalc>(pxi,element_aligned_tag());
+                      tmpr += kv[cv]*loadu<mysimd<Tcalc>>(pxr);
+                      tmpi += kv[cv]*loadu<mysimd<Tcalc>>(pxi);
                       }
                     rr += ku[cu]*tmpr;
                     ri += ku[cu]*tmpi;
