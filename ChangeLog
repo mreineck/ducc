@@ -11,6 +11,11 @@
     symbols for |m|<=2, according to https://arxiv.org/abs/2602.15605v1,
     can be tested via ducc0.misc.experimental.coupling_matrix_rect_new().
 
+- wgridder:
+  - new "bda" interface allowing more flexible channel frequencies.
+  - removed the experimental "tuning" methods, which did not provide the
+    expected performance gain.
+
 
 0.41.1:
 - general:
