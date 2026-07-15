@@ -81,19 +81,18 @@ Computing unity roots and other twiddle factors (unity_roots.h)
 ---------------------------------------------------------------
 
 During FFTs, we often need "twiddle factors" of the form
- exp(i*2*pi*j/k),
-where j,k are integers.
+``exp(i*2*pi*j/k)``, where ``j, k`` are integers.
 
 The FFT algorithm has very good error
 characteristics (see https://arxiv.org/abs/2602.23525), but only if
 these twiddle factors are computed with best possible accuracy.
 Since pi is not exactly representable as an IEEE float, the evaluation
 of the expression above becomes less and less accurate with increasing
-|j/k|. As a practicak example, exp(i*2*pi*1/1000) should be the same
+``|j/k|``. As a practicak example, exp(i*2*pi*1/1000) should be the same
 as exp(i*2*pi*1000001/1000), but in IEEE arithmetics the error in the
 second result is a thousand times worse.
 
-This can be fixed by reducing j to a j' such that |j'/k| <= 1/8 using
+This can be fixed by reducing ``j`` to a ``j'`` such that ``|j'/k| <= 1/8`` using
 purely integer operations and reconstruct the desired result from the
 exponentiation of this reduced value.
 
@@ -102,9 +101,13 @@ exp(i*0*phi), exp(i*1*phi) ... exp(i*n*phi)
 For quick access they could all be precomputed, but this would imply
 a storage size comparable to the FFT data itself, which is too big in
 some situations, so as a compromise one can precompute
+
  exp(i*0*phi), exp(i*1*phi) ... exp(i*(n2-1)*phi)
+
 and
+
  exp(i*n2*phi), exp(i*2*n2*phi) ...
+
 
 where n2 is an integer close to sqrt(n).
 Any desired twiddle factor can then be computed by multiplying
@@ -112,7 +115,9 @@ two of the factors above, and the storage space drops from O(n) to
 O(sqrt(n)).
 
 In some situations, the user requires sequences of
+
  exp(i*0*phi), exp(i*1*phi) ...
+
 where phi is not necessarily a clean fraction of 2pi; this typically
 occurs when applying a shifting operation to data in the Fourier domain.
 In that case the range reducton trick above cannot always be carried
