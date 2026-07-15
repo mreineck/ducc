@@ -826,6 +826,7 @@ void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &re
     res(k)*=cnorm;
   }
 
+#if 0  // currently unused
 template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen=Tsimd::size();
@@ -869,6 +870,7 @@ template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l
     res(k)*=cnorm;
   }
 template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_simd<double> l3, const vmav<native_simd<double>,1> &res);
+#endif
 
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res)
   {
