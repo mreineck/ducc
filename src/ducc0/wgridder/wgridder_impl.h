@@ -448,9 +448,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       double tmp = 1.-xsq-ysq;
       // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
       double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
-      double phs = w*(nm1+nshift);
 // re-centering
-phs += bl.r_l*x + bl.r_m*y;
+nm1 += bl.r_l*x + bl.r_m*y;
+      double phs = w*(nm1+nshift);
+
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
         return twopi*phs;
@@ -1450,6 +1451,7 @@ timers.pop();
               {
               // accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
               auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1);
+nm1 += bl.r_l*(x0+i*pixsize_x) + bl.r_m*(y0+j*pixsize_y);
               fct = krn->corfunc((nm1+nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
@@ -1784,7 +1786,7 @@ nm1max = nm1maxb;
       timers.push("Baseline construction");
 double r_l = lshift / sqrt(1. - lshift*lshift - mshift*mshift);
 double r_m = mshift / sqrt(1. - lshift*lshift - mshift*mshift);
-r_l=r_m=0;
+//r_l=r_m=0;
       bl = Baselines(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, flip_u, flip_v, flip_w, r_l, r_m);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
  //     MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
