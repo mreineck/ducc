@@ -88,7 +88,7 @@ characteristics (see https://arxiv.org/abs/2602.23525), but only if
 these twiddle factors are computed with best possible accuracy.
 Since pi is not exactly representable as an IEEE float, the evaluation
 of the expression above becomes less and less accurate with increasing
-``|j/k|``. As a practicak example, exp(i*2*pi*1/1000) should be the same
+``|j/k|``. As a practical example, exp(i*2*pi*1/1000) should be the same
 as exp(i*2*pi*1000001/1000), but in IEEE arithmetics the error in the
 second result is a thousand times worse.
 
@@ -107,7 +107,6 @@ some situations, so as a compromise one can precompute
 and
 
  exp(i*n2*phi), exp(i*2*n2*phi) ...
-
 
 where n2 is an integer close to sqrt(n).
 Any desired twiddle factor can then be computed by multiplying
