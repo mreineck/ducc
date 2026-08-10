@@ -5,7 +5,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -30,5 +30,5 @@ jobs:
           CIBW_MANYLINUX_PYPY_I686_IMAGE: manylinux_2_28
       - uses: actions/upload-artifact@v4
         with:
-          name: ducc_linux64
+          name: ducc_linux64_${{ runner.arch }}
           path: ./wheelhouse/*.whl
