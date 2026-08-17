@@ -275,11 +275,21 @@ Error conditions are reported by raising exceptions.
 constexpr const char *Py_ConvolverPlan_DS = R"""(
 Class encapsulating the low-level interface for convolution/interpolation.
 Computations are performed on double precision data.
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *Py_ConvolverPlan_f_DS = R"""(
 Class encapsulating the low-level interface for convolution/interpolation.
 Computations are performed on single precision data.
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *Py_ConvolverPlan_init_DS = R"""(
@@ -663,6 +673,10 @@ epsilon : float
     desired accuracy for the interpolation; a typical value is 1e-5
 nthreads : the number of threads to use for computation
 
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *initnormal_DS = R"""(

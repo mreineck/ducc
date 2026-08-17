@@ -834,6 +834,11 @@ this region.
 
 Original implementation by Stephane Plaszczynski;
 for details see https://arxiv.org/abs/astro-ph/0510081.
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *Py_OofaNoise_init_DS = R"""(
