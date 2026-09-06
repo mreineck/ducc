@@ -1628,6 +1628,11 @@ threads.
 
 nthreads_new : int >=1
     the desired new number of threads for ducc0 parallel execution
+
+Notes
+-----
+This function must not be called concurrently;
+doing so will result in undefined behaviour.
 )""";
 
 using shape_t = fmav_info::shape_t;
