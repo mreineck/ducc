@@ -15,9 +15,10 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: C++",
   "Programming Language :: Python",
+  "Typing :: Typed",
 ]
 requires-python = ">=3.8"
-dependencies = ["numpy>=1.17.0"]
+dependencies = ["numpy>=1.21.0"]
 version = "0.41.1"
 
 [project_urls]
@@ -122,6 +123,21 @@ sdist.include = [
     "python/totalconvolve_pymod.cc",
     "python/misc_pymod.cc",
     "python/pointingprovider_pymod.cc",
+    "python/stubs/ducc0-stubs/__init__.pyi",
+    "python/stubs/ducc0-stubs/fft.pyi",
+    "python/stubs/ducc0-stubs/healpix.pyi",
+    "python/stubs/ducc0-stubs/misc/__init__.pyi",
+    "python/stubs/ducc0-stubs/misc/experimental.pyi",
+    "python/stubs/ducc0-stubs/nufft/__init__.pyi",
+    "python/stubs/ducc0-stubs/nufft/experimental.pyi",
+    "python/stubs/ducc0-stubs/pointingprovider.pyi",
+    "python/stubs/ducc0-stubs/sht/__init__.pyi",
+    "python/stubs/ducc0-stubs/sht/experimental.pyi",
+    "python/stubs/ducc0-stubs/totalconvolve.pyi",
+    "python/stubs/ducc0-stubs/wgridder/__init__.pyi",
+    "python/stubs/ducc0-stubs/wgridder/experimental.pyi",
+    "python/stubs/nanobind/_typing.pyi",
+    "python/stubs/pybind11/_typing.pyi",
     "python/test/test_fft.py",
     "python/test/test_healpix.py",
     "python/test/test_misc.py",
