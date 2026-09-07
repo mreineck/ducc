@@ -1,6 +1,22 @@
 name: ducc-tests
 on: [workflow_dispatch]
 jobs:
+  test-typing:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - run: python -m pip install --upgrade numpy==1.21.6 typing_extensions mypy pyright ty
+      - run: python -m pip install .
+      - run: |
+          cd /tmp
+          python -m mypy.stubtest ducc0 --allowlist "$GITHUB_WORKSPACE/python/test/typing/stubtest_allowlist.txt"
+          python -m mypy --config-file "$GITHUB_WORKSPACE/mypy.ini" --warn-unused-ignores "$GITHUB_WORKSPACE/python/test/typing"
+          python -m mypy --config-file "$GITHUB_WORKSPACE/mypy.ini" --warn-unused-ignores "$GITHUB_WORKSPACE/python/test/typing_pybind11.py"
+          pyright --pythonpath "$(command -v python)" "$GITHUB_WORKSPACE/python/test/typing" "$GITHUB_WORKSPACE/python/test/typing_pybind11.py"
+          ty check --python "$(command -v python)" "$GITHUB_WORKSPACE/python/test/typing" "$GITHUB_WORKSPACE/python/test/typing_pybind11.py"
   test-macos:
     runs-on: macos-15
     steps:

@@ -1,0 +1,18 @@
+# DUCC's compiled classes use pybind11_type or nanobind.nb_type rather than
+# Python's default metaclass. Stubtest cannot represent that implementation
+# detail in a .pyi class declaration. _typing is a stub-only shared alias
+# module: the extension's single-module runtime layout cannot import it.
+ducc0._typing
+ducc0.healpix.Healpix_Base
+ducc0.misc.OofaNoise
+ducc0.misc.experimental.PSWF0
+ducc0.nufft.plan
+ducc0.nufft.experimental.incremental_nu2u
+ducc0.nufft.experimental.incremental_u2nu
+ducc0.nufft.experimental.plan3
+ducc0.pointingprovider.PointingProvider
+ducc0.sht.sharpjob_d
+ducc0.totalconvolve.ConvolverPlan
+ducc0.totalconvolve.ConvolverPlan_f
+ducc0.totalconvolve.Interpolator
+ducc0.totalconvolve.Interpolator_f
