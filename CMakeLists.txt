@@ -132,3 +132,12 @@ target_compile_features(ducc0 PRIVATE cxx_std_17)
 set_property(TARGET ducc0 PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 install(TARGETS ducc0 LIBRARY DESTINATION .)
+install(DIRECTORY python/stubs/ducc0-stubs DESTINATION .
+  FILES_MATCHING PATTERN "*.pyi")
+if (DEFINED ENV{DUCC0_USE_NANOBIND})
+    install(FILES python/stubs/nanobind/_typing.pyi
+      DESTINATION ducc0-stubs RENAME _typing.pyi)
+else()
+    install(FILES python/stubs/pybind11/_typing.pyi
+      DESTINATION ducc0-stubs RENAME _typing.pyi)
+endif()

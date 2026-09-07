@@ -1,5 +1,7 @@
 0.42.0:
 - general:
+  - added static type information for the Python interface.
+  - minimum required NumPy version is now 1.21.
   - MultiExp now detects whether a given angle is a fraction of 2pi.
     If so, the generated twiddle factors will be computed in a more
     accurate fashion.
