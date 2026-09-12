@@ -59,6 +59,7 @@ jobs:
         shell: bash
         run: |
           source /opt/intel/oneapi/setvars.sh intel64
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
           ${{ matrix.binding_env }} CC=icx CXX=icpx python -m pip install --user .
 
       - name: Verify binding
@@ -67,7 +68,7 @@ jobs:
       - name: Run tests
         run: python -m pytest python/test -x
 
-  test-i686:
+  test-docker:
     name: i686 / ${{ matrix.binding }}
     runs-on: ubuntu-24.04
     strategy:
