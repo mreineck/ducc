@@ -1,59 +1,89 @@
 name: ducc-tests
 on: [workflow_dispatch]
+
 jobs:
-  test-macos:
-    runs-on: macos-15
+  test-native:
+    name: ${{ matrix.platform }} / ${{ matrix.binding }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos, windows, intel, amd64, arm64]
+        binding: [pybind11, nanobind]
+        include:
+          - platform: macos
+            os: macos-15
+            build_env: DUCC0_OPTIMIZATION=portable
+          - platform: windows
+            os: windows-2025
+            build_env: ""
+          - platform: intel
+            os: ubuntu-24.04
+            build_env: ""
+          - platform: amd64
+            os: ubuntu-24.04
+            build_env: ""
+          - platform: arm64
+            os: ubuntu-24.04-arm
+            build_env: ""
+          - binding: pybind11
+            binding_env: ""
+          - binding: nanobind
+            binding_env: DUCC0_USE_NANOBIND=1
+
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest numpy scipy
-      - run: DUCC0_OPTIMIZATION=portable python -m pip install --user .
-      - run: python -m pytest python/test -x
-  test-windows:
-    runs-on: windows-2025
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest numpy scipy
-      - run: python -m pip install --user .
-      - run: python -m pytest python/test -x
-  test-intel:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest scipy
-      - run: wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
-      - run: sudo apt update
-      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp
-      - run: |
+
+      - name: Install dependencies
+        run: python -m pip install --user --upgrade pytest numpy scipy
+
+      - name: Install Intel compiler
+        if: matrix.platform == 'intel'
+        run: |
+          wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+          sudo apt update
+          sudo apt install intel-oneapi-compiler-dpcpp-cpp
+
+      - name: Build and install
+        if: matrix.platform != 'intel'
+        shell: bash
+        run: ${{ matrix.binding_env }} ${{ matrix.build_env }} python -m pip install --user .
+
+      - name: Build and install with Intel compiler
+        if: matrix.platform == 'intel'
+        shell: bash
+        run: |
           source /opt/intel/oneapi/setvars.sh intel64
-          CC=icx CXX=icpx python3 -m pip install --user .
-          python -m pytest python/test -x
-  test-arm64:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest numpy scipy
-      - run: python -c "import platform; assert platform.machine() in ('aarch64', 'arm64'); print(platform.machine())"
-      - run: python -m pip install --user .
-      - run: python -m pytest python/test -x
+          ${{ matrix.binding_env }} CC=icx CXX=icpx python -m pip install --user .
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: Run tests
+        run: python -m pytest python/test -x
+
   test-i686:
+    name: i686 / ${{ matrix.binding }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        binding: [pybind11, nanobind]
+        include:
+          - binding: pybind11
+            binding_env: ""
+          - binding: nanobind
+            binding_env: DUCC0_USE_NANOBIND=1
+
     steps:
-      - uses: actions/checkout@v5
-      - run: |
+      - uses: actions/checkout@v7
+      - name: Run i686 tests in Docker
+        run: |
           set -euxo pipefail
           docker pull quay.io/pypa/manylinux_2_28_i686
           docker run --rm \
@@ -72,6 +102,7 @@ jobs:
               g++ --version
               DUCC0_OPTIMIZATION=portable \
                 DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
-                python -m pip install --no-build-isolation .
+                ${{ matrix.binding_env }} python -m pip install --no-build-isolation .
+              python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
               python -m pytest python/test -x
             '
