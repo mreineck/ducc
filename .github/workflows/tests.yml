@@ -1,47 +1,113 @@
 name: ducc-tests
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      binding:
+        description: Python binding
+        type: choice
+        required: true
+        default: pybind11
+        options:
+          - pybind11
+          - nanobind
+          - both
+      optimization:
+        description: Optimization
+        type: choice
+        required: true
+        default: native
+        options:
+          - native
+          - portable
+          - both
 
 jobs:
-  test-native:
-    name: ${{ matrix.platform }} / ${{ matrix.binding }}
-    runs-on: ${{ matrix.os }}
+  test:
+    name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
+    runs-on: ${{ matrix.platform.os }}
+    env:
+      DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos, windows, intel, amd64, arm64]
-        binding: [pybind11, nanobind]
-        include:
-          - platform: macos
-            os: macos-15
-            build_env: DUCC0_OPTIMIZATION=portable
-          - platform: windows
-            os: windows-2025
-            build_env: ""
-          - platform: intel
+        platform:
+          - name: python-3.8
             os: ubuntu-24.04
-            build_env: ""
-          - platform: amd64
+            python: '3.8'
+          - name: python-3.9
             os: ubuntu-24.04
-            build_env: ""
-          - platform: arm64
+            python: '3.9'
+          - name: python-3.10
+            os: ubuntu-24.04
+            python: '3.10'
+          - name: python-3.11
+            os: ubuntu-24.04
+            python: '3.11'
+          - name: python-3.12
+            os: ubuntu-24.04
+            python: '3.12'
+          - name: python-3.13
+            os: ubuntu-24.04
+            python: '3.13'
+          - name: python-3.14
+            os: ubuntu-24.04
+            python: '3.14'
+          - name: python-3.14t
+            os: ubuntu-24.04
+            python: '3.14t'
+          - name: python-3.15
+            os: ubuntu-24.04
+            python: '3.15'
+          - name: python-3.15t
+            os: ubuntu-24.04
+            python: '3.15t'
+          - name: ubuntu-22.04
+            os: ubuntu-22.04
+          - name: ubuntu-26.04
+            os: ubuntu-26.04
+          - name: ubuntu-22.04-arm
+            os: ubuntu-22.04-arm
+          - name: ubuntu-24.04-arm
             os: ubuntu-24.04-arm
-            build_env: ""
-          - binding: pybind11
-            binding_env: ""
+          - name: ubuntu-26.04-arm
+            os: ubuntu-26.04-arm
+          - name: macos-15-intel
+            os: macos-15-intel
+          - name: macos-26-intel
+            os: macos-26-intel
+          - name: macos-14
+            os: macos-14
+          - name: macos-15
+            os: macos-15
+          - name: macos-26
+            os: macos-26
+          - name: windows-2022
+            os: windows-2022
+          - name: windows-2025
+            os: windows-2025
+          - name: windows-11-arm
+            os: windows-11-arm
+          - name: ubuntu-24.04-intel
+            os: ubuntu-24.04
+            compiler: intel
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+        optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
+        exclude:
           - binding: nanobind
-            binding_env: DUCC0_USE_NANOBIND=1
+            optimization: portable
 
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.platform.python || '3.11' }}
+          allow-prereleases: true
 
       - name: Install dependencies
         run: python -m pip install --user --upgrade pytest numpy scipy
 
       - name: Install Intel compiler
-        if: matrix.platform == 'intel'
+        if: matrix.platform.compiler == 'intel'
         run: |
           wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
           sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
@@ -50,17 +116,55 @@ jobs:
           sudo apt install intel-oneapi-compiler-dpcpp-cpp
 
       - name: Build and install
-        if: matrix.platform != 'intel'
+        if: matrix.platform.compiler != 'intel'
         shell: bash
-        run: ${{ matrix.binding_env }} ${{ matrix.build_env }} python -m pip install --user .
+        run: ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --user .
 
       - name: Build and install with Intel compiler
-        if: matrix.platform == 'intel'
+        if: matrix.platform.compiler == 'intel'
         shell: bash
         run: |
           source /opt/intel/oneapi/setvars.sh intel64
           echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
-          ${{ matrix.binding_env }} CC=icx CXX=icpx python -m pip install --user .
+          ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} CC=icx CXX=icpx python -m pip install --user .
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: Run tests
+        run: python -m pytest python/test -x
+
+  test-pyodide:
+    name: pyodide / ${{ matrix.binding }} / portable
+    runs-on: ubuntu-26.04
+    env:
+      DUCC0_OPTIMIZATION: portable
+    strategy:
+      fail-fast: false
+      matrix:
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Build Pyodide wheel
+        shell: bash
+        run: |
+          python -m pip install pyodide-build
+          ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} pyodide build .
+          pyodide venv .venv-pyodide
+          .venv-pyodide/bin/python -m pip install pytest numpy scipy
+          .venv-pyodide/bin/python -m pip install dist/*.whl
+          echo "$PWD/.venv-pyodide/bin" >> "$GITHUB_PATH"
 
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
@@ -69,17 +173,14 @@ jobs:
         run: python -m pytest python/test -x
 
   test-docker:
-    name: i686 / ${{ matrix.binding }}
+    name: i686 / ${{ matrix.binding }} / portable
     runs-on: ubuntu-24.04
+    env:
+      DUCC0_OPTIMIZATION: portable
     strategy:
       fail-fast: false
       matrix:
-        binding: [pybind11, nanobind]
-        include:
-          - binding: pybind11
-            binding_env: ""
-          - binding: nanobind
-            binding_env: DUCC0_USE_NANOBIND=1
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
 
     steps:
       - uses: actions/checkout@v7
@@ -89,6 +190,7 @@ jobs:
           docker pull quay.io/pypa/manylinux_2_28_i686
           docker run --rm \
             --platform=linux/i386 \
+            -e DUCC0_OPTIMIZATION \
             -v "$PWD:/ducc" \
             -w /ducc \
             quay.io/pypa/manylinux_2_28_i686 \
@@ -101,9 +203,8 @@ jobs:
               python -m pip install numpy==2.0.0 -Cbuild-dir=/tmp/numpy-builddir
               python -c "import struct; assert struct.calcsize(\"P\") == 4; print(\"pointer bits:\", struct.calcsize(\"P\")*8)"
               g++ --version
-              DUCC0_OPTIMIZATION=portable \
-                DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
-                ${{ matrix.binding_env }} python -m pip install --no-build-isolation .
+              DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
+                ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
               python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
               python -m pytest python/test -x
             '
