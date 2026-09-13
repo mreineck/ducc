@@ -2247,6 +2247,8 @@ Interface class to some of libsharp2's functionality.
 Notes
 -----
 This class is considered obsolescent and will be removed in the future.
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *maximum_safe_l_DS = R"""(
