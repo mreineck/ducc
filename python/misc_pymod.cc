@@ -834,6 +834,11 @@ this region.
 
 Original implementation by Stephane Plaszczynski;
 for details see https://arxiv.org/abs/astro-ph/0510081.
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *Py_OofaNoise_init_DS = R"""(
@@ -1623,6 +1628,11 @@ threads.
 
 nthreads_new : int >=1
     the desired new number of threads for ducc0 parallel execution
+
+Notes
+-----
+This function must not be called concurrently;
+doing so will result in undefined behaviour.
 )""";
 
 using shape_t = fmav_info::shape_t;
