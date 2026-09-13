@@ -75,8 +75,6 @@ jobs:
             os: macos-15-intel
           - name: macos-26-intel
             os: macos-26-intel
-          - name: macos-14
-            os: macos-14
           - name: macos-15
             os: macos-15
           - name: macos-26
