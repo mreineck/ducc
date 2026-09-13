@@ -280,8 +280,7 @@ class Baselines
     vector<size_t> freq_ofs;
     vector<double> f_over_c;
     double umax, vmax;
-public:
-  double r_l, r_m;
+    double r_l, r_m;
 
   public:
     Baselines() = default;
@@ -342,12 +341,12 @@ public:
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-double tu = ufac*coord_(i,0);
-double tv = vfac*coord_(i,1);
-double tw = wfac*coord_(i,2);
-        coord[i] = UVW(tu-r_l*tw, tv-r_m*tw, tw);
-        umax = max(umax, abs(coord_(i,0)));
-        vmax = max(vmax, abs(coord_(i,1)));
+        double tu = ufac*coord_(i,0),
+               tv = vfac*coord_(i,1),
+               tw = wfac*coord_(i,2);
+        coord[i] = UVW(tu+r_l*tw, tv+r_m*tw, tw);
+        umax = max(umax, abs(coord[i].u));
+        vmax = max(vmax, abs(coord[i].v));
         }
       umax *= fcmax;
       vmax *= fcmax;
@@ -383,6 +382,8 @@ double tw = wfac*coord_(i,2);
     double Vmax() const { return vmax; }
     size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
     bool BDA() const { return nfreqs==0; }
+    double Rl() const { return r_l; }
+    double Rm() const { return r_m; }
   };
 
 
@@ -448,10 +449,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       double tmp = 1.-xsq-ysq;
       // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
       double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
-// re-centering
-nm1 += bl.r_l*x + bl.r_m*y;
-      double phs = w*(nm1+nshift);
+      // re-centering
+      nm1 += bl.Rl()*x + bl.Rm()*y;
 
+      double phs = w*(nm1+nshift);
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
         return twopi*phs;
@@ -494,7 +495,7 @@ nm1 += bl.r_l*x + bl.r_m*y;
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for (auto i=lo; i<hi; ++i)
           {
-double x = x0+i*pixsize_x;
+          double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
@@ -639,7 +640,7 @@ double x = x0+i*pixsize_x;
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for(auto i=lo; i<hi; ++i)
           {
-double x = x0+i*pixsize_x;
+          double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
@@ -1451,8 +1452,7 @@ timers.pop();
               {
               // accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
               auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1);
-nm1 += bl.r_l*(x0+i*pixsize_x) + bl.r_m*(y0+j*pixsize_y);
-              fct = krn->corfunc((nm1+nshift)*dw);
+              fct = krn->corfunc((nm1 + bl.Rl()*(x0+i*pixsize_x) + bl.Rm()*(y0+j*pixsize_y) + nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
@@ -1597,38 +1597,26 @@ nm1 += bl.r_l*(x0+i*pixsize_x) + bl.r_m*(y0+j*pixsize_y);
              ymax = ymin + (nydirty-1)*pixsize_y;
       vector<double> xext{xmin, xmax},
                      yext{ymin, ymax};
-      if (xmin*xmax<0) xext.push_back(0);
-      if (ymin*ymax<0) yext.push_back(0);
+      if ((bl.Rl()!=0) || (bl.Rm()!=0))  // recentering is active
+        {
+        xext.push_back(lshift);
+        yext.push_back(mshift);
+        }
+      else
+        {
+        if (xmin*xmax<0) xext.push_back(0);
+        if (ymin*ymax<0) yext.push_back(0);
+        }
       nm1min = 1e300, nm1max = -1e300;
       for (auto xc: xext)
         for (auto yc: yext)
           {
           double tmp = xc*xc+yc*yc;
           double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
-//nval += bl.r_l*xc + bl.r_m*yc;
+          nval += bl.Rl()*xc + bl.Rm()*yc;
           nm1min = min(nm1min, nval);
           nm1max = max(nm1max, nval);
           }
-double nm1minb = 1e300, nm1maxb = -1e300;
-xext.push_back(0.5*(xmin+xmax));
-yext.push_back(0.5*(ymin+ymax));
-      for (auto xc: xext)
-        for (auto yc: yext)
-          {
-          double tmp = xc*xc+yc*yc;
-          double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
-nval += bl.r_l*xc + bl.r_m*yc;
-          nm1minb = min(nm1minb, nval);
-          nm1maxb = max(nm1maxb, nval);
-          }
-cout << "bla" << endl;
-cout << xmin <<" " << xmax << endl;
-cout << ymin <<" " << ymax << endl;
-cout << nm1min <<" " << nm1max << endl;
-cout << nm1minb <<" " << nm1maxb << endl;
-nm1min = nm1minb;
-nm1max = nm1maxb;
-
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
@@ -1784,9 +1772,20 @@ nm1max = nm1maxb;
         no_nshift(!allow_nshift)
       {
       timers.push("Baseline construction");
-double r_l = lshift / sqrt(1. - lshift*lshift - mshift*mshift);
-double r_m = mshift / sqrt(1. - lshift*lshift - mshift*mshift);
-//r_l=r_m=0;
+      double r_l = 0., r_m = 0.;
+#if 1
+      if (do_wgridding && lmshift)
+        {
+        double xextreme = std::abs(lshift) + 0.5*nxdirty*pixsize_x,
+               yextreme = std::abs(mshift) + 0.5*nydirty*pixsize_y;
+        if (xextreme*xextreme + yextreme*yextreme < 1.)
+          {
+          double n0 = sqrt(1. - lshift*lshift - mshift*mshift);
+          r_l = lshift/n0;
+          r_m = mshift/n0;
+          }
+        }
+#endif
       bl = Baselines(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, flip_u, flip_v, flip_w, r_l, r_m);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
  //     MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
