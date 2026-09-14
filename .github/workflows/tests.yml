@@ -54,6 +54,9 @@ jobs:
             python: '3.15t'
           - name: ubuntu-22.04
             os: ubuntu-22.04
+          - name: ubuntu-24.04-intel
+            os: ubuntu-24.04
+            compiler: intel
           - name: ubuntu-26.04
             os: ubuntu-26.04
           - name: ubuntu-22.04-arm
@@ -76,9 +79,6 @@ jobs:
             os: windows-2025
           - name: windows-11-arm
             os: windows-11-arm
-          - name: ubuntu-24.04-intel
-            os: ubuntu-24.04
-            compiler: intel
         binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
         optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
         exclude:
