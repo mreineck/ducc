@@ -402,6 +402,13 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
                            pixsizey, wstacking, mask, divide_by_n=False)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
     assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
+    if fov == 120.:
+        dirty3 = vis2dirty_with_faceting(
+            nfacets_x=3, nfacets_y=5, uvw=uvw, freq=freq, vis=ms, wgt=wgt,
+            npix_x=nxdirty, npix_y=nydirty, pixsize_x=pixsizex,
+            pixsize_y=pixsizey, epsilon=epsilon, do_wgridding=wstacking,
+            nthreads=nthreads, mask=mask, divide_by_n=False).astype("f8")
+        assert_allclose(ducc0.misc.l2error(dirty3, ref), 0, atol=epsilon)
 
 
 @pmp('nxdirty', [2, 16, 64])

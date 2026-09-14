@@ -1454,10 +1454,12 @@ timers.pop();
               auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1);
               fct = krn->corfunc((nm1 + bl.Rl()*(x0+i*pixsize_x) + bl.Rm()*(y0+j*pixsize_y) + nshift)*dw);
               if (divide_by_n)
-                fct /= nm1+1;
+                fct = (nm1+1>0.) ? fct/(nm1+1) : 0.;
               }
             else // beyond the horizon, don't really know what to do here
-              fct = divide_by_n ? 0 : krn->corfunc((-sqrt(-tmp)-1.+nshift)*dw);
+              fct = divide_by_n ? 0 : krn->corfunc((-sqrt(-tmp)-1.
+                    + bl.Rl()*(x0+i*pixsize_x) + bl.Rm()*(y0+j*pixsize_y)
+                    + nshift)*dw);
             if (lmshift)
               {
               auto i2=min(i, nxdirty-i), j2=min(j, nydirty-j);
@@ -1595,28 +1597,44 @@ timers.pop();
              xmax = xmin + (nxdirty-1)*pixsize_x,
              ymin = mshift - 0.5*nydirty*pixsize_y,
              ymax = ymin + (nydirty-1)*pixsize_y;
-      vector<double> xext{xmin, xmax},
-                     yext{ymin, ymax};
-      if ((bl.Rl()!=0) || (bl.Rm()!=0))  // recentering is active
+      bool recentering = (bl.Rl()!=0) || (bl.Rm()!=0);
+      nm1min = 1e300, nm1max = -1e300;
+      auto update_nm1_range = [&](double x, double y)
         {
-        xext.push_back(lshift);
-        yext.push_back(mshift);
+        double tmp = x*x+y*y;
+        double nval = (tmp<=1.) ? (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
+        nval += bl.Rl()*x + bl.Rm()*y;
+        nm1min = min(nm1min, nval);
+        nm1max = max(nm1max, nval);
+        };
+      double xextreme = max(abs(xmin), abs(xmax)),
+             yextreme = max(abs(ymin), abs(ymax));
+      if (recentering && xextreme*xextreme+yextreme*yextreme>=1.)
+        {
+        // The w screen is evaluated only at image pixels. In the crossing
+        // case q' is not covered by the cheap concave-function extrema.
+        for (size_t i=0; i<nxdirty; ++i)
+          for (size_t j=0; j<nydirty; ++j)
+            update_nm1_range(xmin+i*pixsize_x, ymin+j*pixsize_y);
         }
       else
         {
-        if (xmin*xmax<0) xext.push_back(0);
-        if (ymin*ymax<0) yext.push_back(0);
-        }
-      nm1min = 1e300, nm1max = -1e300;
-      for (auto xc: xext)
-        for (auto yc: yext)
+        vector<double> xext{xmin, xmax},
+                       yext{ymin, ymax};
+        if (recentering)
           {
-          double tmp = xc*xc+yc*yc;
-          double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
-          nval += bl.Rl()*xc + bl.Rm()*yc;
-          nm1min = min(nm1min, nval);
-          nm1max = max(nm1max, nval);
+          xext.push_back(lshift);
+          yext.push_back(mshift);
           }
+        else
+          {
+          if (xmin*xmax<0) xext.push_back(0);
+          if (ymin*ymax<0) yext.push_back(0);
+          }
+        for (auto xc: xext)
+          for (auto yc: yext)
+            update_nm1_range(xc, yc);
+        }
       nshift = (no_nshift||(!do_wgridding)) ? 0. : -0.5*(nm1max+nm1min);
       shifting = lmshift || (nshift!=0);
 
@@ -1776,11 +1794,10 @@ timers.pop();
 #if 1
       if (do_wgridding && lmshift)
         {
-        double xextreme = std::abs(lshift) + 0.5*nxdirty*pixsize_x,
-               yextreme = std::abs(mshift) + 0.5*nydirty*pixsize_y;
-        if (xextreme*xextreme + yextreme*yextreme < 1.)
+        double n0sq = 1. - lshift*lshift - mshift*mshift;
+        if (n0sq>0.)
           {
-          double n0 = sqrt(1. - lshift*lshift - mshift*mshift);
+          double n0 = sqrt(n0sq);
           r_l = lshift/n0;
           r_m = mshift/n0;
           }
