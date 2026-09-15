@@ -1,5 +1,8 @@
 0.42.0:
 - general:
+  - the Python module declares that the GIL need not be held while
+    any of its functions are running; this can increase parallelism
+    when running under free-threading Python interpreters.
   - MultiExp now detects whether a given angle is a fraction of 2pi.
     If so, the generated twiddle factors will be computed in a more
     accurate fashion.
