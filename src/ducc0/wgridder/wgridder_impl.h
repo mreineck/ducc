@@ -15,7 +15,8 @@
  */
 
 /* Copyright (C) 2019-2026 Max-Planck-Society
-   Author: Martin Reinecke */
+   Copyright (C) 2026 Albert M. W. Yau
+   Authors: Martin Reinecke, Albert M. W. Yau */
 
 #ifndef DUCC0_WGRIDDER_IMPL_H
 #define DUCC0_WGRIDDER_IMPL_H
