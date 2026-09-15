@@ -15,7 +15,8 @@
  */
 
 /* Copyright (C) 2019-2026 Max-Planck-Society
-   Author: Martin Reinecke */
+   Copyright (C) 2026 Albert M. W. Yau
+   Authors: Martin Reinecke, Albert M. W. Yau */
 
 #ifndef DUCC0_WGRIDDER_IMPL_H
 #define DUCC0_WGRIDDER_IMPL_H
@@ -280,6 +281,7 @@ class Baselines
     vector<size_t> freq_ofs;
     vector<double> f_over_c;
     double umax, vmax;
+    double r_l, r_m;
 
   public:
     Baselines() = default;
@@ -288,7 +290,8 @@ class Baselines
       const cmav<uint64_t,1> &freqlist_id,
       const cmav<uint64_t,1> &freqlist_nfreqs,
       const cmav<double,1> &freqlist_freqs,
-      bool flip_u=false, bool flip_v=false, bool flip_w=false)
+      bool flip_u=false, bool flip_v=false, bool flip_w=false, double r_l_=0, double r_m_=0)
+      : r_l(r_l_), r_m(r_m_)
       {
       size_t nrows = coord_.shape(0);
       constexpr double speedOfLight = 299792458.;
@@ -339,9 +342,12 @@ class Baselines
       umax=vmax=0;
       for (size_t i=0; i<coord.size(); ++i)
         {
-        coord[i] = UVW(ufac*coord_(i,0), vfac*coord_(i,1), wfac*coord_(i,2));
-        umax = max(umax, abs(coord_(i,0)));
-        vmax = max(vmax, abs(coord_(i,1)));
+        double tu = ufac*coord_(i,0),
+               tv = vfac*coord_(i,1),
+               tw = wfac*coord_(i,2);
+        coord[i] = UVW(tu+r_l*tw, tv+r_m*tw, tw);
+        umax = max(umax, abs(coord[i].u));
+        vmax = max(vmax, abs(coord[i].v));
         }
       umax *= fcmax;
       vmax *= fcmax;
@@ -377,6 +383,8 @@ class Baselines
     double Vmax() const { return vmax; }
     size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
     bool BDA() const { return nfreqs==0; }
+    double Rl() const { return r_l; }
+    double Rm() const { return r_m; }
   };
 
 
@@ -437,11 +445,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
 
-    static double phase(double xsq, double ysq, double w, bool adjoint, double nshift)
+    double phase(double xsq, double ysq, double w, bool adjoint, double nshift, double x, double y)
       {
       double tmp = 1.-xsq-ysq;
       // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
       double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
+      // re-centering
+      nm1 += bl.Rl()*x + bl.Rm()*y;
+
       double phs = w*(nm1+nshift);
       if (adjoint) phs *= -1;
       if constexpr (is_same<Tcalc, double>::value)
@@ -485,11 +496,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for (auto i=lo; i<hi; ++i)
           {
+          double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift, x, y0+i*pixsize_y)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
@@ -629,11 +641,12 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         vector<Tcalc> buf(lmshift ? nydirty : (nydirty/2+1));
         for(auto i=lo; i<hi; ++i)
           {
+          double x = x0+i*pixsize_x;
           double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift)); });
+            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift, x, y0+i*pixsize_y)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
@@ -1440,7 +1453,7 @@ timers.pop();
               {
               // accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
               auto nm1 = (-xsq-ysq)/(sqrt(tmp)+1);
-              fct = krn->corfunc((nm1+nshift)*dw);
+              fct = krn->corfunc((nm1 + bl.Rl()*(x0+i*pixsize_x) + bl.Rm()*(y0+j*pixsize_y) + nshift)*dw);
               if (divide_by_n)
                 fct /= nm1+1;
               }
@@ -1585,14 +1598,23 @@ timers.pop();
              ymax = ymin + (nydirty-1)*pixsize_y;
       vector<double> xext{xmin, xmax},
                      yext{ymin, ymax};
-      if (xmin*xmax<0) xext.push_back(0);
-      if (ymin*ymax<0) yext.push_back(0);
+      if ((bl.Rl()!=0) || (bl.Rm()!=0))  // recentering is active
+        {
+        xext.push_back(lshift);
+        yext.push_back(mshift);
+        }
+      else
+        {
+        if (xmin*xmax<0) xext.push_back(0);
+        if (ymin*ymax<0) yext.push_back(0);
+        }
       nm1min = 1e300, nm1max = -1e300;
       for (auto xc: xext)
         for (auto yc: yext)
           {
           double tmp = xc*xc+yc*yc;
           double nval = (tmp<=1.) ?  (sqrt(1.-tmp)-1.) : (-sqrt(tmp-1.)-1.);
+          nval += bl.Rl()*xc + bl.Rm()*yc;
           nm1min = min(nm1min, nval);
           nm1max = max(nm1max, nval);
           }
@@ -1751,7 +1773,21 @@ timers.pop();
         no_nshift(!allow_nshift)
       {
       timers.push("Baseline construction");
-      bl = Baselines(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, flip_u, flip_v, flip_w);
+      double r_l = 0., r_m = 0.;
+#if 1
+      if (do_wgridding && lmshift)
+        {
+        double xextreme = std::abs(lshift) + 0.5*nxdirty*pixsize_x,
+               yextreme = std::abs(mshift) + 0.5*nydirty*pixsize_y;
+        if (xextreme*xextreme + yextreme*yextreme < 1.)
+          {
+          double n0 = sqrt(1. - lshift*lshift - mshift*mshift);
+          r_l = lshift/n0;
+          r_m = mshift/n0;
+          }
+        }
+#endif
+      bl = Baselines(uvw, freqlist_id, freqlist_nfreqs, freqlist_freqs, flip_u, flip_v, flip_w, r_l, r_m);
       MR_assert(bl.Nrows()<(uint64_t(1)<<32), "too many rows in the MS");
  //     MR_assert(bl.Nchannels()<(uint64_t(1)<<16), "too many channels in the MS");
       timers.pop();
