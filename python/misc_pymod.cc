@@ -41,6 +41,7 @@
 #include <vector>
 #include <cmath>
 #include <complex>
+#include <queue>
 
 
 namespace ducc0 {
@@ -1902,6 +1903,205 @@ static py::tuple native_vector_lengths()
   return py::tuple(res);
   }
 
+template<typename Tf, typename Ti, size_t ndim> struct Node
+  {
+  array<Tf,ndim> coord;
+  Ti idx;
+  Ti splitdim;
+  };
+
+template <typename Tf, typename Ti, size_t ndim> static void find_neighbors_single(
+  const vector<Node<Tf, Ti, ndim>> &nodes,
+  size_t k,
+  size_t pos0,
+  const vmav<Ti,1> &nb)
+  {
+  struct entry
+    {
+    Tf rsq;
+    Ti pos;
+    bool operator< (const entry &other) const
+      { return rsq<other.rsq; }
+    };
+  std::priority_queue<entry> pq;
+  const auto iloc = nodes[pos0].coord;
+
+  std::function<void(Ti, Ti)> step = [&](Ti pos2, Ti lvl)
+    {
+    if (pos2 >= pos0) return; // the following nodes cannot be neighbours
+    auto loc = nodes[pos2].coord;
+    Tf dsq=0;
+    for (size_t idim=0; idim<ndim; ++idim)
+      dsq += (loc[idim]-iloc[idim])*(loc[idim]-iloc[idim]);
+    if (pq.size()<k)
+      pq.push({dsq, pos2});
+    else if (dsq < pq.top().rsq)
+      {
+      pq.pop();
+      pq.push({dsq, pos2});
+      }
+
+    // on which side of the dividing plane are we?
+    auto spl = nodes[pos2].splitdim;
+    if (spl == 255) return;
+    Tf planedist = iloc[spl] - loc[spl];
+    Ti pos_left = pos2 + (Ti(1)<<lvl);
+    Ti pos_right = pos2 + (Ti(2)<<lvl);
+    if (planedist <= 0)  // we are in the lower part
+      {
+      step(pos_left, lvl+1);
+      if (pq.top().rsq > planedist*planedist)
+        step(pos_right, lvl+1);
+      }
+    else
+      {
+      step(pos_right, lvl+1);
+      if (pq.top().rsq > planedist*planedist)
+        step(pos_left, lvl+1);
+      }
+    };
+  step(0, 0);
+
+  MR_assert(pq.size()==k, "oops");
+  for(size_t i=0; i<k; ++i)
+    {
+    nb(k-1-i) = pq.top().pos;
+    pq.pop();
+    }
+  }
+template <typename Tf, typename Ti, size_t ndim> static void build_tree(vector<Node<Tf, Ti, ndim>> &nodes)
+  {
+  std::function<void(Ti, Ti)> build_sub_tree = [&](Ti lo, Ti hi)
+    {
+    if (hi <= lo+1) return;  // interval length <=1, done
+    array<Tf, ndim> cmin, cmax;
+    for (size_t idim=0; idim<ndim; ++idim)
+      {
+      cmax[idim] = -Tf(1e30);
+      cmin[idim] = Tf(1e30);
+      }
+    for (size_t i=lo; i<hi; ++i)
+      {
+      for (size_t idim=0; idim<ndim; ++idim)
+        {
+        cmin[idim] = min(cmin[idim], nodes[i].coord[idim]);
+        cmax[idim] = max(cmax[idim], nodes[i].coord[idim]);
+        }
+      }
+    size_t splitdim = 0;
+    Tf max_extent = cmax[0]-cmin[0];
+    for (size_t idim=1; idim<ndim; ++idim)
+      {
+      Tf extent = cmax[idim]-cmin[idim];
+      if (extent>max_extent)
+        {
+        max_extent = extent;
+        splitdim = idim;
+        }
+      }
+    size_t kth = (hi-lo)/2;
+    std::nth_element(&nodes[lo], &nodes[lo+kth], &nodes[hi], [&](const auto &a, const auto &b) {return a.coord[splitdim]<b.coord[splitdim];});
+    build_sub_tree(lo, lo+kth);
+    build_sub_tree(lo+kth+1, hi);
+    nodes[lo+kth].splitdim = splitdim;
+    };
+
+  build_sub_tree(0, nodes.size());
+  }
+template <typename Tf, typename Ti, size_t ndim> static void rearrange(vector<Node<Tf, Ti, ndim>> &nodes)
+  {
+  vector<Ti> idx(nodes.size());
+
+  std::function<void(Ti, Ti, Ti, Ti)> recurse = [&](Ti lo, Ti hi, Ti pos, Ti lvl)
+    {
+    if (lo>=hi) return;
+    auto kth = (hi-lo)/2;
+    idx[pos] = lo + kth;
+    recurse(lo, lo+kth, pos + (1<<lvl), lvl+1);
+    recurse(lo+kth+1, hi, pos + (2<<lvl), lvl+1);
+    };
+
+  recurse(0, nodes.size(), 0, 0);
+  auto nodes2 = nodes;
+  for (size_t i=0; i<nodes.size(); ++i)
+    nodes[i] = nodes2[idx[i]];
+  }
+template <typename Tf, typename Ti, size_t ndim> static void find_neighbors(const vector<Node<Tf, Ti, ndim>> &nodes, const vmav<Ti,2> &nb, size_t nthreads)
+  {
+  Ti n0 = nodes.size()-nb.shape(0);
+  Ti k = nb.shape(1);
+
+  execDynamic(nodes.size()-n0, nthreads, 1000, [&](Scheduler &sched)
+    {
+    while (auto rng=sched.getNext())
+      for (auto i=rng.lo; i<rng.hi; ++i)
+        find_neighbors_single(nodes, k, i+n0, subarray<1>(nb, {{i}, {}}));
+    });
+  }
+
+template <typename Ti> static void compute_depths(const vmav<Ti,2> &nb, Ti n0, const vmav<Ti,1> &depths)
+  {
+  for (size_t i=0; i<n0; ++i)
+    depths(i) = 0;
+  for (size_t i=n0; i<depths.shape(0); ++i)
+    {
+    Ti d=0;
+    for (size_t j=0; j<nb.shape(1); ++j)
+      d = max(d, depths(nb(i-n0,j)));
+    depths(i) = 1+d;
+    }
+  }
+//def order_by_depth(points, indices, neighbors, depths):
+    //n0 = len(points) - len(neighbors)
+    //order = np.argsort(depths)
+    //points, indices, depths = points[order], indices[order], depths[order]
+    //neighbors = neighbors[order[n0:] - n0]  # first n0 should stay in order
+    //inv_order = np.arange(len(points), dtype=int)
+    //inv_order[order] = inv_order
+    //neighbors = inv_order[neighbors]
+    //return points, indices, neighbors, depths
+
+template <typename Tf, typename Ti, size_t ndim> static py::tuple build_graphgp(const CNpArr &points_, size_t n0, size_t k, size_t nthreads)
+  {
+  const auto points = to_cmav<Tf,2>(points_);
+  MR_assert(points.shape(1)==ndim, "last axis of points array must have length 3");
+  vector<Node<Tf, Ti, ndim>> nodes(points.shape(0));
+  for (size_t i=0; i<nodes.size(); ++i)
+    {
+    for (size_t idim=0; idim<ndim; ++idim)
+      nodes[i].coord[idim] = points(i,idim);
+    nodes[i].splitdim = 255;
+    nodes[i].idx = i;
+    }
+  build_tree<Tf, Ti, ndim>(nodes);
+  rearrange(nodes);
+  vmav<Ti,2> nb({nodes.size()-n0,k});
+  auto [nb_out_, nb_out] = make_Pyarr_and_vmav<Ti,2>({points.shape(0)-n0, k});
+  find_neighbors(nodes, nb_out, nthreads);
+  auto [points_out_, points_out] = make_Pyarr_and_vmav<Tf,2>({points.shape(0),ndim});
+  auto [indices_out_, indices_out] = make_Pyarr_and_vmav<Ti,1>({points.shape(0)});
+  for (size_t i=0; i<nodes.size(); ++i)
+    {
+    for (size_t idim=0; idim<ndim; ++idim)
+      points_out(i,idim) = nodes[i].coord[idim];
+    indices_out(i) = nodes[i].idx;
+    }
+  auto [depths_out_, depths_out] = make_Pyarr_and_vmav<Ti,1>({points.shape(0)});
+  compute_depths(nb_out, Ti(n0), depths_out);
+  py::list res;
+  res.append(points_out_);
+  res.append(nb_out_);
+  res.append(indices_out_);
+  res.append(depths_out_);
+  return res;
+  }
+static py::tuple Pybuild_graphgp(const CNpArr &points_, size_t n0, size_t k, size_t nthreads)
+  {
+  if (isPyarr<double>(points_))
+    return build_graphgp<double, uint32_t, 3>(points_, n0, k, nthreads);
+  MR_fail("unsupported input types");
+  }
+
 const char *native_vector_lengths_DS = R"""(
 Returns the vector lengths for float32 and float64 supported by this ducc library.
 
@@ -1997,6 +2197,8 @@ void add_misc(py::module_ &msup)
 
   m.def("print_diagnostics", print_diagnostics, print_diagnostics_DS);
   m.def("native_vector_lengths", native_vector_lengths, native_vector_lengths_DS);
+
+  m2.def("build_graphgp", Pybuild_graphgp, "points"_a, "n0"_a, "k"_a, "nthreads"_a=1);
   }
 
 }
