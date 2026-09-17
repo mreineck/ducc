@@ -83,6 +83,7 @@ int main()
   const bool fma = has_bit(leaf1.ecx, 12);
   const bool sse41 = has_bit(leaf1.ecx, 19);
   const bool sse42 = has_bit(leaf1.ecx, 20);
+  const bool xsave = has_bit(leaf1.ecx, 26);
   const bool osxsave = has_bit(leaf1.ecx, 27);
   const bool avx = has_bit(leaf1.ecx, 28);
   const bool f16c = has_bit(leaf1.ecx, 29);
@@ -97,12 +98,12 @@ int main()
   const bool avx512vl = has_bit(leaf7.ebx, 31);
 
   std::uint64_t xcr0 = 0;
-  if (osxsave)
+  if (xsave && osxsave)
     xcr0 = read_xcr(0);
 
   const bool ymm_state = (xcr0 & 0x6)==0x6;
   const bool zmm_state = (xcr0 & 0xe6)==0xe6;
-  const bool avx_usable = avx && osxsave && ymm_state;
+  const bool avx_usable = avx && xsave && osxsave && ymm_state;
   const bool avx2_usable = avx_usable && avx2;
   const bool fma_usable = avx_usable && fma;
   const bool f16c_usable = avx_usable && f16c;
@@ -133,6 +134,7 @@ int main()
   print_flag("avx512cd_cpu", avx512cd);
   print_flag("avx512bw_cpu", avx512bw);
   print_flag("avx512vl_cpu", avx512vl);
+  print_flag("xsave", xsave);
   print_flag("osxsave", osxsave);
   std::cout << " xcr0=0x" << std::hex << xcr0 << std::dec;
   print_flag("avx_usable", avx_usable);
