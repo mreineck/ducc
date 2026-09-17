@@ -95,6 +95,10 @@ jobs:
           python-version: ${{ matrix.platform.python || '3.11' }}
           allow-prereleases: true
 
+      - name: Report architecture
+        continue-on-error: true
+        run: python -c "import platform, struct; print('runner.os=${{ runner.os }}'); print('runner.arch=${{ runner.arch }}'); print('platform.machine=' + platform.machine()); print('pointer_bits=' + str(struct.calcsize('P') * 8))"
+
       - name: Install dependencies
         run: python -m pip install --user --upgrade pytest numpy scipy
 
@@ -165,6 +169,10 @@ jobs:
           .venv-pyodide/bin/python -m pip install dist/*.whl
           echo "$PWD/.venv-pyodide/bin" >> "$GITHUB_PATH"
 
+      - name: Report Pyodide architecture
+        continue-on-error: true
+        run: python -c "import platform, struct; print('runner.os=${{ runner.os }}'); print('runner.arch=${{ runner.arch }}'); print('platform.machine=' + platform.machine()); print('pointer_bits=' + str(struct.calcsize('P') * 8))"
+
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
@@ -183,6 +191,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - name: Report i686 architecture
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            --platform=linux/i386 \
+            quay.io/pypa/manylinux_2_28_i686 \
+            python3.12 -c 'import platform, struct; print("platform.machine=" + platform.machine()); print("pointer_bits=" + str(struct.calcsize("P") * 8))'
       - name: Run i686 tests in Docker
         run: |
           set -euxo pipefail
