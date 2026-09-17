@@ -121,12 +121,16 @@ if(DEFINED ENV{DUCC0_FLAGS})
     SET (LINK_OPTS ${LINK_OPTS} ${FLAGS_TMP})
 endif()
 
-find_package(Threads REQUIRED)
+if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+    list(APPEND DEFS DUCC0_NO_LOWLEVEL_THREADING)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(ducc0 PRIVATE Threads::Threads)
+endif()
 
 target_compile_definitions(ducc0 PRIVATE ${DEFS} PKGNAME=${PKGNAME})
 target_compile_options(ducc0 PRIVATE ${COMP_OPTS})
 target_link_options(ducc0 PRIVATE ${LINK_OPTS})
-target_link_libraries(ducc0 PRIVATE Threads::Threads)
 target_compile_features(ducc0 PRIVATE cxx_std_17)
 
 set_property(TARGET ducc0 PROPERTY INTERPROCEDURAL_OPTIMIZATION True)

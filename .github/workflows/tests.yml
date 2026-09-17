@@ -1,40 +1,283 @@
 name: ducc-tests
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      binding:
+        description: Python binding
+        type: choice
+        required: true
+        default: pybind11
+        options:
+          - pybind11
+          - nanobind
+          - both
+      optimization:
+        description: Optimization
+        type: choice
+        required: true
+        default: native
+        options:
+          - native
+          - portable
+          - both
+
 jobs:
-  test-macos:
-    runs-on: macos-15
+  test:
+    name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
+    runs-on: ${{ matrix.platform.os }}
+    env:
+      DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: python-3.11
+            os: ubuntu-24.04
+            python: '3.11'
+          - name: python-3.12
+            os: ubuntu-24.04
+            python: '3.12'
+          - name: python-3.13
+            os: ubuntu-24.04
+            python: '3.13'
+          - name: python-3.14
+            os: ubuntu-24.04
+            python: '3.14'
+          - name: python-3.14t
+            os: ubuntu-24.04
+            python: '3.14t'
+          - name: python-3.15
+            os: ubuntu-24.04
+            python: '3.15'
+          - name: python-3.15t
+            os: ubuntu-24.04
+            python: '3.15t'
+          - name: ubuntu-22.04
+            os: ubuntu-22.04
+          - name: ubuntu-24.04-intel
+            os: ubuntu-24.04
+            compiler: intel
+          - name: ubuntu-24.04-clang
+            os: ubuntu-24.04
+            compiler: clang
+          - name: ubuntu-26.04
+            os: ubuntu-26.04
+          - name: ubuntu-22.04-arm
+            os: ubuntu-22.04-arm
+          - name: ubuntu-24.04-arm
+            os: ubuntu-24.04-arm
+          - name: ubuntu-26.04-arm
+            os: ubuntu-26.04-arm
+          - name: macos-15-intel
+            os: macos-15-intel
+          - name: macos-26-intel
+            os: macos-26-intel
+          - name: macos-15
+            os: macos-15
+          - name: macos-26
+            os: macos-26
+          - name: windows-2022
+            os: windows-2022
+          - name: windows-2025
+            os: windows-2025
+          - name: windows-11-arm
+            os: windows-11-arm
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+        optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
+        exclude:
+          - binding: nanobind
+            optimization: portable
+
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest numpy scipy
-      - run: DUCC0_OPTIMIZATION=portable python -m pip install --user .
-      - run: python -m pytest python/test -x
-  test-windows:
-    runs-on: windows-2025
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest numpy scipy
-      - run: python -m pip install --user .
-      - run: python -m pytest python/test -x
-  test-intel:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - run: python -m pip install --user --upgrade pytest scipy
-      - run: wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-      - run: sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
-      - run: sudo apt update
-      - run: sudo apt install intel-oneapi-compiler-dpcpp-cpp
-      - run: |
+          python-version: ${{ matrix.platform.python || '3.11' }}
+          allow-prereleases: true
+
+      - name: Report architecture
+        continue-on-error: true
+        run: python -c "import platform, struct; print('runner.os=${{ runner.os }}'); print('runner.arch=${{ runner.arch }}'); print('platform.machine=' + platform.machine()); print('pointer_bits=' + str(struct.calcsize('P') * 8))"
+
+      - name: Configure MSVC for CPU capability probe
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        continue-on-error: true
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Report CPU capabilities
+        if: runner.os != 'Windows'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="$RUNNER_TEMP/CPUCapabilities"
+          c++ -std=c++17 -O0 cmake/CPUCapabilities.cpp -o "$probe"
+          capabilities="$($probe)"
+          echo "$capabilities"
+          {
+            echo '### Runner CPU capabilities'
+            echo '- Runner: ${{ runner.os }} / ${{ runner.arch }}'
+            echo "- CPUCapabilities: $capabilities"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report CPU capabilities
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = Join-Path $env:RUNNER_TEMP 'CPUCapabilities.exe'
+          $object = Join-Path $env:RUNNER_TEMP 'CPUCapabilities.obj'
+          cl /nologo /EHsc /std:c++17 "/Fo:$object" "/Fe:$probe" cmake/CPUCapabilities.cpp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $capabilities = ((& $probe) -join ' ').Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host $capabilities
+          @(
+            '### Runner CPU capabilities'
+            '- Runner: ${{ runner.os }} / ${{ runner.arch }}'
+            "- CPUCapabilities: $capabilities"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Report Windows ARM64 capabilities
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host 'arch=arm64 neon=1 detailed_runtime_simd_detection=not_implemented'
+          @(
+            '### Runner CPU capabilities'
+            '- Runner: ${{ runner.os }} / ${{ runner.arch }}'
+            '- CPUCapabilities: arch=arm64 neon=1 detailed_runtime_simd_detection=not_implemented'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Install dependencies
+        run: python -m pip install --user --upgrade pytest numpy scipy
+
+      - name: Install Intel compiler
+        if: matrix.platform.compiler == 'intel'
+        run: |
+          wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
+          sudo apt update
+          sudo apt install intel-oneapi-compiler-dpcpp-cpp
+
+      - name: Build and install
+        if: matrix.platform.compiler != 'intel' && matrix.platform.compiler != 'clang'
+        shell: bash
+        run: ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --user .
+
+      - name: Build and install with Intel compiler
+        if: matrix.platform.compiler == 'intel'
+        shell: bash
+        run: |
           source /opt/intel/oneapi/setvars.sh intel64
-          CC=icx CXX=icpx python3 -m pip install --user .
-          python -m pytest python/test -x
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} CC=icx CXX=icpx python -m pip install --user .
+
+      - name: Build and install with Clang
+        if: matrix.platform.compiler == 'clang'
+        shell: bash
+        run: |
+          clang --version
+          ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} CC=clang CXX=clang++ python -m pip install --user .
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: Run tests
+        run: python -m pytest python/test -x
+
+  test-pyodide:
+    name: pyodide / ${{ matrix.binding }} / portable
+    runs-on: ubuntu-26.04
+    env:
+      DUCC0_OPTIMIZATION: portable
+    strategy:
+      fail-fast: false
+      matrix:
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Build Pyodide wheel
+        shell: bash
+        run: |
+          python -m pip install pyodide-build
+          ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} pyodide build .
+          pyodide venv .venv-pyodide
+          .venv-pyodide/bin/python -m pip install pytest numpy scipy
+          .venv-pyodide/bin/python -m pip install dist/*.whl
+          echo "$PWD/.venv-pyodide/bin" >> "$GITHUB_PATH"
+
+      - name: Report Pyodide architecture
+        continue-on-error: true
+        run: python -c "import platform, struct; print('runner.os=${{ runner.os }}'); print('runner.arch=${{ runner.arch }}'); print('platform.machine=' + platform.machine()); print('pointer_bits=' + str(struct.calcsize('P') * 8)); print('native_cpu_simd=not_applicable')"
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: Run tests
+        run: python -m pytest python/test -x
+
+  test-docker:
+    name: i686 / ${{ matrix.binding }} / portable
+    runs-on: ubuntu-24.04
+    env:
+      DUCC0_OPTIMIZATION: portable
+    strategy:
+      fail-fast: false
+      matrix:
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Report i686 CPU capabilities
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            --platform=linux/i386 \
+            -v "$PWD:/ducc" \
+            -w /ducc \
+            quay.io/pypa/manylinux_2_28_i686 \
+            /bin/bash -c '
+              set -euo pipefail
+              g++ -std=c++17 -O0 cmake/CPUCapabilities.cpp -o /tmp/CPUCapabilities
+              /tmp/CPUCapabilities
+              python3.12 -c "import platform, struct; print(\"platform.machine=\" + platform.machine()); print(\"pointer_bits=\" + str(struct.calcsize(\"P\") * 8))"
+            '
+      - name: Run i686 tests in Docker
+        run: |
+          set -euxo pipefail
+          docker pull quay.io/pypa/manylinux_2_28_i686
+          docker run --rm \
+            --platform=linux/i386 \
+            -e DUCC0_OPTIMIZATION \
+            -v "$PWD:/ducc" \
+            -w /ducc \
+            quay.io/pypa/manylinux_2_28_i686 \
+            /bin/bash -c '
+              set -euxo pipefail
+              python3.12 -m venv /tmp/venv
+              source /tmp/venv/bin/activate
+              python -m pip install --upgrade pip
+              python -m pip install pytest scikit-build-core nanobind pybind11
+              python -m pip install numpy==2.0.0 -Cbuild-dir=/tmp/numpy-builddir
+              python -c "import struct; assert struct.calcsize(\"P\") == 4; print(\"pointer bits:\", struct.calcsize(\"P\")*8)"
+              g++ --version
+              DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
+                ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
+              python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
+              python -m pytest python/test -x
+            '
