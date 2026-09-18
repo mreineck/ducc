@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <complex>
 #include <functional>
 #include <vector>
 #include <memory>
@@ -32,6 +33,9 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/simd.h"
+#if (!defined(DUCC0_NO_SIMD)) && (!defined(DUCC0_HOMEGROWN_SIMD)) && (defined(__AVX__) || defined(__SSE3__))
+#include <immintrin.h>
+#endif
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
@@ -39,6 +43,51 @@
 namespace ducc0 {
 
 namespace detail_gridding_kernel {
+
+template<typename T> constexpr inline int hsum_simdlen
+  = std::min<int>(8, native_simd<T>::size());
+
+template<typename T> using hsum_simd = typename simd_select<T,hsum_simdlen<T>>::type;
+
+template<typename T> inline std::complex<T> hsum_cmplx
+  (hsum_simd<T> vr, hsum_simd<T> vi)
+  { return std::complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
+
+#if (!defined(DUCC0_NO_SIMD)) && defined(__AVX__)
+static_assert(hsum_simd<float>::size()==8, "must not happen");
+#if 1
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
+  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
+  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
+  return std::complex<float>(t2[0], t2[1]);
+  }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return std::complex<float>(t5[0], t5[1]);
+  }
+#endif
+#elif (!defined(DUCC0_NO_SIMD)) && defined(__SSE3__)
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  static_assert(hsum_simd<float>::size()==4, "must not happen");
+  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
+  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
+  return std::complex<float>(t1[0], t1[2]);
+  }
+#endif
 
 using namespace std;
 
