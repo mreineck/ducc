@@ -1910,6 +1910,26 @@ template<typename Tf, typename Ti, size_t ndim> struct Node
   Ti splitdim;
   };
 
+template<typename Ti, typename Swap> void inplace_reorder (const vector<Ti> &idx, Swap swapper)
+  {
+  vector<uint8_t> done(idx.size());
+  for (size_t i=0; i<idx.size(); ++i)
+    {
+    if (!done[i])
+      {
+      size_t j0=i, j1=idx[i];
+      done[i] = 1;
+      while (j1!=i)
+        {
+        swapper(j0,j1);
+        done[j1]=1;
+        j0 = j1;
+        j1 = idx[j1];
+        }
+      }
+    }
+  }
+
 template <typename Tf, typename Ti, size_t ndim> static void find_neighbors_single(
   const vector<Node<Tf, Ti, ndim>> &nodes,
   size_t k,
@@ -1960,9 +1980,10 @@ template <typename Tf, typename Ti, size_t ndim> static void find_neighbors_sing
         step(pos_left, lvl+1);
       }
     };
+
   step(0, 0);
 
-  MR_assert(pq.size()==k, "oops");
+MR_assert(pq.size()==k, "oops");
   for(size_t i=0; i<k; ++i)
     {
     nb(k-1-i) = pq.top().pos;
@@ -2022,9 +2043,7 @@ template <typename Tf, typename Ti, size_t ndim> static void rearrange(vector<No
     };
 
   recurse(0, nodes.size(), 0, 0);
-  auto nodes2 = nodes;
-  for (size_t i=0; i<nodes.size(); ++i)
-    nodes[i] = nodes2[idx[i]];
+  inplace_reorder(idx, [&](size_t i, size_t j) {swap(nodes[i], nodes[j]);});
   }
 template <typename Tf, typename Ti, size_t ndim> static void find_neighbors(const vector<Node<Tf, Ti, ndim>> &nodes, const vmav<Ti,2> &nb, size_t nthreads)
   {
@@ -2039,32 +2058,10 @@ template <typename Tf, typename Ti, size_t ndim> static void find_neighbors(cons
     });
   }
 
-template <typename Ti> static void compute_depths(const vmav<Ti,2> &nb, Ti n0, const vmav<Ti,1> &depths)
-  {
-  for (size_t i=0; i<n0; ++i)
-    depths(i) = 0;
-  for (size_t i=n0; i<depths.shape(0); ++i)
-    {
-    Ti d=0;
-    for (size_t j=0; j<nb.shape(1); ++j)
-      d = max(d, depths(nb(i-n0,j)));
-    depths(i) = 1+d;
-    }
-  }
-//def order_by_depth(points, indices, neighbors, depths):
-    //n0 = len(points) - len(neighbors)
-    //order = np.argsort(depths)
-    //points, indices, depths = points[order], indices[order], depths[order]
-    //neighbors = neighbors[order[n0:] - n0]  # first n0 should stay in order
-    //inv_order = np.arange(len(points), dtype=int)
-    //inv_order[order] = inv_order
-    //neighbors = inv_order[neighbors]
-    //return points, indices, neighbors, depths
-
 template <typename Tf, typename Ti, size_t ndim> static py::tuple build_graphgp(const CNpArr &points_, size_t n0, size_t k, size_t nthreads)
   {
   const auto points = to_cmav<Tf,2>(points_);
-  MR_assert(points.shape(1)==ndim, "last axis of points array must have length 3");
+  MR_assert(points.shape(1)==ndim, "last axis of points array must have length ", ndim);
   vector<Node<Tf, Ti, ndim>> nodes(points.shape(0));
   for (size_t i=0; i<nodes.size(); ++i)
     {
@@ -2075,30 +2072,89 @@ template <typename Tf, typename Ti, size_t ndim> static py::tuple build_graphgp(
     }
   build_tree<Tf, Ti, ndim>(nodes);
   rearrange(nodes);
-  vmav<Ti,2> nb({nodes.size()-n0,k});
-  auto [nb_out_, nb_out] = make_Pyarr_and_vmav<Ti,2>({points.shape(0)-n0, k});
-  find_neighbors(nodes, nb_out, nthreads);
+  auto [nb_, nb] = make_Pyarr_and_vmav<Ti,2>({points.shape(0)-n0, k});
+  find_neighbors(nodes, nb, nthreads);
   auto [points_out_, points_out] = make_Pyarr_and_vmav<Tf,2>({points.shape(0),ndim});
-  auto [indices_out_, indices_out] = make_Pyarr_and_vmav<Ti,1>({points.shape(0)});
+  auto [indices_, indices] = make_Pyarr_and_vmav<Ti,1>({points.shape(0)});
   for (size_t i=0; i<nodes.size(); ++i)
     {
     for (size_t idim=0; idim<ndim; ++idim)
       points_out(i,idim) = nodes[i].coord[idim];
-    indices_out(i) = nodes[i].idx;
+    indices(i) = nodes[i].idx;
     }
-  auto [depths_out_, depths_out] = make_Pyarr_and_vmav<Ti,1>({points.shape(0)});
-  compute_depths(nb_out, Ti(n0), depths_out);
-  py::list res;
-  res.append(points_out_);
-  res.append(nb_out_);
-  res.append(indices_out_);
-  res.append(depths_out_);
-  return res;
+  vector<Node<Tf, Ti, ndim>>().swap(nodes);  // deallocate nodes
+
+  vector<Ti> depths(points.shape(0));
+  for (size_t i=n0; i<depths.size(); ++i)
+    {
+    Ti d=0;
+    for (size_t j=0; j<nb.shape(1); ++j)
+{
+MR_assert(nb(i-n0,j)<i, "oops");
+      d = max(d, depths[nb(i-n0,j)]);
+}
+    depths[i] = 1+d;
+    }
+  vector<Ti> order(points.shape(0));
+  for (size_t i=0; i<order.size(); ++i) order[i] = i;
+  sort(order.begin(), order.end(), [&](Ti a, Ti b){return depths[a]<depths[b];});
+  inplace_reorder(order, [&](size_t a, size_t b)
+    {
+    for (size_t i=0; i<ndim; ++i)
+      swap(points_out(a,i), points_out(b,i));
+    swap(indices(a), indices(b));
+    swap(depths[a], depths[b]);
+    });
+
+  {
+  vector<Ti> order2(order.size()-n0);
+  for (size_t i=0; i<order2.size(); ++i)
+    order2[i] = order[i+n0]-n0;
+  inplace_reorder(order2, [&](size_t a, size_t b)
+    {
+    for (size_t i=0; i<nb.shape(1); ++i)
+      swap(nb(a,i), nb(b,i));
+    });
+  vector<Ti> inv_order(order.size());
+  for (size_t i=0; i<inv_order.size(); ++i)
+    inv_order[order[i]] = i;
+  for (size_t i=0; i<nb.shape(0); ++i)
+    for (size_t j=0; j<nb.shape(1); ++j)
+      nb(i,j) = inv_order[nb(i,j)];
+  }
+
+  vector<Ti> voffsets;
+  for (size_t i=1; i<depths.size(); ++i)
+    if (depths[i]!=depths[i-1]) voffsets.push_back(i);
+  voffsets.push_back(depths.size());
+  auto [offsets_, offsets] = make_Pyarr_and_vmav<Ti,1>({voffsets.size()});
+  for (size_t i=0; i<voffsets.size(); ++i)
+    offsets(i) = voffsets[i];
+
+  return py::make_tuple(points_out_, nb_, indices_, offsets_);
   }
 static py::tuple Pybuild_graphgp(const CNpArr &points_, size_t n0, size_t k, size_t nthreads)
   {
   if (isPyarr<double>(points_))
-    return build_graphgp<double, uint32_t, 3>(points_, n0, k, nthreads);
+    {
+    if (points_.shape(1)==1)
+      return build_graphgp<double, uint32_t, 1>(points_, n0, k, nthreads);
+    if (points_.shape(1)==2)
+      return build_graphgp<double, uint32_t, 2>(points_, n0, k, nthreads);
+    if (points_.shape(1)==3)
+      return build_graphgp<double, uint32_t, 3>(points_, n0, k, nthreads);
+    MR_fail("unsupported dimensionality");
+    }
+  if (isPyarr<float>(points_))
+    {
+    if (points_.shape(1)==1)
+      return build_graphgp<float, uint32_t, 1>(points_, n0, k, nthreads);
+    if (points_.shape(1)==2)
+      return build_graphgp<float, uint32_t, 2>(points_, n0, k, nthreads);
+    if (points_.shape(1)==3)
+      return build_graphgp<float, uint32_t, 3>(points_, n0, k, nthreads);
+    MR_fail("unsupported dimensionality");
+    }
   MR_fail("unsupported input types");
   }
 
