@@ -1578,23 +1578,10 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
         }
     });
   }
-  py::list res;
-  res.append(alm_);
-  if (map_.ndim()<=2) // just a single transform
-    {
-    res.append(istop[0]);
-    res.append(itn[0]);
-    res.append(rnorm[0]);
-    res.append(sqnorm[0]);
-    }
+  if (map_.ndim()<=2) // single transform?
+    return py::make_tuple(alm_, istop[0], itn[0], rnorm[0], sqnorm[0]);
   else
-    {
-    res.append(istop);
-    res.append(itn);
-    res.append(rnorm);
-    res.append(sqnorm);
-    }
-  return py::tuple(res);
+    return py::make_tuple(alm_, istop, itn, rnorm, sqnorm);
   }
 py::tuple Py_pseudo_analysis(const CNpArr &map, const CNpArr &theta,
  size_t lmax,
