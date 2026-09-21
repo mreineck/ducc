@@ -1910,9 +1910,16 @@ template<typename Tf, typename Ti, size_t ndim> struct Node
   Ti splitdim;
   };
 
-template<typename Ti, typename Swap> void inplace_reorder (const vector<Ti> &idx, Swap swapper)
+template<typename Ti, typename Swap> void inplace_reorder (const vector<Ti> &idx, Swap swapper, bool forward=true)
   {
-  vector<uint8_t> done(idx.size());
+/*
+    forward : the order of permutation
+        If True, the function performs the equivalent of
+            arr = arr[idx]
+        If False, the function performs the equivalent of
+            arr[idx] = arr
+*/
+  vector<bool> done(idx.size(),false);
   for (size_t i=0; i<idx.size(); ++i)
     {
     if (!done[i])
@@ -1921,8 +1928,8 @@ template<typename Ti, typename Swap> void inplace_reorder (const vector<Ti> &idx
       done[i] = 1;
       while (j1!=i)
         {
-        swapper(j0,j1);
-        done[j1]=1;
+        swapper(forward ? j0 : i, j1);
+        done[j1]=true;
         j0 = j1;
         j1 = idx[j1];
         }
