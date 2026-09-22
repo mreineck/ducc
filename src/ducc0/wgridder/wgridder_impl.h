@@ -759,7 +759,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       else
         {
         checkShape(wgt->shape(),{bl.Nvis()});
-        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(gridding?ms_in->shape():ms_out->shape(), {bl.Nvis()});
         checkShape(mask->shape(), {bl.Nvis()});
         }
 
@@ -1671,7 +1671,7 @@ timers.pop();
       else
         {
         checkShape(wgt->shape(),{bl.Nvis()});
-        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(gridding?ms_in->shape():ms_out->shape(), {bl.Nvis()});
         checkShape(mask->shape(), {bl.Nvis()});
         }
 
