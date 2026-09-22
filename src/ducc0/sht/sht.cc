@@ -24,9 +24,6 @@
 #include <vector>
 #include <cmath>
 #include <cstring>
-#if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
-#include <x86intrin.h>
-#endif
 #include "ducc0/infra/simd.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/sphere_interpol.h"
