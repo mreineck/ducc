@@ -290,7 +290,8 @@ class Baselines
       const cmav<uint64_t,1> &freqlist_id,
       const cmav<uint64_t,1> &freqlist_nfreqs,
       const cmav<double,1> &freqlist_freqs,
-      bool flip_u=false, bool flip_v=false, bool flip_w=false, double r_l_=0, double r_m_=0)
+      bool flip_u=false, bool flip_v=false, bool flip_w=false,
+      double r_l_=0, double r_m_=0)
       : r_l(r_l_), r_m(r_m_)
       {
       size_t nrows = coord_.shape(0);
@@ -445,8 +446,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
 
-    double phase(double xsq, double ysq, double w, bool adjoint, double nshift, double x, double y)
+    double phase(double x, double y, double w, bool adjoint, double nshift)
       {
+      auto xsq = x*x;
+      auto ysq = y*y;
       double tmp = 1.-xsq-ysq;
       // more accurate form of sqrt(1-xsq-ysq)-1 for nm1 close to zero
       double nm1 = (tmp>=0) ? (-xsq-ysq)/(sqrt(tmp)+1) : -sqrt(-tmp)-1;
@@ -497,11 +500,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         for (auto i=lo; i<hi; ++i)
           {
           double x = x0+i*pixsize_x;
-          double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, true, nshift, x, y0+i*pixsize_y)); });
+            { return Tcalc(phase(x, y0+i*pixsize_y, w, true, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               {
@@ -642,11 +644,10 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         for(auto i=lo; i<hi; ++i)
           {
           double x = x0+i*pixsize_x;
-          double xsq = sqr(x0+i*pixsize_x);
           size_t ix = nu-nxdirty/2+i;
           if (ix>=nu) ix-=nu;
           expi(phases, buf, [&](size_t i)
-            { return Tcalc(phase(xsq, sqr(y0+i*pixsize_y), w, false, nshift, x, y0+i*pixsize_y)); });
+            { return Tcalc(phase(x, y0+i*pixsize_y, w, false, nshift)); });
           if (lmshift)
             for (size_t j=0, jx=nv-nydirty/2; j<nydirty; ++j, jx=(jx+1>=nv)? jx+1-nv : jx+1)
               grid(ix,jx) = Tcalc(dirty(i,j))*phases[j];
@@ -1598,12 +1599,12 @@ timers.pop();
              ymax = ymin + (nydirty-1)*pixsize_y;
       vector<double> xext{xmin, xmax},
                      yext{ymin, ymax};
-      if ((bl.Rl()!=0) || (bl.Rm()!=0))  // recentering is active
+      if ((bl.Rl()!=0) || (bl.Rm()!=0))  // recentering is active, always check the facet center
         {
         xext.push_back(lshift);
         yext.push_back(mshift);
         }
-      else
+      else  // no recentering, check (0,0) if it is inside the facet
         {
         if (xmin*xmax<0) xext.push_back(0);
         if (ymin*ymax<0) yext.push_back(0);
@@ -1774,7 +1775,7 @@ timers.pop();
       {
       timers.push("Baseline construction");
       double r_l = 0., r_m = 0.;
-#if 1
+#if 1  // switch this off for reverting to old, non-recentering behavior
       if (do_wgridding && lmshift)
         {
         double xextreme = std::abs(lshift) + 0.5*nxdirty*pixsize_x,
