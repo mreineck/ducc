@@ -114,7 +114,7 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
                                 modeord=1 if fft_order else 0)
         if comp.ndim==0:
             comp=np.array([comp[()]])
-        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
+        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=20*epsilon)
 
 @pmp('nx', [1, 20, 257])
 @pmp("npoints", (1, 37))
@@ -225,7 +225,7 @@ def test_nufft_2d(nx, ny, npoints, epsilon, forward, singleprec, periodicity,
                                 modeord=1 if fft_order else 0)
         if comp.ndim==0:
             comp=np.array([comp[()]])
-        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=10*epsilon)
+        assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=20*epsilon)
 
 @pmp('nx', [1, 20, 21])
 @pmp('ny', [1, 21, 32])

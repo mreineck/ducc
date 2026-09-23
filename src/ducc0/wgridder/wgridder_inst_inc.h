@@ -14,8 +14,8 @@ template void dirty2ms<Tcalc, Tacc, Tms, Timg>(const cmav<double,2> &uvw,
 
 template void ms2dirty_bda<Tcalc, Tacc, Tms, Tms_in, Timg>(
     const cmav<double,2> &uvw,                        // (nrows,3)
-    const cmav<size_t,1> &freqlist_id,                // (nrows),
-    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<uint64_t,1> &freqlist_id,              // (nrows),
+    const cmav<uint64_t,1> &freqlist_nfreqs,          // (max(freqlist_id)+1)
     const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
     const Tms_in &ms,
   const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y, double epsilon,
@@ -25,8 +25,8 @@ template void ms2dirty_bda<Tcalc, Tacc, Tms, Tms_in, Timg>(
 
 template void dirty2ms_bda<Tcalc, Tacc, Tms, Timg>(
     const cmav<double,2> &uvw,                        // (nrows,3)
-    const cmav<size_t,1> &freqlist_id,                // (nrows),
-    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<uint64_t,1> &freqlist_id,              // (nrows),
+    const cmav<uint64_t,1> &freqlist_nfreqs,          // (max(freqlist_id)+1)
     const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
   const cmav<Timg,2> &dirty,
   const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,

@@ -156,8 +156,8 @@ template<typename T> static NpArr Py2_vis2dirty_bda(const CNpArr &uvw_,
   bool double_precision_accumulation)
   {
   auto uvw = to_cmav<double,2>(uvw_);
-  auto freqlist_id = to_cmav<size_t,1>(freqlist_id_);
-  auto freqlist_nfreqs = to_cmav<size_t,1>(freqlist_nfreqs_);
+  auto freqlist_id = to_cmav<uint64_t,1>(freqlist_id_);
+  auto freqlist_nfreqs = to_cmav<uint64_t,1>(freqlist_nfreqs_);
   auto freqlist_freqs = to_cmav<double,1>(freqlist_freqs_);
   auto vis = to_cmav<complex<T>,1>(vis_);
   auto wgt = get_OptCNpArr<T>(wgt_, {vis.shape(0)});
@@ -374,8 +374,8 @@ template<typename T> static NpArr Py2_dirty2vis_bda(const CNpArr &uvw_,
   const OptNpArr &vis_, double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   auto uvw = to_cmav<double,2>(uvw_);
-  auto freqlist_id = to_cmav<size_t,1>(freqlist_id_);
-  auto freqlist_nfreqs = to_cmav<size_t,1>(freqlist_nfreqs_);
+  auto freqlist_id = to_cmav<uint64_t,1>(freqlist_id_);
+  auto freqlist_nfreqs = to_cmav<uint64_t,1>(freqlist_nfreqs_);
   auto freqlist_freqs = to_cmav<double,1>(freqlist_freqs_);
   auto dirty = to_cmav<T,2>(dirty_);
   size_t vissize = 0;

@@ -40,7 +40,7 @@
 #endif
 
 #ifdef DUCC0_USE_PDEP_PEXT
-#include <x86intrin.h>
+#include <immintrin.h>
 #endif
 
 namespace ducc0 {
