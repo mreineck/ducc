@@ -389,11 +389,11 @@ nthreads: int
 
 Returns
 -------
-list of float and numpy.ndarray :
+tuple of float and numpy.ndarray :
     Output value and derivative. The derivative has the same shape and dtype as
     `a`.
 )""";
-template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::tuple Py2_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<complex<T>>(a_);
@@ -411,12 +411,9 @@ template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeri
     return redSum(norm(diff)*v3);
     }, nthreads, a, b, c, out).val;
   }
-  py::list lst;
-  lst.append(0.5*res);
-  lst.append(out_);
-  return lst;
+  return py::make_tuple( 0.5*res, out_);
   }
-template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::tuple Py3_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<T>(a_);
@@ -433,13 +430,10 @@ template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeri
     return redSum(diff*diff*v3);
     }, nthreads, a, b, c, out).val;
   }
-  py::list lst;
-  lst.append(0.5*res);
-  lst.append(out_);
-  return lst;
+  return py::make_tuple( 0.5*res, out_);
   }
 
-static py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
+static py::tuple Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
   const CNpArr &c, const OptNpArr &out, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
@@ -998,12 +992,9 @@ static py::tuple scan_kernel(const function<vector<double>(const vector<double> 
       }
     });
   }
-  py::list res;
   py::list parlist;
   for (const auto &p: par_best) parlist.append(p);
-  res.append(err_best);
-  res.append(parlist);
-  return py::tuple(res);
+  return py::make_tuple(err_best, py::tuple(parlist));
   }
 
 template<typename To> static void fill_zero(
@@ -1897,10 +1888,7 @@ static py::tuple native_vector_lengths()
     vlen_f32 = int(native_simd<float>::size());
   if constexpr (vectorizable<double>)
     vlen_f64 = int(native_simd<double>::size());
-  py::list res;
-  res.append (vlen_f32);
-  res.append (vlen_f64);
-  return py::tuple(res);
+  return py::make_tuple(vlen_f32, vlen_f64);
   }
 
 template<typename Tf, typename Ti, size_t ndim> struct Node

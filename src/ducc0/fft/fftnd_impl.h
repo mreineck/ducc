@@ -647,7 +647,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
                      || (((out.stride(axes[iax])*sizeof(T))&4095)==0);
       bool nostride = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
 
-      constexpr size_t l2cache=262144*2;
+      constexpr size_t l2cache=size_t(1)<<20;
       constexpr size_t cacheline=64;
 
       // working set size
