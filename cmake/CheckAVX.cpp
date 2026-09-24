@@ -10,8 +10,8 @@ bool is_sse_supported() {
 
 bool is_avx2_supported() {
     std::array<int, 4> cpui;
-    __cpuid(cpui.data(), 1);
-    return (cpui[2] & (1 << 5)) != 0;
+    __cpuidex(cpui.data(), 7, 0);
+    return (cpui[1] & (1 << 5)) != 0;
 }
 
 bool is_avx512_supported() {
