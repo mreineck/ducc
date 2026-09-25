@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(DEFINED ENV{DUCC0_OPTIMIZATION})
     set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
@@ -33,6 +34,12 @@ set(PYMOD_SOURCES
     python/misc_pymod.cc python/healpix_pymod.cc
     python/pointingprovider_pymod.cc python/ducc.cc)
 
+add_library(${PKGNAME}_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+if (MULTIARCH)
+    add_library(${PKGNAME}_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    add_library(${PKGNAME}_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+endif()
+
 if (DEFINED ENV{DUCC0_USE_NANOBIND})
     execute_process(
             COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -58,11 +65,16 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
 #    )
 else()
     find_package(pybind11 REQUIRED)
-    pybind11_add_module(${PKGNAME} NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
     if (MULTIARCH)
-        pybind11_add_module(${PKGNAME}_v1 NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
-        pybind11_add_module(${PKGNAME}_v3 NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
-        pybind11_add_module(${PKGNAME}_v4 NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
+        target_include_directories(${PKGNAME}_v1 PRIVATE ${pybind11_INCLUDE_DIRS})
+        target_include_directories(${PKGNAME}_v3 PRIVATE ${pybind11_INCLUDE_DIRS})
+        target_include_directories(${PKGNAME}_v4 PRIVATE ${pybind11_INCLUDE_DIRS})
+        pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver_multiarch.cc)
+        target_link_libraries(${PKGNAME} PRIVATE ${PKGNAME}_v1 ${PKGNAME}_v3 ${PKGNAME}_v4)
+    else()
+        target_include_directories(${PKGNAME}_v1 PRIVATE ${pybind11_INCLUDE_DIRS})
+        pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver_single.cc)
+        target_link_libraries(${PKGNAME} PRIVATE ducc0_v1)
     endif()
 endif()
 
@@ -151,19 +163,21 @@ else()
     target_link_libraries(${PKGNAME} PRIVATE Threads::Threads)
 endif()
 
-target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
+target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME} DUCC0_NAMESPACE=${PKGNAME})
+target_compile_definitions(${PKGNAME}_v1 PRIVATE ${DEFS} PKGNAME=${PKGNAME} DUCC0_NAMESPACE=${PKGNAME})
 target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+target_compile_options(${PKGNAME}_v1 PRIVATE ${COMP_OPTS})
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
 target_compile_features(${PKGNAME} PRIVATE cxx_std_17)
+target_compile_features(${PKGNAME}_v1 PRIVATE cxx_std_17)
 
 set_property(TARGET ${PKGNAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
 install(TARGETS ${PKGNAME} LIBRARY DESTINATION .)
 
 if (MULTIARCH)
-    target_compile_definitions(${PKGNAME}_v1 PRIVATE ${DEFS} PKGNAME=${PKGNAME}_v1 DUCC0_TARGET=v1)
-    target_compile_definitions(${PKGNAME}_v3 PRIVATE ${DEFS} PKGNAME=${PKGNAME}_v3 DUCC0_TARGET=v3)
-    target_compile_definitions(${PKGNAME}_v4 PRIVATE ${DEFS} PKGNAME=${PKGNAME}_v4 DUCC0_TARGET=v4)
+    target_compile_definitions(${PKGNAME}_v3 PRIVATE ${DEFS} PKGNAME=${PKGNAME}_v3 DUCC0_NAMESPACE=${PKGNAME}_v3 DUCC0_TARGET=v3)
+    target_compile_definitions(${PKGNAME}_v4 PRIVATE ${DEFS} PKGNAME=${PKGNAME}_v4 DUCC0_NAMESPACE=${PKGNAME}_v4 DUCC0_TARGET=v4)
     target_compile_options(${PKGNAME}_v1 PRIVATE ${COMP_OPTS} -march=x86-64)
     target_compile_options(${PKGNAME}_v3 PRIVATE ${COMP_OPTS} -march=x86-64-v3)
     target_compile_options(${PKGNAME}_v4 PRIVATE ${COMP_OPTS} -march=x86-64-v4)

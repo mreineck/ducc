@@ -70,7 +70,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <experimental/simd>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 
@@ -192,7 +192,7 @@ template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *p
 
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 

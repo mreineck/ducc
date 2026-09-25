@@ -93,7 +93,7 @@ static_assert(false, "DUCC0_STDCXX_LOWLEVEL_THREADING must not be defined extern
 // no headers needed
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 namespace detail_threading {
 
 using std::size_t;
@@ -119,7 +119,7 @@ class thread_pool
 #include "ducc0_custom_lowlevel_threading.h"
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_threading {
 
@@ -332,6 +332,6 @@ using detail_threading::execGuided;
 using detail_threading::execParallel;
 using detail_threading::execWorklist;
 
-} // end of namespace ducc0
+} // end of namespace DUCC0_NAMESPACE
 
 #endif

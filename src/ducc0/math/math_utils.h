@@ -37,7 +37,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_math_utils {
 

@@ -43,7 +43,7 @@
 #include <immintrin.h>
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 // Naming conventions
 // - 2D/3D: function works on 2D/3D integer coordinates

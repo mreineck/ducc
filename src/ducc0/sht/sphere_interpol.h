@@ -48,7 +48,7 @@
 #include "ducc0/infra/timers.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sphereinterpol {
 
@@ -417,8 +417,8 @@ template<typename T> class SphereInterpol
         kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
           {(2*ntheta_s-2), nphi_s}, npoints, true, nthreads)),
         kernel(selectKernel(kernel_index)),
-        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*mmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
-        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*mmax+1)*DUCC0_NAMESPACE::getKernel(kernel_index).ofactor/2.)))),
+        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*DUCC0_NAMESPACE::getKernel(kernel_index).ofactor))+1)),
         dphi(2*pi/nphi_b),
         dtheta(pi/(ntheta_b-1)),
         xdphi(1./dphi),
@@ -480,7 +480,7 @@ template<typename T> class SphereInterpol
       alm2leg(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       timers.poppush("theta resampling and deconvolution");
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
       timers.poppush("phi FFT and deconvolution");
       // fix phi
@@ -630,7 +630,7 @@ template<typename T> class SphereInterpol
         mval(i) = i;
 
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
       timers.poppush("leg2alm");
       leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);

@@ -1,6 +1,6 @@
 #include "ducc0/wgridder/wgridder_impl.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 namespace detail_gridder {
 
 using namespace std;

@@ -47,7 +47,7 @@
 #include "ducc0/math/math_utils.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_totalconvolve {
 
@@ -365,9 +365,9 @@ template<typename T> class ConvolverPlan
         kernel_index(findNufftKernel<T,T>(epsilon, sigma_min, sigma_max,
           {(2*ntheta_s-2), nphi_s, npsi_s}, npoints, true, nthreads)),
         kernel(selectKernel(kernel_index)),
-        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*ducc0::getKernel(kernel_index).ofactor/2.)))),
-        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*ducc0::getKernel(kernel_index).ofactor))+1)),
-        npsi_b(size_t(npsi_s*ducc0::getKernel(kernel_index).ofactor+0.99999)),
+        nphi_b(std::max<size_t>(20,2*good_size_real(size_t((2*lmax+1)*DUCC0_NAMESPACE::getKernel(kernel_index).ofactor/2.)))),
+        ntheta_b(std::max<size_t>(21,good_size_real(size_t((lmax+1)*DUCC0_NAMESPACE::getKernel(kernel_index).ofactor))+1)),
+        npsi_b(size_t(npsi_s*DUCC0_NAMESPACE::getKernel(kernel_index).ofactor+0.99999)),
         dphi(2*pi/nphi_b),
         dtheta(pi/(ntheta_b-1)),
         dpsi(2*pi/npsi_b),
@@ -467,7 +467,7 @@ template<typename T> class ConvolverPlan
         }
       alm2leg(aarr, leg_s, mbeam, lmax, mval, mstart, 1, theta, nthreads, STANDARD);
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, mbeam, nthreads, false);
       // fix phi
       size_t nj=2*lmax+1;
@@ -626,7 +626,7 @@ template<typename T> class ConvolverPlan
         }
 
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, mbeam, nthreads, true);
 
       vector<T>lnorm(lmax+1);

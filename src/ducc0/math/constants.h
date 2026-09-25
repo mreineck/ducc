@@ -29,7 +29,7 @@
 #ifndef DUCC0_CONSTANTS_H
 #define DUCC0_CONSTANTS_H
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 /*! \defgroup mathconstgroup Mathematical constants */
 /*! \{ */

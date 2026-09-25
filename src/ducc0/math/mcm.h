@@ -33,7 +33,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/wigner3j.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 using namespace std;
 
@@ -197,12 +197,12 @@ template<typename Tout> void coupling_matrix_spin0_rect(const cmav<double,2> &sp
   auto spec2(vmav<double,2>::build_noncritical({nspec, lmax_spec_used+1+vlen-1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t i=0; i<nspec; ++i)
-      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+      spec2(i,l) = spec(i,l)/DUCC0_NAMESPACE::fourpi*(2.*l+1.);
   for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
     for (size_t i=0; i<nspec; ++i)
       spec2(i,l) = 0.;
   auto diag(vmav<Tout,2>::build_noncritical({nspec, lmax+1}));
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+  execDynamic(lmax+1, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
     {
     vmav<Tsimd,1> resfullv({lmax+1});
     vmav<Tsimd,1> val_({nspec});
@@ -394,12 +394,12 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect(
     ({nspec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t i=0; i<nspec; ++i)
-      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+      spec2(i,l) = spec(i,l)/DUCC0_NAMESPACE::fourpi*(2.*l+1.);
   for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
     for (size_t i=0; i<nspec; ++i)
       spec2(i,l) = 0.;
   auto diag(vmav<Tout,2>::build_noncritical({nmat, lmax+1}));
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+  execDynamic(lmax+1, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
     {
 // res arrays are one larger to make loops simpler below
     vmav<Tsimd,2> wig({2, 2*lmax+1+1});
@@ -563,13 +563,13 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect_new(
     ({nspec, lmax_spec_used+1+vlen-1+1}, PAGE_IN(nthreads)));
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t i=0; i<nspec; ++i)
-      spec2(i,l) = spec(i,l)/ducc0::fourpi*(2.*l+1.);
+      spec2(i,l) = spec(i,l)/DUCC0_NAMESPACE::fourpi*(2.*l+1.);
   for (size_t l=lmax_spec_used+1; l<spec2.shape(1); ++l)
     for (size_t i=0; i<nspec; ++i)
       spec2(i,l) = 0.;
   auto diag(vmav<Tout,2>::build_noncritical({nmat, lmax+1}));
   Wigner3j_direct_tables<Tsimd> wtables(lmax);
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+  execDynamic(lmax+1, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
     {
     Wigner3j_direct<Tsimd> w3j(wtables);
     vmav<array<Tsimd,4>,1> val_({nspec});
@@ -652,7 +652,7 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
   for (size_t l=0; l<=lmax_spec_used; ++l)
     for (size_t j=0; j<ncomp_spec; ++j)
       for (size_t i=0; i<nspec; ++i)
-        spec2(i,j,l) = spec(i,j,l)/ducc0::fourpi*(2.*l+1.);
+        spec2(i,j,l) = spec(i,j,l)/DUCC0_NAMESPACE::fourpi*(2.*l+1.);
   for (size_t l=lmax_spec_used+1; l<spec2.shape(2); ++l)
     for (size_t j=0; j<ncomp_spec; ++j)
       for (size_t i=0; i<nspec; ++i)
@@ -663,7 +663,7 @@ template<typename Tout> void coupling_matrix_spin0and2_pure(const cmav<double,3>
     nom1[el3] = 2.*sqrt((el3+1.)*el3);
     nom2[el3] = sqrt((el3+2.)*(el3+1.)*el3*(el3-1.));
     }
-  execDynamic(lmax+1, nthreads, 1, [&](ducc0::Scheduler &sched)
+  execDynamic(lmax+1, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
     {
     // res arrays are one larger to make loops simpler below
     vmav<Tsimd,2> wig({6, 2*lmax+1+1});

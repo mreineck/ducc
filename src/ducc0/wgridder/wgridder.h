@@ -23,7 +23,7 @@
 #include <complex>
 #include "ducc0/infra/mav.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gridder {
 
@@ -77,6 +77,6 @@ using detail_gridder::dirty2ms;
 using detail_gridder::ms2dirty_bda;
 using detail_gridder::dirty2ms_bda;
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif
