@@ -35,9 +35,6 @@
 #include <array>
 #include <atomic>
 #include <memory>
-#if ((!defined(DUCC0_NO_SIMD)) && (defined(__AVX__)||defined(__SSE3__)))
-#include <x86intrin.h>
-#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -62,6 +59,8 @@ template<typename T> constexpr inline int mysimdlen
   = min<int>(8, native_simd<T>::size());
 
 template<typename T> using mysimd = typename simd_select<T,mysimdlen<T>>::type;
+
+using detail_gridding_kernel::hsum_cmplx;
 
 template<typename T> T sqr(T val) { return val*val; }
 
@@ -110,42 +109,6 @@ template<typename T, typename F> [[gnu::hot]] void expi(vector<complex<T>> &res,
   for (; i<n; ++i)
     res[i] = complex<T>(cos(buf[i]), sin(buf[i]));
   }
-
-template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
-  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
-
-#if (!defined(DUCC0_NO_SIMD))
-#if (defined(__AVX__))
-#if 1
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
-  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
-  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
-  return complex<float>(t2[0], t2[1]);
-  }
-#else
-// this version may be slightly faster, but this needs more benchmarking
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
-  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
-  auto t3 = _mm256_add_ps(t1,t2);
-  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
-  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
-  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
-  return complex<float>(t5[0], t5[1]);
-  }
-#endif
-#elif defined(__SSE3__)
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
-  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
-  return complex<float>(t1[0], t1[2]);
-  }
-#endif
-#endif
 
 template<size_t ndim> void checkShape
   (const array<size_t, ndim> &shp1, const array<size_t, ndim> &shp2)
@@ -285,8 +248,8 @@ class Baselines
     Baselines() = default;
     template<typename T> Baselines(
       const cmav<T,2> &coord_,
-      const cmav<size_t,1> &freqlist_id,
-      const cmav<size_t,1> &freqlist_nfreqs,
+      const cmav<uint64_t,1> &freqlist_id,
+      const cmav<uint64_t,1> &freqlist_nfreqs,
       const cmav<double,1> &freqlist_freqs,
       bool flip_u=false, bool flip_v=false, bool flip_w=false)
       {
@@ -294,7 +257,7 @@ class Baselines
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
       MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
-      size_t max_id = 0;
+      uint64_t max_id = 0;
       for (size_t i=0; i<nrows; ++i)
         max_id = max(max_id, freqlist_id(i));
       MR_assert(max_id+1<=freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
@@ -759,7 +722,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       else
         {
         checkShape(wgt->shape(),{bl.Nvis()});
-        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(gridding?ms_in->shape():ms_out->shape(), {bl.Nvis()});
         checkShape(mask->shape(), {bl.Nvis()});
         }
 
@@ -1671,7 +1634,7 @@ timers.pop();
       else
         {
         checkShape(wgt->shape(),{bl.Nvis()});
-        checkShape((gridding?ms_in:ms_out)->shape(), {bl.Nvis()});
+        checkShape(gridding?ms_in->shape():ms_out->shape(), {bl.Nvis()});
         checkShape(mask->shape(), {bl.Nvis()});
         }
 
@@ -1716,8 +1679,8 @@ timers.pop();
 
   public:
     Wgridder(const cmav<double,2> &uvw,
-           const cmav<size_t,1> &freqlist_id,                // (nrows),
-           const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+           const cmav<uint64_t,1> &freqlist_id,              // (nrows),
+           const cmav<uint64_t,1> &freqlist_nfreqs,          // (max(freqlist_id)+1)
            const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
            const Tms_in *ms_in_, const Tms2d_in *ms2d_in_,
            const vmav<complex<Tms>,1> *ms_out_,
@@ -1801,8 +1764,8 @@ timers.pop();
 template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg>
   void ms2dirty_bda(
     const cmav<double,2> &uvw,                        // (nrows,3)
-    const cmav<size_t,1> &freqlist_id,                // (nrows),
-    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<uint64_t,1> &freqlist_id,              // (nrows),
+    const cmav<uint64_t,1> &freqlist_nfreqs,          // (max(freqlist_id)+1)
     const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
     const Tms_in &ms,                                 // concatenated array of visibilities, shape (sum_i(freqlist_nfreq[freqlist_id[i]))
     const cmav<Tms,1> &wgt_,                          // same shape as above
@@ -1827,8 +1790,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
   double sigma_max, double center_x, double center_y, bool allow_nshift)
   {
   auto dirty_in(vmav<Timg,2>::build_empty());
-  auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
-  auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
+  auto freqlist_id = cmav<uint64_t,1>::build_uniform({ms.shape(0)},0);
+  auto freqlist_nfreqs = cmav<uint64_t,1>::build_uniform({1},freq.shape(0));
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg, cmav<complex<Tms>,1>, Tms_in> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, &ms, nullptr, nullptr, dirty_in, dirty, nullptr, &wgt, nullptr, &mask, pixsize_x,
@@ -1839,8 +1802,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
 template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
   void dirty2ms_bda(
     const cmav<double,2> &uvw,
-    const cmav<size_t,1> &freqlist_id,                // (nrows),
-    const cmav<size_t,1> &freqlist_nfreqs,            // (max(freqlist_id)+1)
+    const cmav<uint64_t,1> &freqlist_id,              // (nrows),
+    const cmav<uint64_t,1> &freqlist_nfreqs,          // (max(freqlist_id)+1)
     const cmav<double,1> &freqlist_freqs,             // (sum(freqlist_nfreqs), concatenated frequency lists for all freqlist_ids
     const cmav<Timg,2> &dirty,
     const cmav<Tms,1> &wgt_, const cmav<uint8_t,1> &mask_, double pixsize_x, double pixsize_y,
@@ -1865,8 +1828,8 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
   {
   if (ms.size()==0) return;  // nothing to do
   auto dirty_out(vmav<Timg,2>::build_empty());
-  auto freqlist_id = cmav<size_t,1>::build_uniform({ms.shape(0)},0);
-  auto freqlist_nfreqs = cmav<size_t,1>::build_uniform({1},freq.shape(0));
+  auto freqlist_id = cmav<uint64_t,1>::build_uniform({ms.shape(0)},0);
+  auto freqlist_nfreqs = cmav<uint64_t,1>::build_uniform({1},freq.shape(0));
   auto wgt(wgt_.size()!=0 ? wgt_ : wgt_.build_uniform(ms.shape(), 1.));
   auto mask(mask_.size()!=0 ? mask_ : mask_.build_uniform(ms.shape(), 1));
   Wgridder<Tcalc, Tacc, Tms, Timg> par(uvw, freqlist_id, freqlist_nfreqs, freq, nullptr, nullptr, nullptr, &ms, dirty, dirty_out, nullptr, &wgt, nullptr, &mask, pixsize_x,
