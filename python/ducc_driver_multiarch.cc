@@ -80,10 +80,13 @@ void print_flag(const char *name, bool value)
 
 int psabi_level()
   {
-#if defined(DUCC0_CPU_X86)
+#if defined(DUCC0_CPU_X86_64)
   const auto leaf0 = cpuid(0, 0);
   const auto leaf1 = (leaf0.eax>=1) ? cpuid(1, 0) : cpuid_result{0,0,0,0};
   const auto leaf7 = (leaf0.eax>=7) ? cpuid(7, 0) : cpuid_result{0,0,0,0};
+  const uint32_t high = 0x80000000;
+  const auto leaf_high0 = cpuid(high, 0);
+  const auto leaf_high1 = (leaf_high0.eax>=high+1) ? cpuid(high+1, 0) : cpuid_result{0,0,0,0};
 
   const bool fpu = has_bit(leaf1.edx, 0);
   const bool cx8 = has_bit(leaf1.edx, 8);
@@ -98,6 +101,7 @@ int psabi_level()
   const bool cx16 = has_bit(leaf1.ecx, 13);
   const bool sse41 = has_bit(leaf1.ecx, 19);
   const bool sse42 = has_bit(leaf1.ecx, 20);
+  const bool movbe = has_bit(leaf1.ecx, 22);
   const bool popcnt = has_bit(leaf1.ecx, 23);
   const bool xsave = has_bit(leaf1.ecx, 26);
   const bool osxsave = has_bit(leaf1.ecx, 27);
@@ -112,6 +116,8 @@ int psabi_level()
   const bool avx512cd = has_bit(leaf7.ebx, 28);
   const bool avx512bw = has_bit(leaf7.ebx, 30);
   const bool avx512vl = has_bit(leaf7.ebx, 31);
+
+  const bool lzcnt = has_bit(leaf_high1.ecx, 5);
 
   std::uint64_t xcr0 = 0;
   if (xsave && osxsave)
@@ -130,6 +136,7 @@ int psabi_level()
   int lvl = 0;
   // Level 1: always present on x86_64
   // includes CMOV, CX8, FPU, FXSR, MMX, OSFXSR, SCE, SSE, SSE2
+  // MR: no idea how to check for OSFXSR and SCE ...
   if (cmov && cx8 && fpu && fxsr && mmx && sse && sse2)
 {
 cout << "lvl1 detected" << endl;
@@ -137,6 +144,7 @@ cout << "lvl1 detected" << endl;
 }
   // Level 2:
   // includes CMPXCHG16B, LAHF-SAHF, POPCNT, SSE3, SSE4_1, SSE4_2, SSSE3
+  // MR: no idea how to check for LAHF-SAHF ...
   if ((lvl==1) && cx16 && popcnt && sse3 && sse41 && sse42 && ssse3)
 {
 cout << "lvl2 detected" << endl;
@@ -144,7 +152,7 @@ cout << "lvl2 detected" << endl;
 }
   // Level 3:
   // includes AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE, OSXSAVE
-  if (avx_usable && avx2_usable && bmi1 && bmi2 && f16c && fma_usable && osxsave)
+  if (avx_usable && avx2_usable && bmi1 && bmi2 && f16c && fma_usable && lzcnt && movbe && osxsave)
 {
 cout << "lvl3 detected" << endl;
     lvl = 3;
