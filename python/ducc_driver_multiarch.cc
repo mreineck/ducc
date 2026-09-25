@@ -14,7 +14,7 @@ namespace py = nanobind;
 namespace py = pybind11;
 #endif
 
-namespace ducc0 { void add_ducc0(py::module_ &m); }
+namespace ducc0_v1 { void add_ducc0(py::module_ &m); }
 namespace ducc0_v3 { void add_ducc0(py::module_ &m); }
 namespace ducc0_v4 { void add_ducc0(py::module_ &m); }
 
@@ -45,5 +45,5 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
     if (string(evar) == "v4") return ducc0_v4::add_ducc0(m);
     if (string(evar) == "v3") return ducc0_v3::add_ducc0(m);
     }
-  ducc0::add_ducc0(m);
+  ducc0_v1::add_ducc0(m);
   }

@@ -20,10 +20,6 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
   {
 #define DUCC0_XSTRINGIFY(s) DUCC0_STRINGIFY(s)
 #define DUCC0_STRINGIFY(s) #s
-#if defined (DUCC0_TARGET)
-  MR_assert(cpu_supports(DUCC0_XSTRINGIFY(DUCC0_TARGET)),
-    "required CPU feature not supported by this CPU");
-#endif
   m.attr("__version__") = DUCC0_XSTRINGIFY(PKGVERSION);
 #undef DUCC0_STRINGIFY
 #undef DUCC0_XSTRINGIFY
