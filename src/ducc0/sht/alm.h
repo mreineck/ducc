@@ -549,7 +549,7 @@ template<size_t Ncomp, typename T> void rothelper
   auto mmax_in = base_in.Mmax();
   auto mmax_out = base_out.Mmax();
 
-  execDynamic(lmax-1,nthreads,1,[&](DUCC0_NAMESPACE::Scheduler &sched)
+  execDynamic(lmax-1,nthreads,1,[&](Scheduler &sched)
     {
     vector<complex<T>> talm(Ncomp*(lmax+1));
     // "+3" is just some safety margin; I was too lazy to calculate the required minimum

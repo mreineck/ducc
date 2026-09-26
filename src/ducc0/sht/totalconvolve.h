@@ -467,7 +467,7 @@ template<typename T> class ConvolverPlan
         }
       alm2leg(aarr, leg_s, mbeam, lmax, mval, mstart, 1, theta, nthreads, STANDARD);
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, mbeam, nthreads, false);
       // fix phi
       size_t nj=2*lmax+1;
@@ -626,7 +626,7 @@ template<typename T> class ConvolverPlan
         }
 
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, mbeam, nthreads, true);
 
       vector<T>lnorm(lmax+1);

@@ -480,7 +480,7 @@ template<typename T> class SphereInterpol
       alm2leg(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       timers.poppush("theta resampling and deconvolution");
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
       timers.poppush("phi FFT and deconvolution");
       // fix phi
@@ -630,7 +630,7 @@ template<typename T> class SphereInterpol
         mval(i) = i;
 
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      DUCC0_NAMESPACE::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
       timers.poppush("leg2alm");
       leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
