@@ -18,6 +18,9 @@
 
 - wgridder:
   - new "bda" interface allowing more flexible channel frequencies.
+  - new recentering algorithm proposed by Peter Wortmann to reduce the
+    numer of w-planes in off-center transforms, with helpful fixes by
+    Albert M. W. Yau
   - removed the experimental "tuning" methods, which did not provide the
     expected performance gain.
 
