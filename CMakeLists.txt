@@ -1,3 +1,6 @@
+# TODO:
+# - make multiarch work on Windows x86_64? Do we care enough?
+# - make multiarch work on ARM?
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
