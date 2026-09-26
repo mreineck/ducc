@@ -1,12 +1,8 @@
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
-#else
-#include <pybind11/pybind11.h>
-#endif
-
-#ifdef DUCC0_USE_NANOBIND
 namespace py = nanobind;
 #else
+#include <pybind11/pybind11.h>
 namespace py = pybind11;
 #endif
 
