@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION True)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_STANDARD 17)
 
 if(DEFINED ENV{DUCC0_OPTIMIZATION})
     set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
 else()
     set (OPTFLAGS "native-strip")
 endif()
-
+if (DEFINED ENV{DUCC0_MULTIARCH} AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    set (MULTIARCH ON)
+else()
+    set (MULTIARCH OFF)
+endif()
 set(PKGNAME ${SKBUILD_PROJECT_NAME})
 set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
@@ -29,14 +37,35 @@ set(PYMOD_SOURCES
     python/misc_pymod.cc python/healpix_pymod.cc
     python/pointingprovider_pymod.cc python/ducc.cc)
 
+if (MULTIARCH)
+    add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+else()
+    add_library(${PKGNAME}_lib OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+endif()
+
 if (DEFINED ENV{DUCC0_USE_NANOBIND})
     execute_process(
             COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
             OUTPUT_STRIP_TRAILING_WHITESPACE
             OUTPUT_VARIABLE NB_DIR)
+    execute_process(
+            COMMAND "${Python_EXECUTABLE}" -m nanobind --include_dir
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            OUTPUT_VARIABLE NB_INCDIR)
     list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
     find_package(nanobind CONFIG REQUIRED)
-    nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set(INC_DIRS ${INC_DIRS} ${NB_INCDIR} ${Python_INCLUDE_DIRS})
+    if (MULTIARCH)
+        nanobind_compile_options(${PKGNAME}_lib_v1)
+        nanobind_compile_options(${PKGNAME}_lib_v3)
+        nanobind_compile_options(${PKGNAME}_lib_v4)
+        nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE python/ducc_driver_multiarch.cc)
+    else()
+        nanobind_compile_options(${PKGNAME}_lib)
+        nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE python/ducc_driver_single.cc)
+    endif()
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
 # Enable this if stubs are required
 #    nanobind_add_stub(
@@ -49,10 +78,13 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
 #    )
 else()
     find_package(pybind11 REQUIRED)
-    pybind11_add_module(${PKGNAME} NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
+    if (MULTIARCH)
+        pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver_multiarch.cc)
+    else()
+        pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver_single.cc)
+    endif()
 endif()
-
-set (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
 
 if (NOT MSVC)
     if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc|ppc64|powerpc|powerpc64" OR (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "ppc|ppc64"))
@@ -137,11 +169,28 @@ else()
     target_link_libraries(${PKGNAME} PRIVATE Threads::Threads)
 endif()
 
-target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
+# settings for the final compile/link step
+target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME} PKGVERSION=${PKGVERSION})
 target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
-target_compile_features(${PKGNAME} PRIVATE cxx_std_17)
 
-set_property(TARGET ${PKGNAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+# setting s for the library part(s)
+if (MULTIARCH)
+    target_include_directories(${PKGNAME}_lib_v1 SYSTEM PRIVATE ${INC_DIRS})
+    target_include_directories(${PKGNAME}_lib_v3 SYSTEM PRIVATE ${INC_DIRS})
+    target_include_directories(${PKGNAME}_lib_v4 SYSTEM PRIVATE ${INC_DIRS})
+    target_compile_definitions(${PKGNAME}_lib_v1 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v1)
+    target_compile_definitions(${PKGNAME}_lib_v3 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v3)
+    target_compile_definitions(${PKGNAME}_lib_v4 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v4)
+    target_compile_options(${PKGNAME}_lib_v1 PRIVATE ${COMP_OPTS} -march=x86-64)
+    target_compile_options(${PKGNAME}_lib_v3 PRIVATE ${COMP_OPTS} -march=x86-64-v3)
+    target_compile_options(${PKGNAME}_lib_v4 PRIVATE ${COMP_OPTS} -march=x86-64-v4)
+    target_link_libraries(${PKGNAME} PRIVATE ${PKGNAME}_lib_v1 ${PKGNAME}_lib_v3 ${PKGNAME}_lib_v4)
+else()
+    target_include_directories(${PKGNAME}_lib SYSTEM PRIVATE ${INC_DIRS})
+    target_compile_definitions(${PKGNAME}_lib PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME})
+    target_compile_options(${PKGNAME}_lib PRIVATE ${COMP_OPTS})
+    target_link_libraries(${PKGNAME} PRIVATE ${PKGNAME}_lib)
+endif()
 
 install(TARGETS ${PKGNAME} LIBRARY DESTINATION .)

@@ -25,7 +25,7 @@
 
 using namespace std;
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_types {
 

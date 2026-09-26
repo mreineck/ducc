@@ -31,7 +31,7 @@
 #include "ducc0/fft/fft.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sht {
 
@@ -255,7 +255,7 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
   double epsilon = is_same<T,float>::value ? 1e-7 : 2e-13;
   auto kernel_index = findNufftKernel<double,double>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
                                            theta.shape(0), true, nthreads);
-  auto kernel = ducc0::getKernel(kernel_index);
+  auto kernel = DUCC0_NAMESPACE::getKernel(kernel_index);
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
   const size_t nborder = kernel.W/2+2;
@@ -337,7 +337,7 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
   double epsilon = is_same<T,float>::value ? 1e-7 : 2e-13;
   auto kernel_index = findNufftKernel<double,double>(epsilon, 1.1, 2.6, {2*ntheta_s-2},
                                            theta.shape(0), true, nthreads);
-  auto kernel = ducc0::getKernel(kernel_index);
+  auto kernel = DUCC0_NAMESPACE::getKernel(kernel_index);
   auto poly = selectKernel(kernel_index);
   auto ntheta_b = std::max<size_t>(21,good_size_real(size_t((lmax+1)*kernel.ofactor))+1);
   const size_t nborder = kernel.W/2+2;

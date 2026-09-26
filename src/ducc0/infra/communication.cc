@@ -26,7 +26,7 @@
 #include "ducc0/infra/communication.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_communication {
 

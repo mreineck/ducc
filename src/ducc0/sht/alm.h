@@ -39,7 +39,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/unity_roots.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_alm {
 
@@ -549,7 +549,7 @@ template<size_t Ncomp, typename T> void rothelper
   auto mmax_in = base_in.Mmax();
   auto mmax_out = base_out.Mmax();
 
-  execDynamic(lmax-1,nthreads,1,[&](ducc0::Scheduler &sched)
+  execDynamic(lmax-1,nthreads,1,[&](DUCC0_NAMESPACE::Scheduler &sched)
     {
     vector<complex<T>> talm(Ncomp*(lmax+1));
     // "+3" is just some safety margin; I was too lazy to calculate the required minimum

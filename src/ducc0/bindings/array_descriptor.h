@@ -25,7 +25,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/bindings/typecode.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_array_descriptor {
 

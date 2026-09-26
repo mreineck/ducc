@@ -87,7 +87,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * \authors Martin Reinecke, Peter Bell
  */
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_fft {
 
@@ -171,7 +171,7 @@ struct util // hack to avoid duplicate symbols
     size_t size = info.size();
     if (size<32768) return 1;  // not worth opening a parallel region
     size_t max_parallel = size / info.shape(axis);
-    size_t max_threads = ducc0::adjust_nthreads(nthreads);
+    size_t max_threads = DUCC0_NAMESPACE::adjust_nthreads(nthreads);
     return std::max(size_t(1), std::min(max_parallel, max_threads));
     }
   };
@@ -1850,6 +1850,6 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &
 
 } // namespace detail_fft
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif // POCKETFFT_HDRONLY_H

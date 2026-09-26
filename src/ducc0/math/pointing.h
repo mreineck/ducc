@@ -36,7 +36,7 @@
 #include <iostream>
 #include "ducc0/math/vec3.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 /*! \defgroup pointinggroup Pointings */
 /*! \{ */

@@ -24,7 +24,7 @@
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/totalconvolve.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_totalconvolve {
 

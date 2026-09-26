@@ -37,7 +37,7 @@
 #include "ducc0/infra/timers.h"
 #include "ducc0/sht/sht_inner_loop.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sht {
 
@@ -271,7 +271,7 @@ void get_gridweights(const string &type, const vmav<double,1> &wgt)
   size_t nrings=wgt.shape(0);
   if (type=="GL") // Gauss-Legendre
     {
-    ducc0::GL_Integrator integ(nrings);
+    DUCC0_NAMESPACE::GL_Integrator integ(nrings);
     auto xwgt = integ.weights();
     for (size_t m=0; m<nrings; ++m)
       wgt(m) = 2*pi*xwgt[m];
@@ -681,7 +681,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
         f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
       }
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    DUCC0_NAMESPACE::execDynamic(nm, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({nalm,lmax+2+spin}, UNINITIALIZED);
@@ -726,7 +726,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
     auto &rdata(rdata_normal);
     YlmBase base(lmax, mmax, spin);
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    DUCC0_NAMESPACE::execDynamic(nm, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
@@ -875,7 +875,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
         f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
       }
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    DUCC0_NAMESPACE::execDynamic(nm, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({2, lmax+2+spin}, UNINITIALIZED);
@@ -919,7 +919,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
     auto &rdata(rdata_normal);
     YlmBase base(lmax, mmax, spin);
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    DUCC0_NAMESPACE::execDynamic(nm, nthreads, 1, [&](DUCC0_NAMESPACE::Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
@@ -1488,7 +1488,7 @@ void get_ringtheta_2d(const string &type, const vmav<double, 1> &theta)
 
   if (type=="GL") // Gauss-Legendre
     {
-    ducc0::GL_Integrator integ(nrings);
+    DUCC0_NAMESPACE::GL_Integrator integ(nrings);
     auto th = integ.thetas();
     for (size_t m=0; m<nrings; ++m)
       theta(m) = th[nrings-1-m];

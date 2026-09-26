@@ -38,7 +38,7 @@
 #include <vector>
 #include <complex>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_sht {
 
