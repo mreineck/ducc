@@ -1,24 +1,21 @@
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
-#else
-#include <pybind11/pybind11.h>
-#endif
-#include <string>
-#include <cstdlib>
-#include <cstdint>
-#include <iostream>
-
-using namespace std;
-
-#ifdef DUCC0_USE_NANOBIND
 namespace py = nanobind;
 #else
+#include <pybind11/pybind11.h>
 namespace py = pybind11;
 #endif
 
+#ifdef DUCC0_MULTIARCH
+
+#include <cstdlib>
+#include <cstdint>
+
+using namespace std;
+
 #if defined(__x86_64__) || defined(_M_X64)
 #define DUCC0_CPU_X86
-#define DUCC0_CPU_X86_64
+//#define DUCC0_CPU_X86_64
 #elif defined(__i386__) || defined(_M_IX86)
 #define DUCC0_CPU_X86
 #endif
@@ -36,9 +33,7 @@ namespace {
 #if defined(DUCC0_CPU_X86)
 
 struct cpuid_result
-  {
-  std::uint32_t eax, ebx, ecx, edx;
-  };
+  { std::uint32_t eax, ebx, ecx, edx; };
 
 cpuid_result cpuid(std::uint32_t leaf, std::uint32_t subleaf)
   {
@@ -70,12 +65,6 @@ std::uint64_t read_xcr(std::uint32_t index)
   return (std::uint64_t(edx)<<32) | eax;
 #endif
   }
-
-#endif
-
-}
-
-#if defined(DUCC0_CPU_X86_64)
 
 int psabi_level()
   {
@@ -129,7 +118,7 @@ int psabi_level()
   const bool avx_usable = avx && xsave && osxsave && ymm_state;
   const bool avx2_usable = avx_usable && avx2;
   const bool fma_usable = avx_usable && fma;
-  const bool f16c_usable = avx_usable && f16c;
+  //const bool f16c_usable = avx_usable && f16c;
   const bool avx512f_usable = avx_usable && avx512f && zmm_state;
   const bool avx512_full_usable = avx512f_usable && avx512dq
     && avx512cd && avx512bw && avx512vl;
@@ -169,9 +158,17 @@ int psabi_level() { return 0; }
 
 #endif
 
+}
+
 namespace ducc0_v1 { void add_ducc0(py::module_ &m); }
 namespace ducc0_v3 { void add_ducc0(py::module_ &m); }
 namespace ducc0_v4 { void add_ducc0(py::module_ &m); }
+
+#else  // DUCC0_MULTIARCH not defined
+
+namespace ducc0 { void add_ducc0(py::module_ &m); }
+
+#endif
 
 #ifdef DUCC0_USE_NANOBIND
 NB_MODULE(PKGNAME, m)
@@ -190,8 +187,12 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
   m.attr("__wrapper__") = "pybind11";
 #endif
 
+#ifdef DUCC0_MULTIARCH
   auto lvl = psabi_level();
   if (lvl>=4) return ducc0_v4::add_ducc0(m);
   if (lvl>=3) return ducc0_v3::add_ducc0(m);
   ducc0_v1::add_ducc0(m);
+#else
+  ducc0::add_ducc0(m);
+#endif
   }
