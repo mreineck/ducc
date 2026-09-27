@@ -377,7 +377,7 @@ template<typename T> static NpArr separable_fht_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_separable_fht(ain, aout, axes, fct, nthreads);
+  r2r_separable_fht(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -398,7 +398,7 @@ template<typename T> static NpArr genuine_fht_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
+  r2r_genuine_fht(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -443,7 +443,7 @@ template<typename T> static NpArr convolve_axis_internal(const CNpArr &in_,
   auto kernel = to_cmav<T,1>(kernel_, "kernel");
   {
   py::gil_scoped_release release;
-  DUCC0_NAMESPACE::convolve_axis(in, out, axis, kernel, nthreads);
+  convolve_axis(in, out, axis, kernel, nthreads);
   }
   return out_;
   }
