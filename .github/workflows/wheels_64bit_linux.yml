@@ -19,7 +19,7 @@ jobs:
           CIBW_ENVIRONMENT: DUCC0_MULTIARCH=1
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
-          CIBW_TEST_SKIP: cp38-* cp39-* cp310-* cp311-* cp312-*
+          CIBW_TEST_SKIP: cp39-* cp310-* cp311-* cp312-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_PYPY_X86_64_IMAGE: manylinux_2_28
