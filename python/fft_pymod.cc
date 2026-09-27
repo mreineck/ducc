@@ -50,7 +50,7 @@ using namespace std;
 
 namespace {
 
-using shape_t = DUCC0_NAMESPACE::fmav_info::shape_t;
+using shape_t = fmav_info::shape_t;
 
 #ifdef DUCC0_USE_NANOBIND
 using ldbl_t = double;
@@ -128,7 +128,7 @@ template<typename T> static NpArr c2c_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::c2c(ain, aout, axes, forward, fct, nthreads);
+  c2c(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -147,7 +147,7 @@ template<typename T> static NpArr c2c_sym_internal(const CNpArr &in,
   auto shp_half = aout.shape();
   shp_half[axes.back()] = shp_half[axes.back()]/2+1;
   vfmav<complex<T>> aout_half(aout, shp_half, aout.stride());
-  DUCC0_NAMESPACE::r2c(ain, aout_half, axes, forward, fct, nthreads);
+  r2c(ain, aout_half, axes, forward, fct, nthreads);
   // now fill in second half
   using namespace DUCC0_NAMESPACE::detail_fft;
   hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const complex<T> &c, complex<T> &, complex<T> &c1)
@@ -181,7 +181,7 @@ template<typename T> static NpArr r2c_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2c(ain, aout, axes, forward, fct, nthreads);
+  r2c(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -203,7 +203,7 @@ template<typename T> static NpArr r2r_fftpack_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
+  r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
   return out;
   }
@@ -226,7 +226,7 @@ template<typename T> static NpArr r2r_fftw_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
+  r2r_fftw(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -250,7 +250,7 @@ template<typename T> static NpArr dct_internal(const CNpArr &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = (inorm==1);
-  DUCC0_NAMESPACE::dct(ain, aout, axes, type, fct, ortho, nthreads);
+  dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
   }
@@ -275,7 +275,7 @@ template<typename T> static NpArr dst_internal(const CNpArr &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = (inorm==1);
-  DUCC0_NAMESPACE::dst(ain, aout, axes, type, fct, ortho, nthreads);
+  dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
   }
@@ -307,13 +307,13 @@ template<typename T> static NpArr c2r_internal(const NpArr &in,
     auto ain = to_vfmav<complex<T>>(in, "a");
     {
     py::gil_scoped_release release;
-    DUCC0_NAMESPACE::c2r_mut(ain, aout, axes, forward, fct, nthreads);
+    c2r_mut(ain, aout, axes, forward, fct, nthreads);
     }
     }
   else
     {
     py::gil_scoped_release release;
-    DUCC0_NAMESPACE::c2r(ain_c, aout, axes, forward, fct, nthreads);
+    c2r(ain_c, aout, axes, forward, fct, nthreads);
     }
   return out;
   }
@@ -335,7 +335,7 @@ template<typename T> static NpArr separable_hartley_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
+  r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -356,7 +356,7 @@ template<typename T> static NpArr genuine_hartley_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  DUCC0_NAMESPACE::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
+  r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
