@@ -8,6 +8,8 @@ jobs:
   cpp-tests:
     name: C++ unit tests (ASAN)
     runs-on: ubuntu-latest
+    # no duplicate runs for same-repo PRs; their branch push already ran
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     steps:
       - uses: actions/checkout@v4
       - name: Run C++ unit tests
