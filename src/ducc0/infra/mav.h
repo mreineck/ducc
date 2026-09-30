@@ -1270,6 +1270,22 @@ template<typename Ttuple, typename Func>
   }
 
 template<typename Ttuple, typename Func>
+  inline void applyHelper_leaf(size_t idim, size_t len,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    bool last_contiguous)
+  {
+  auto locptrs(ptrs);
+  if (last_contiguous)
+    for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
+      call_with_tuple(func, to_ref(locptrs));
+  else
+    {
+    const auto locstr = get_strides<Ttuple>(str, idim);
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
+      call_with_tuple(func, to_ref(locptrs));
+    }
+  }
+template<typename Ttuple, typename Func>
   DUCC0_NOINLINE void applyHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
     const Ttuple &ptrs, Func &&func, bool last_contiguous)
@@ -1277,23 +1293,19 @@ template<typename Ttuple, typename Func>
   auto len = shp[idim];
   if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
     applyHelper_block(idim, shp, str, block0, block1, ptrs, func);
+  else if (idim+2==shp.size())  // avoid a function call for every short row
+    {
+    auto locptrs(ptrs);
+    const auto locstr = get_strides<Ttuple>(str, idim);
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
+      applyHelper_leaf(idim+1, shp[idim+1], str, locptrs, func, last_contiguous);
+    }
   else if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
       applyHelper(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
         func, last_contiguous);
   else
-    {
-    auto locptrs(ptrs);
-    if (last_contiguous)
-      for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
-        call_with_tuple(func, to_ref(locptrs));
-    else
-      {
-      const auto locstr = get_strides<Ttuple>(str, idim);
-      for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-        call_with_tuple(func, to_ref(locptrs));
-      }
-    }
+    applyHelper_leaf(idim, len, str, ptrs, func, last_contiguous);
   }
 template<typename Func, typename Ttuple>
   inline void applyHelper(const vector<size_t> &shp,
@@ -1375,6 +1387,24 @@ template<typename ReduceType, typename Ttuple, typename Func>
   return rt;
   }
 template<typename ReduceType, typename Ttuple, typename Func>
+  inline ReduceType applyReduceHelper_leaf(size_t idim, size_t len,
+    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
+    bool last_contiguous)
+  {
+  ReduceType rt;
+  auto locptrs(ptrs);
+  if (last_contiguous)
+    for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
+      rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+  else
+    {
+    const auto locstr = get_strides<Ttuple>(str, idim);
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
+      rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+    }
+  return rt;
+  }
+template<typename ReduceType, typename Ttuple, typename Func>
   DUCC0_NOINLINE ReduceType applyReduceHelper(size_t idim, const vector<size_t> &shp,
     const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
     const Ttuple &ptrs, Func &&func, bool last_contiguous)
@@ -1384,23 +1414,21 @@ template<typename ReduceType, typename Ttuple, typename Func>
   if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
     rt.reduceWith(applyReduceHelper_block<ReduceType>(idim, shp, str,
       block0, block1, ptrs, func));
+  else if (idim+2==shp.size())  // avoid a function call for every short row
+    {
+    auto locptrs(ptrs);
+    const auto locstr = get_strides<Ttuple>(str, idim);
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
+      rt.reduceWith(applyReduceHelper_leaf<ReduceType>(idim+1, shp[idim+1],
+        str, locptrs, func, last_contiguous));
+    }
   else if (idim+1<shp.size())
     for (size_t i=0; i<len; ++i)
       rt.reduceWith(applyReduceHelper<ReduceType>(idim+1, shp, str, block0,
         block1, update_pointers(ptrs, str, idim, i), func, last_contiguous));
   else
-    {
-    auto locptrs(ptrs);
-    if (last_contiguous)
-      for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
-        rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
-    else
-      {
-      const auto locstr = get_strides<Ttuple>(str, idim);
-      for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-        rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
-      }
-    }
+    return applyReduceHelper_leaf<ReduceType>(idim, len, str, ptrs, func,
+      last_contiguous);
   return rt;
   }
 template<typename ReduceType, typename Func, typename Ttuple>
