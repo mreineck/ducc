@@ -1,0 +1,16 @@
+name: ducc-cpp-tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bugproofs:
+    name: C++ bug proofs (ASAN)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run bug proofs
+        # red while any of the hunted bugs is still reproducible,
+        # green once all of them are fixed
+        run: ./test_cpp/run.sh --fail-on-confirmed
