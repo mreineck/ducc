@@ -70,30 +70,33 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 template<typename Tsimd> class Wigner3j_direct_tables
   {
   private:
-    vector<double> g, fct;
+    // gshift contains values shifted by one place to the right,
+    // to allow access at "g[-1]" without segfaulting.
+    vector<double> gshift, fct;
     static constexpr size_t safety = 4*Tsimd::size(); // safety margin beyond lmax
 
   public:
     Wigner3j_direct_tables(size_t lmax)
-      : g(2*lmax+1+safety), fct(2*lmax+1+safety)
+      : gshift(2*lmax+1+safety+1), fct(2*lmax+1+safety)
       {
+      gshift[0] = 0;
       double gcur = 1.;
-      for (size_t i=0; i<g.size(); ++i, gcur*=(i-0.5)/i)
+      for (size_t i=0; i<fct.size(); ++i, gcur*=(i-0.5)/i)
         {
-        g[i] = sqrt(gcur);
+        gshift[i+1] = sqrt(gcur);
         fct[i] = sqrt(1./(gcur*(2*i+1)));
         }
       }
 
-    const vector<double> &G() const { return g; }
-    const vector<double> &Fct() const { return fct; }
+    const double *G() const { return gshift.data()+1; }
+    const double *Fct() const { return fct.data(); }
   };
 
 template<typename Tsimd> class Wigner3j_direct
   {
   private:
-    const vector<double> &g;
-    const vector<double> &fct;
+    const double *g;
+    const double *fct;
     Tsimd iota;
 
     int el1, el2;
