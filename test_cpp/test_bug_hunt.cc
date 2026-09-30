@@ -1,9 +1,7 @@
 /* C++ unit tests for bugs found during the 2026-09 bug hunt of ducc0.
 
-   Every test asserts the *correct* behavior of the affected API:
-     - while a bug is present, its test fails,
-     - once the bug is fixed, its test passes and remains in place as a
-       permanent regression test.
+   Each test fails while its bug is present and passes once the bug is
+   fixed, then remains as a regression test.
 
    The swap_axes and wigner3j tests detect out-of-bounds accesses via
    AddressSanitizer, so this binary must be built with -fsanitize=address

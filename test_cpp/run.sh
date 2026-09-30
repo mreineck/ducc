@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Builds and runs the C++ unit tests collected in test_cpp/.
 #
-# Every test asserts the *correct* behavior of the affected API:
-#   - while a bug is present, its test fails,
-#   - once the bug is fixed, its test passes and remains as a permanent
-#     regression test.
+# Each test fails while its bug is present and passes once the bug is
+# fixed, then remains as a regression test.
 # The swap_axes and wigner3j tests detect out-of-bounds accesses via
 # AddressSanitizer; the test binary is therefore always built with
 # -fsanitize=address.
