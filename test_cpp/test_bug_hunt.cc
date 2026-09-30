@@ -108,13 +108,13 @@ static int test_wigner3j_oob()
   return 0;
   }
 
-/* TemplateKernel::transferCoeffs (src/ducc0/math/gridding_kernel.h:331)
-   zeroes only `coeff[0 .. nvec_eval-1]` (one row) when the polynomial
-   degree is smaller than the hardcoded degree D. For `ofs = D-d_input >= 2`
-   rows 1..ofs-1 are never written and eval() reads uninitialized memory.
-   The buffers are poisoned with 0xFF (NaN doubles) to make an
-   uninitialized read deterministic. Correct behavior: kernel values must
-   match the reference evaluation for any accepted degree. */
+/* TemplateKernel (src/ducc0/math/gridding_kernel.h): the degree of the input
+   polynomial must be D-1 or D; this contract is asserted explicitly in
+   transferCoeffs. Kernel evaluation must match the reference for the
+   accepted degrees, and smaller degrees must be rejected. (Before the
+   contract was asserted, a degree of D-2 left coefficient rows
+   uninitialized and eval() read indeterminate memory; the buffer here is
+   poisoned with 0xFF to keep catching that.) */
 static int test_template_kernel()
   {
   constexpr size_t W = 8;
@@ -122,7 +122,7 @@ static int test_template_kernel()
   auto func = [](double v) { return exp(-v*v*9.); };
   detail_gridding_kernel::GLFullCorrection corr(W, func);
   bool ok = true;
-  for (size_t deg : {W+2, W+1})  // ofs = D-deg: 1 (must work) and 2 (buggy)
+  for (size_t deg : {W+3, W+2})  // d_input = D and D-1: must work
     {
     PolynomialKernel krn(W, deg, func, corr);
     alignas(alignof(TK)) static unsigned char raw[sizeof(TK)];
@@ -140,6 +140,20 @@ static int test_template_kernel()
       }
     else
       cout << "degree " << deg << " (ofs=" << W+3+(W&1)-deg << "): ok\n";
+    }
+    {  // d_input = D-2: must be rejected
+    PolynomialKernel krn(W, W+1, func, corr);
+    bool rejected = false;
+    try { TK dummy(krn); (void)dummy; }
+    catch (const exception &)
+      { rejected = true; }
+    if (rejected)
+      cout << "degree " << W+1 << " (ofs=2): rejected as expected\n";
+    else
+      {
+      cout << "degree " << W+1 << " (ofs=2) was accepted\n";
+      ok = false;
+      }
     }
   if (ok) cout << "PASS template_kernel\n";
   return ok ? 0 : 1;

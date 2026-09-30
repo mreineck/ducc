@@ -47,7 +47,7 @@ for t in swap_axes slice_wraparound wigner3j_oob template_kernel healpix_interpo
 done
 
 for t in test_wgridder_custom_buffer_1d test_wgridder_custom_buffer_2d \
-         test_sphere_interpol_legacy_api; do
+         test_sphere_interpol_api; do
   note "compiling $t ..."
   $CXX $CXXFLAGS -c "test_cpp/$t.cc" -o "$OUT/$t.o" 2>"$OUT/$t.log"
   report "$t" $? "$OUT/$t.log"
