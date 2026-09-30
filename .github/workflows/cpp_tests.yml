@@ -3,7 +3,7 @@ name: ducc-cpp-tests
 on:
   push:
     branches:
-      - main
+      - ducc0
   pull_request:
 
 jobs:
