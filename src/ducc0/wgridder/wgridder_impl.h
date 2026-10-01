@@ -730,7 +730,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         {
         size_t nchan = bl.Nchannels(0);
         checkShape(wgt2d->shape(),{nrow,nchan});
-        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(gridding?ms2d_in->shape():ms2d_out->shape(), {nrow,nchan});
         checkShape(mask2d->shape(), {nrow,nchan});
         }
       else
@@ -1651,7 +1651,7 @@ timers.pop();
         {
         size_t nchan = bl.Nchannels(0);
         checkShape(wgt2d->shape(), {nrow,nchan});
-        checkShape((gridding?ms2d_in:ms2d_out)->shape(), {nrow,nchan});
+        checkShape(gridding?ms2d_in->shape():ms2d_out->shape(), {nrow,nchan});
         checkShape(mask2d->shape(), {nrow,nchan});
         }
       else

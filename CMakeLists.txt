@@ -36,11 +36,20 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
             OUTPUT_VARIABLE NB_DIR)
     list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
     find_package(nanobind CONFIG REQUIRED)
-    nanobind_add_module(ducc0 FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
+    nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
+# Enable this if stubs are required
+#    nanobind_add_stub(
+#        ${PKGNAME}_stub
+#        MODULE ${PKGNAME}
+#        OUTPUT ${PKGNAME}.pyi
+#        PYTHON_PATH $<TARGET_FILE_DIR:${PKGNAME}>
+#        DEPENDS ${PKGNAME}
+#        RECURSIVE
+#    )
 else()
     find_package(pybind11 REQUIRED)
-    pybind11_add_module(ducc0 NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
+    pybind11_add_module(${PKGNAME} NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
 
 set (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
@@ -125,14 +134,14 @@ if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
     list(APPEND DEFS DUCC0_NO_LOWLEVEL_THREADING)
 else()
     find_package(Threads REQUIRED)
-    target_link_libraries(ducc0 PRIVATE Threads::Threads)
+    target_link_libraries(${PKGNAME} PRIVATE Threads::Threads)
 endif()
 
-target_compile_definitions(ducc0 PRIVATE ${DEFS} PKGNAME=${PKGNAME})
-target_compile_options(ducc0 PRIVATE ${COMP_OPTS})
-target_link_options(ducc0 PRIVATE ${LINK_OPTS})
-target_compile_features(ducc0 PRIVATE cxx_std_17)
+target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
+target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
+target_compile_features(${PKGNAME} PRIVATE cxx_std_17)
 
-set_property(TARGET ducc0 PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+set_property(TARGET ${PKGNAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-install(TARGETS ducc0 LIBRARY DESTINATION .)
+install(TARGETS ${PKGNAME} LIBRARY DESTINATION .)
