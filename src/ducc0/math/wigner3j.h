@@ -70,8 +70,8 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 template<typename Tsimd> class Wigner3j_direct_tables
   {
   private:
-    // gshift contains values shifted by one place to the right,
-    // to allow access at "g[-1]" without segfaulting.
+    // The value for g[i] is stored at gshift[i+1], which allows us
+    // to access "g[-1]"(=0), which we need in a few corner cases.
     vector<double> gshift, fct;
     static constexpr size_t safety = 4*Tsimd::size(); // safety margin beyond lmax
 
@@ -88,6 +88,7 @@ template<typename Tsimd> class Wigner3j_direct_tables
         }
       }
 
+    // return a pointer shifted by 1 to fix the indices.
     const double *G() const { return gshift.data()+1; }
     const double *Fct() const { return fct.data(); }
   };
