@@ -306,7 +306,6 @@ template<typename T, size_t len> class vtp
         operator T() const { return v.v[i]; }
       };
 
-    void Set(size_t i, T val) { v[i] = val; }
     reference operator[](size_t i) { return reference(*this, i); }
     T operator[](size_t i) const { return v[i]; }
 
