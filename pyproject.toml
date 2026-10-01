@@ -31,7 +31,8 @@ version = "0.41.1"
 
 [build-system]
 requires = [
-    "scikit-build-core>=1.0",
+    # FIXME: scikit-build-core limited to <1.1 for the moment, because otherwise CI breaks for Python 3.14t and 3.15t
+    "scikit-build-core>=1.0,<1.1",
     "nanobind>=2.5.0,<2.10.0; python_version == '3.8'",
     "nanobind>=2.5.0; python_version >= '3.9'",
     "pybind11>=2.13.6",
