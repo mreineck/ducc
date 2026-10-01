@@ -198,7 +198,8 @@ jobs:
               python3.12 -m venv /tmp/venv
               source /tmp/venv/bin/activate
               python -m pip install --upgrade pip
-              python -m pip install pytest scikit-build-core nanobind pybind11
+              # FIXME: scikit-build-core limited to <1.1 for the moment, because otherwise CI breaks for Python 3.14t and 3.15t
+              python -m pip install pytest "scikit-build-core<1.1" nanobind pybind11
               python -m pip install numpy==2.0.0 -Cbuild-dir=/tmp/numpy-builddir
               python -c "import struct; assert struct.calcsize(\"P\") == 4; print(\"pointer bits:\", struct.calcsize(\"P\")*8)"
               g++ --version

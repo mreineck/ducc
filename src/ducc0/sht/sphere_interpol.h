@@ -536,12 +536,6 @@ template<typename T> class SphereInterpol
       timers.pop();
       }
 
-    void getPlane(const cmav<complex<T>,1> &alm, const vmav<T,3> &planes) const
-      {
-      cmav<complex<T>,2> valm(&alm(0), {1,alm.shape(0)}, {0,alm.stride(0)});
-      getPlane(valm, planes);
-      }
-
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const vmav<T,2> &signal, TimerHierarchy &timers) const
@@ -635,12 +629,6 @@ template<typename T> class SphereInterpol
       timers.poppush("leg2alm");
       leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       timers.pop();
-      }
-
-    void updateAlm(const vmav<complex<T>,1> &alm, const vmav<T,3> &planes, SHT_mode mode) const
-      {
-      auto valm(alm.prepend_1());
-      updateAlm(valm, planes, mode);
       }
 
     vmav<T,3> build_planes() const

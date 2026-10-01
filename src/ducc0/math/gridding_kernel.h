@@ -327,7 +327,10 @@ template<size_t W, typename Tsimd> class TemplateKernel
 
     void transferCoeffs(const vector<double> &input, size_t d_input)
       {
-      auto ofs = D-d_input;
+      MR_assert((d_input==D)||(d_input+1==D),
+        "degree of input polynomial must be D-1 or D");
+
+      auto ofs = D-d_input;  // can only be 0 or 1
       if (ofs>0)
         for (size_t i=0; i<nvec_eval; ++i)
           coeff[i] = 0;

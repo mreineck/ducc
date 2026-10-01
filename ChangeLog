@@ -10,6 +10,8 @@
     accurate fashion.
     This is specifically relevant for shifted rings in Healpix and
     internal resampling in theta direction during SHTs.
+  - Several fixes for issues reported by Andrea Zonca following an
+    AI-assisted review.
 
 - misc:
   - new (still experimental) implementation for computing Wigner 3j

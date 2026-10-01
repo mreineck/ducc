@@ -21,7 +21,7 @@
 
           inherit src;
           postPatch = ''
-            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6", ' ""
+            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6",' ""
           '';
 
           DUCC0_USE_NANOBIND = "";
@@ -42,7 +42,7 @@
             pytest-xdist
             hypothesis
           ];
-          pytestFlagsArray = [ "python/test" ];
+          pytestFlags = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
 
           postInstall = ''

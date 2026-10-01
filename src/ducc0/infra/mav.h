@@ -165,7 +165,9 @@ struct slice
   slice(size_t beg_, size_t end_, ptrdiff_t step_=1)
     : beg(beg_), end(end_), step(step_)
     {
-// FIXME: add sanity checks here
+    MR_assert(step!=0, "slice step must not be 0");
+    if (beg!=end)
+      MR_assert((beg<end)!=(step<0), "step does not match begin, end ordering");
     }
 
   size_t size(size_t shp) const
@@ -323,7 +325,7 @@ class fmav_info
 
     void swap_axes(size_t ax0, size_t ax1)
       {
-      MR_assert(ax0<=ndim() && ax1<=ndim(), "bad axes");
+      MR_assert(ax0<ndim() && ax1<ndim(), "bad axes");
       if (ax0==ax1) return;
       swap(shp[ax0], shp[ax1]);
       swap(str[ax0], str[ax1]);
@@ -533,7 +535,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       }
     void swap_axes(size_t ax0, size_t ax1)
       {
-      MR_assert(ax0<=ndim && ax1<=ndim, "bad axes");
+      MR_assert(ax0<ndim && ax1<ndim, "bad axes");
       if (ax0==ax1) return;
       swap(shp[ax0], shp[ax1]);
       swap(str[ax0], str[ax1]);
