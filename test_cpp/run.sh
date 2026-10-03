@@ -12,7 +12,7 @@ set -u
 cd "$(dirname "$0")/.."
 
 CXX="${CXX:-g++}"
-CXXFLAGS="-std=c++17 -O1 -g -Isrc"
+CXXFLAGS="-std=c++17 -O1 -g -Isrc -DDUCC0_NAMESPACE=ducc0"
 SRCS="src/ducc0/healpix/healpix_base.cc src/ducc0/healpix/healpix_tables.cc \
       src/ducc0/infra/mav.cc src/ducc0/infra/threading.cc \
       src/ducc0/math/gl_integrator.cc src/ducc0/math/space_filling.cc \

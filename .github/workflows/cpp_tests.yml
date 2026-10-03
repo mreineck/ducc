@@ -1,10 +1,11 @@
 name: ducc-cpp-tests
+on: [workflow_dispatch]
 
-on:
-  push:
-    branches:
-      - ducc0
-  pull_request:
+#on:
+#  push:
+#    branches:
+#      - ducc0
+#  pull_request:
 
 jobs:
   cpp-tests:
