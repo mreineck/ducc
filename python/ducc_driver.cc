@@ -136,9 +136,9 @@ int psabi_level()
     lvl=2;
   // Level 3:
   // includes AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE, OSXSAVE
-  if (avx_usable && avx2_usable && bmi1 && bmi2 && f16c && fma_usable && lzcnt && movbe && osxsave)
+  if ((lvl==2) && avx_usable && avx2_usable && bmi1 && bmi2 && f16c && fma_usable && lzcnt && movbe && osxsave)
     lvl = 3;
-  if ((lvl>=3) && avx512_full_usable)
+  if ((lvl==3) && avx512_full_usable)
     lvl = 4;
 
   // check if maximum level is limted by environment variable (typically for testing)
