@@ -35,7 +35,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/space_filling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_healpix {
 

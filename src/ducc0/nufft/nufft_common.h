@@ -26,7 +26,7 @@
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/fft/fft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_nufft {
 

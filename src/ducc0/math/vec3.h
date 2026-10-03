@@ -35,7 +35,7 @@
 #include <cmath>
 #include <iostream>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 /*! \defgroup vec3group 3D vectors */
 /*! \{ */

@@ -25,7 +25,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/quaternion.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_pointingprovider {
 

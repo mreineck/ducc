@@ -34,7 +34,7 @@
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/math/math_utils.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_bucket_sort {
 

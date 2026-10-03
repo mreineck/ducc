@@ -31,7 +31,7 @@
 #include <string>
 #include <cstddef>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_system {
 
