@@ -572,8 +572,10 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
     vmav<complex<Tpoints>,1> fact_in, fact_out;
     vector<size_t> dims;
 
+    size_t npoints_in, npoints_out;
     size_t kidx;
     size_t nthreads;
+    bool noop;
     unique_ptr<Spreadinterp2<Tcalc, Tacc, Tcoord, uint32_t>> spreadinterp;
     unique_ptr<Nufft<Tcalc, Tacc, Tcoord>> nufft;
 
@@ -581,11 +583,20 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
     Nufft3(const cmav<Tcoord,2> &coord_in, double epsilon, size_t nthreads_,
     const cmav<Tcoord,2> &coord_out, size_t /*verbosity*/,
     double sigma_min, double sigma_max)
-      : nthreads(adjust_nthreads(nthreads_))
+      : npoints_in(coord_in.shape(0)), npoints_out(coord_out.shape(0)),
+        kidx(0), nthreads(adjust_nthreads(nthreads_)), noop(false)
       {
       auto ndim = coord_in.shape(1);
       MR_assert((ndim>=1) && (ndim<=3), "transform must be 1D/2D/3D");
       MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
+      MR_assert((npoints_in<=~uint32_t(0)) && (npoints_out<=~uint32_t(0)),
+        "too many nonuniform points");
+      if ((npoints_in==0) || (npoints_out==0))
+        {
+        getAvailableKernels<Tcalc>(epsilon*0.5, ndim, sigma_min, sigma_max);
+        noop=true;
+        return;
+        }
 
       auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);
       auto [mid_out, hdelta_out] = get_mid_hdelta(coord_out, nthreads);
@@ -652,8 +663,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
               const vmav<complex<Tpoints>,1> &points_out,
               bool forward)
       {
-      MR_assert(fact_in.shape()==points_in.shape(), "points_in shape mismatch");
-      MR_assert(fact_out.shape()==points_out.shape(), "points_out shape mismatch");
+      MR_assert(npoints_in==points_in.shape(0), "points_in shape mismatch");
+      MR_assert(npoints_out==points_out.shape(0), "points_out shape mismatch");
+      if (noop)
+        {
+        if (npoints_in==0)
+          mav_apply([](complex<Tpoints> &v){v=complex<Tpoints>(0);}, nthreads, points_out);
+        return;
+        }
 
       {
       // try to use points_out for temporary points_in_2 storage
@@ -683,8 +700,14 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
                       const vmav<complex<Tpoints>,1> &points_out,
                       bool forward)
       {
-      MR_assert(fact_out.shape()==points_in.shape(), "points_in shape mismatch");
-      MR_assert(fact_in.shape()==points_out.shape(), "points_out shape mismatch");
+      MR_assert(npoints_out==points_in.shape(0), "points_in shape mismatch");
+      MR_assert(npoints_in==points_out.shape(0), "points_out shape mismatch");
+      if (noop)
+        {
+        if (npoints_out==0)
+          mav_apply([](complex<Tpoints> &v){v=complex<Tpoints>(0);}, nthreads, points_out);
+        return;
+        }
 
       {
       // try to use points_out for temporary points_in_2 storage
@@ -726,6 +749,15 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   MR_assert(ndim==coord_out.shape(1), "dimensionality mismatch");
   MR_assert(coord_in.shape(0)==points_in.shape(0), "points_in shape mismatch");
   MR_assert(coord_out.shape(0)==points_out.shape(0), "points_out shape mismatch");
+  if ((points_in.shape(0)==0) || (points_out.shape(0)==0))
+    {
+    MR_assert((points_in.shape(0)<=~uint32_t(0)) &&
+      (points_out.shape(0)<=~uint32_t(0)), "too many nonuniform points");
+    getAvailableKernels<Tcalc>(epsilon*0.5, ndim, sigma_min, sigma_max);
+    if (points_in.shape(0)==0)
+      mav_apply([](complex<Tpoints> &v){v=complex<Tpoints>(0);}, nthreads, points_out);
+    return;
+    }
 
   timers.push("coord min/max");
   auto [mid_in, hdelta_in] = get_mid_hdelta(coord_in, nthreads);

@@ -149,6 +149,54 @@ def test_nufft_empty_point_sets(ntrans, nthreads):
     assert result.shape == points.shape
 
 
+@pmp("ntrans", (None, 2))
+def test_nufft3_empty_source_or_target(ntrans):
+    nlead = () if ntrans is None else (ntrans,)
+    coord_out = np.array([[-0.5], [0.25], [0.75]], dtype=np.float64)
+    coord_in = np.empty((0, 1), dtype=np.float64)
+    points_in = np.empty(nlead + (0,), dtype=np.complex128)
+    out_shape = nlead + (coord_out.shape[0],)
+    out = np.full(out_shape, np.nan + 1j*np.nan, dtype=np.complex128)
+
+    result = ducc0.nufft.experimental.nu2nu(
+        points_in=points_in, coord_in=coord_in, coord_out=coord_out,
+        forward=True, epsilon=1e-5, points_out=out)
+    assert result is out
+    np.testing.assert_array_equal(out, np.zeros(out_shape, dtype=np.complex128))
+
+    plan = ducc0.nufft.experimental.plan3(
+        coord_in=coord_in, coord_out=coord_out, epsilon=1e-5)
+    planned = plan.exec(points_in=points_in, forward=True)
+    np.testing.assert_array_equal(planned, np.zeros(out_shape, dtype=np.complex128))
+    adjoint_in = np.ones(out_shape, dtype=np.complex128)
+    adjoint = plan.exec_adjoint(points_in=adjoint_in, forward=True)
+    assert adjoint.shape == points_in.shape
+
+    coord_in = np.array([[-0.5], [0.25]], dtype=np.float64)
+    points_in = np.array([1.+2.j, -3.+4.j], dtype=np.complex128)
+    if ntrans is not None:
+        points_in = np.broadcast_to(points_in, (ntrans, points_in.size)).copy()
+    coord_out = np.empty((0, 1), dtype=np.float64)
+    empty_shape = nlead + (0,)
+    out = np.empty(empty_shape, dtype=np.complex128)
+
+    result = ducc0.nufft.experimental.nu2nu(
+        points_in=points_in, coord_in=coord_in, coord_out=coord_out,
+        forward=True, epsilon=1e-5, points_out=out)
+    assert result is out
+    assert result.shape == empty_shape
+
+    plan = ducc0.nufft.experimental.plan3(
+        coord_in=coord_in, coord_out=coord_out, epsilon=1e-5)
+    planned = plan.exec(points_in=points_in, forward=True)
+    assert planned.shape == empty_shape
+    adjoint_in = np.empty(empty_shape, dtype=np.complex128)
+    adjoint = plan.exec_adjoint(points_in=adjoint_in, forward=True)
+    expected_adjoint_shape = nlead + (coord_in.shape[0],)
+    np.testing.assert_array_equal(
+        adjoint, np.zeros(expected_adjoint_shape, dtype=np.complex128))
+
+
 @pmp('nx', [1, 20, 257])
 @pmp("npoints", (1, 37))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
