@@ -404,3 +404,20 @@ def test_inplace_r2c_c2r(shp):
     ducc0.fft.r2c(bufr, out=buf)
     ducc0.fft.c2r(buf, out=bufr,inorm=2, lastsize=shp[-1], forward=False)
     _assert_close(ref, bufr, 1e-12)
+
+
+@pmp("dtype", (np.complex64, np.complex128))
+@pmp("size", (7, 8))
+@pmp("writeable, allow_overwriting_input", ((False, False), (False, True),
+                                             (True, False), (True, True)))
+def test_c2r_input_writeability(dtype, size, writeable, allow_overwriting_input):
+    rng = np.random.default_rng(42)
+    inp = (rng.standard_normal(size//2+1) +
+           1j*rng.standard_normal(size//2+1)).astype(dtype)
+    inp.flags.writeable = writeable
+    ref = np.fft.irfft(inp, n=size).astype(np.float32 if dtype == np.complex64 else np.float64)
+    result = ducc0.fft.c2r(inp, lastsize=size, forward=False, inorm=2,
+                           allow_overwriting_input=allow_overwriting_input)
+    np.testing.assert_allclose(result, ref, rtol=1e-5 if dtype == np.complex64 else 1e-12,
+                               atol=1e-5 if dtype == np.complex64 else 1e-12)
+    assert inp.flags.writeable == writeable
