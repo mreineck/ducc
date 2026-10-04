@@ -14,4 +14,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run C++ unit tests
-        run: ./test_cpp/run.sh
+        run: ./test/run.sh
