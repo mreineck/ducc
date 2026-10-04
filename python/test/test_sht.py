@@ -50,6 +50,20 @@ def myalmdot(a1, a2, lmax):
     return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm((a2), lmax))
 
 
+def test_map_leg_rejects_mismatched_ring_metadata():
+    nphi = np.array([1], dtype=np.uint64)
+    phi0 = np.zeros(1)
+    ringstart = np.array([], dtype=np.uint64)
+
+    with pytest.raises(RuntimeError, match="inconsistent number of rings"):
+        ducc0.sht.map2leg(map=np.zeros((1, 1)), nphi=nphi, phi0=phi0,
+                          ringstart=ringstart, mmax=0)
+    with pytest.raises(RuntimeError, match="inconsistent number of rings"):
+        ducc0.sht.leg2map(leg=np.ones((1, 1, 1), dtype=np.complex128),
+                          nphi=nphi, phi0=phi0, ringstart=ringstart,
+                          map=np.zeros((1, 1)))
+
+
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
