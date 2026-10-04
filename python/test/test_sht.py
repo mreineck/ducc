@@ -111,6 +111,40 @@ def test_empty_m_modes_in_alm_leg_transforms():
                              mval=mval, mstart=mstart, alm=out) is out
 
 
+def test_alm_leg_transforms_accept_documented_unsigned_m_metadata():
+    theta = np.array([0.5])
+    alm = np.array([[0.0 + 0.0j, 2.0 + 0.0j]])
+    mval_u = np.array([1], dtype=np.uint64)
+    mstart_u = np.array([0], dtype=np.uint64)
+    mval_i = np.array([1], dtype=np.int64)
+    mstart_i = np.array([0], dtype=np.int64)
+
+    leg_u = ducc0.sht.alm2leg(alm=alm, lmax=1, theta=theta,
+                              mval=mval_u, mstart=mstart_u)
+    leg_i = ducc0.sht.alm2leg(alm=alm, lmax=1, theta=theta,
+                              mval=mval_i, mstart=mstart_i)
+    np.testing.assert_array_equal(leg_u, leg_i)
+
+    alm_u = ducc0.sht.leg2alm(leg=leg_u, lmax=1, theta=theta,
+                              mval=mval_u, mstart=mstart_u)
+    alm_i = ducc0.sht.leg2alm(leg=leg_i, lmax=1, theta=theta,
+                              mval=mval_i, mstart=mstart_i)
+    np.testing.assert_array_equal(alm_u[:, 1:], alm_i[:, 1:])
+
+    invalid_mvals = (np.array([-1], dtype=np.int64),
+                     np.array([np.iinfo(np.uint64).max], dtype=np.uint64))
+    invalid_mstart = np.array([np.iinfo(np.uint64).max], dtype=np.uint64)
+    for transform, data in ((ducc0.sht.alm2leg, {"alm": alm}),
+                            (ducc0.sht.leg2alm, {"leg": leg_u})):
+        for invalid_mval in invalid_mvals:
+            with pytest.raises(RuntimeError, match="bad m value"):
+                transform(**data, lmax=1, theta=theta,
+                          mval=invalid_mval, mstart=mstart_u)
+        with pytest.raises(RuntimeError, match="bad mstart value"):
+            transform(**data, lmax=1, theta=theta,
+                      mval=mval_u, mstart=invalid_mstart)
+
+
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
