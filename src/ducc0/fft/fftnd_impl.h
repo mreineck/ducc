@@ -126,6 +126,7 @@ struct util // hack to avoid duplicate symbols
     {
     if (axis>=ac.ndim()) throw invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
+    MR_assert(ar.shape(axis)>0, "no zero-sized FFTs");
     for (size_t i=0; i<ac.ndim(); ++i)
       {
       if (i==axis)

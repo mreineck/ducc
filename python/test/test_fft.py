@@ -25,6 +25,12 @@ import platform
 
 pmp = pytest.mark.parametrize
 
+
+def test_r2c_rejects_zero_length_transform_axis():
+    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
+        ducc0.fft.r2c(np.empty((0,), dtype=np.float64))
+
+
 shapes1D = ((10,), (127,))
 shapes2D = ((128, 128), (128, 129),
             (1, 129), (2, 127), (3, 127), (6, 127),
