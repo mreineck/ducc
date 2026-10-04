@@ -264,7 +264,7 @@ class Baselines
       uint64_t max_id = 0;
       for (size_t i=0; i<nrows; ++i)
         max_id = max(max_id, freqlist_id(i));
-      MR_assert(max_id+1<=freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
+      MR_assert(max_id<freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
       freq_ofs.resize(max_id+2);
       freq_ofs[0] = 0;
       for (size_t i=0; i<=max_id; ++i)
