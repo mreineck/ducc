@@ -89,6 +89,31 @@ static int test_slice_wraparound()
   return ok ? 0 : 1;
   }
 
+/* fmav_info::subdata() must preserve a full slice of an empty dimension.
+   Empty subviews are used when batched Python APIs select a transform whose
+   point dimension is zero. */
+static int test_subarray_empty_axis()
+  {
+  bool ok=true;
+  double dummy=0;
+  vmav<double,2> fixed(&dummy, {2,0}, {100,1});
+  auto fixed_sub=fixed.subarray<1>({slice(1), slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0)
+      || (fixed_sub.data()!=fixed.data()))
+    ok=false;
+
+  fmav_info info({2,0}, {100,1});
+  vfmav<double> dynamic(&dummy, info);
+  auto dynamic_sub=dynamic.subarray({slice(1), slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0)
+      || (dynamic_sub.data()!=dynamic.data()))
+    ok=false;
+
+  if (ok) cout << "PASS subarray_empty_axis\n";
+  else cout << "FAIL subarray_empty_axis\n";
+  return ok ? 0 : 1;
+  }
+
 /* Wigner3j_direct::calc() (src/ducc0/math/wigner3j.h:191) evaluates
    `g[ofs-1]` for the EE/TE terms; the intended call pattern starts at
    ofs=0 (mcm.h: sum_wig_general), i.e. one double *before* the `g` table
@@ -185,6 +210,25 @@ static int test_healpix_interpol()
   return 0;
   }
 
+static int test_null_backed_empty_subarrays()
+  {
+  vmav<double,1> fixed(static_cast<double *>(nullptr), {0}, {1});
+  auto fixed_sub=fixed.subarray<1>({slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0)
+      || (fixed_sub.data()!=nullptr))
+    return 1;
+
+  fmav_info info({0}, {1});
+  vfmav<double> dynamic(static_cast<double *>(nullptr), info);
+  auto dynamic_sub=dynamic.subarray({slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0)
+      || (dynamic_sub.data()!=nullptr))
+    return 1;
+
+  cout << "PASS null_backed_empty_subarrays\n";
+  return 0;
+  }
+
 struct RegressionTest { const char *name; int (*run)(); };
 
 static constexpr RegressionTest regression_tests[] =
@@ -194,6 +238,8 @@ static constexpr RegressionTest regression_tests[] =
   {"wigner3j_oob", test_wigner3j_oob},
   {"template_kernel", test_template_kernel},
   {"healpix_interpol", test_healpix_interpol},
+  {"subarray_empty_axis", test_subarray_empty_axis},
+  {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
   };
 
 int main(int argc, char **argv)

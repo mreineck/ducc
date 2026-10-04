@@ -116,6 +116,39 @@ def test_nufft_1d(nx, npoints, epsilon, forward, singleprec, periodicity,
             comp=np.array([comp[()]])
         assert_allclose(ducc0.misc.l2error(ms2,comp), 0, atol=20*epsilon)
 
+
+@pmp("ntrans", (None, 1, 2))
+@pmp("nthreads", (1, 2))
+def test_nufft_empty_point_sets(ntrans, nthreads):
+    coord = np.empty((0, 1), dtype=np.float64)
+    if ntrans is None:
+        grid = np.full((4,), 1.+2.j)
+        points = np.empty((0,), dtype=np.complex128)
+    else:
+        grid = np.full((ntrans, 4), 1.+2.j)
+        points = np.empty((ntrans, 0), dtype=np.complex128)
+
+    out = np.empty_like(grid)
+    result = ducc0.nufft.nu2u(points=points, coord=coord, forward=True,
+                              epsilon=1e-6, out=out, nthreads=nthreads)
+    assert result is out
+    np.testing.assert_array_equal(out, np.zeros_like(grid))
+
+    result = ducc0.nufft.u2nu(grid=grid, coord=coord, forward=True,
+                              epsilon=1e-6, nthreads=nthreads)
+    assert result.shape == points.shape
+
+    plan = ducc0.nufft.plan(nu2u=True, coord=coord, grid_shape=(4,), epsilon=1e-6,
+                            nthreads=nthreads)
+    result = plan.nu2u(forward=True, points=points)
+    np.testing.assert_array_equal(result, np.zeros_like(grid))
+
+    plan = ducc0.nufft.plan(nu2u=False, coord=coord, grid_shape=(4,), epsilon=1e-6,
+                            nthreads=nthreads)
+    result = plan.u2nu(forward=True, grid=grid)
+    assert result.shape == points.shape
+
+
 @pmp('nx', [1, 20, 257])
 @pmp("npoints", (1, 37))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
