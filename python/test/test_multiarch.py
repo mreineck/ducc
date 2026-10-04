@@ -15,6 +15,7 @@ import numpy as np
 
 path, expected_level, expected_cap = sys.argv[1:]
 info = ducc0.misc.cpu_info()
+assert info["multiarch"] is True, info
 assert info["selected_level"] == expected_level, info
 assert info["selection_cap"] == expected_cap, info
 
@@ -55,12 +56,22 @@ def _run_level(path, cap, expected_level):
     )
 
 
-def test_multiarch_dispatch_matches_x86_64(tmp_path):
-    cpu_info = getattr(ducc0.misc, "cpu_info", None)
-    if cpu_info is None:
-        pytest.skip("this build has no multiarch dispatch introspection")
+def _assert_numerics(result, baseline, level):
+    np.testing.assert_array_equal(result["healpix"], baseline["healpix"])
+    np.testing.assert_allclose(result["fft32"], baseline["fft32"],
+                               rtol=5e-7, atol=5e-7)
+    np.testing.assert_allclose(result["fft64"], baseline["fft64"],
+                               rtol=2e-14, atol=2e-14)
+    np.testing.assert_allclose(result["sht"], baseline["sht"],
+                               rtol=1e-12, atol=1e-12,
+                               err_msg=f"SHT mismatch at {level}")
 
-    info = cpu_info()
+
+def test_multiarch_dispatch_matches_x86_64(tmp_path):
+    info = ducc0.misc.cpu_info()
+    print(f"CPU info: {info}", flush=True)
+    if not info["multiarch"]:
+        pytest.skip("not a multiarch build")
     assert info["architecture"] == "x86-64"
     compiled = info["compiled_levels"]
     compiled_numbers = [_level_number(level) for level in compiled]
@@ -77,37 +88,27 @@ def test_multiarch_dispatch_matches_x86_64(tmp_path):
     assert eligible
 
     baseline_path = tmp_path / "x86-64.npz"
+    print("Testing x86-64 ... ", end="", flush=True)
     _run_level(baseline_path, 1, "x86-64")
     baseline = np.load(baseline_path)
+    print("PASS", flush=True)
 
-    paths = {"x86-64": baseline}
     for level in eligible:
         if level == "x86-64":
             continue
         path = tmp_path / f"{level}.npz"
         cap = _level_number(level)
+        print(f"Testing {level} ... ", end="", flush=True)
         _run_level(path, cap, level)
-        paths[level] = np.load(path)
-
-    for level, result in paths.items():
-        np.testing.assert_array_equal(result["healpix"], baseline["healpix"])
-        np.testing.assert_allclose(result["fft32"], baseline["fft32"],
-                                   rtol=5e-7, atol=5e-7)
-        np.testing.assert_allclose(result["fft64"], baseline["fft64"],
-                                   rtol=2e-14, atol=2e-14)
-        np.testing.assert_allclose(result["sht"], baseline["sht"],
-                                   rtol=1e-12, atol=1e-12,
-                                   err_msg=f"SHT mismatch at {level}")
+        _assert_numerics(np.load(path), baseline, level)
+        print("PASS", flush=True)
 
     if max(compiled_numbers) > usable_number:
         highest_usable = eligible[-1]
         path = tmp_path / "cap-above-host.npz"
-        _run_level(path, max(compiled_numbers), highest_usable)
-        result = np.load(path)
-        np.testing.assert_array_equal(result["healpix"], baseline["healpix"])
-        np.testing.assert_allclose(result["fft32"], baseline["fft32"],
-                                   rtol=5e-7, atol=5e-7)
-        np.testing.assert_allclose(result["fft64"], baseline["fft64"],
-                                   rtol=2e-14, atol=2e-14)
-        np.testing.assert_allclose(result["sht"], baseline["sht"],
-                                   rtol=1e-12, atol=1e-12)
+        cap = max(compiled_numbers)
+        print(f"Testing cap {cap} (fallback to {highest_usable}) ... ",
+              end="", flush=True)
+        _run_level(path, cap, highest_usable)
+        _assert_numerics(np.load(path), baseline, highest_usable)
+        print("PASS", flush=True)

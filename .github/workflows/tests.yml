@@ -24,6 +24,7 @@ on:
 
 jobs:
   test:
+    if: inputs.optimization != 'multiarch'
     name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -84,7 +85,7 @@ jobs:
           - name: windows-11-arm
             os: windows-11-arm
         binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
-        optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
+        optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || inputs.optimization == 'multiarch' && '["native"]' || format('["{0}"]', inputs.optimization)) }}
         exclude:
           - binding: nanobind
             optimization: portable
@@ -131,6 +132,51 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
+      - name: CPU info
+        run: python -c "import ducc0; print(ducc0.misc.cpu_info())"
+
+      - name: Run tests
+        run: python -m pytest python/test -x
+
+  test-multiarch:
+    if: inputs.optimization == 'multiarch'
+    name: multiarch / ${{ matrix.platform }} / ${{ matrix.binding }}
+    runs-on: ${{ matrix.platform }}
+    env:
+      DUCC0_OPTIMIZATION: multiarch-strip
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ubuntu-24.04
+          - ubuntu-26.04
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install --user --upgrade pytest numpy scipy
+
+      - name: Build and install
+        shell: bash
+        run: ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --user .
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: CPU info
+        run: python -c "import ducc0; print(ducc0.misc.cpu_info())"
+
+      - name: Verify multiarch build
+        run: python -c "import ducc0; assert ducc0.misc.cpu_info()['multiarch']"
+
+      - name: Test CPU dispatch
+        run: python -m pytest -q -s python/test/test_multiarch.py
+
       - name: Run tests
         run: python -m pytest python/test -x
 
@@ -168,6 +214,9 @@ jobs:
 
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: CPU info
+        run: python -c "import ducc0; print(ducc0.misc.cpu_info())"
 
       - name: Run tests
         run: python -m pytest python/test -x
@@ -207,5 +256,6 @@ jobs:
               DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
                 ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
               python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
+              python -c "import ducc0; print(ducc0.misc.cpu_info())"
               python -m pytest python/test -x
             '

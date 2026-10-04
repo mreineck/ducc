@@ -6,11 +6,40 @@ namespace py = nanobind;
 namespace py = pybind11;
 #endif
 
+#include "multiarch.h"
+
+namespace {
+
+void add_cpu_info(py::module_ &m, bool multiarch, int usable_level,
+                  int selection_cap, int selected_level)
+  {
+  m.attr("misc").attr("cpu_info") = py::cpp_function(
+    [multiarch, usable_level, selection_cap, selected_level]()
+    {
+    py::dict result;
+    result["architecture"] = ducc0_multiarch::architecture_name();
+    result["multiarch"] = multiarch;
+    if (multiarch)
+      {
+      py::list compiled;
+      compiled.append("x86-64");
+      compiled.append("x86-64-v3");
+      compiled.append("x86-64-v4");
+      result["compiled_levels"] = compiled;
+      result["usable_level"] = ducc0_multiarch::level_name(usable_level);
+      result["selection_cap"] = ducc0_multiarch::level_name(selection_cap);
+      result["selected_level"] = ducc0_multiarch::level_name(selected_level);
+      }
+    return result;
+    });
+  }
+
+}
+
 #ifdef DUCC0_MULTIARCH
 
 #include <cstdlib>
 #include <cstdint>
-#include "multiarch.h"
 
 using namespace std;
 
@@ -176,24 +205,6 @@ selection_state current_selection()
           ducc0_multiarch::select_psabi_level(usable, cap, true, true)};
   }
 
-void add_cpu_info(py::module_ &m, const selection_state &selection)
-  {
-  m.attr("misc").attr("cpu_info") = py::cpp_function([selection]()
-    {
-    py::dict result;
-    py::list compiled;
-    compiled.append("x86-64");
-    compiled.append("x86-64-v3");
-    compiled.append("x86-64-v4");
-    result["architecture"] = "x86-64";
-    result["compiled_levels"] = compiled;
-    result["usable_level"] = ducc0_multiarch::level_name(selection.usable_level);
-    result["selection_cap"] = ducc0_multiarch::level_name(selection.selection_cap);
-    result["selected_level"] = ducc0_multiarch::level_name(selection.selected_level);
-    return result;
-    });
-  }
-
 }
 
 namespace ducc0_v1 { void add_ducc0(py::module_ &m); }
@@ -228,8 +239,10 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
   if (selection.selected_level >= 4) ducc0_v4::add_ducc0(m);
   else if (selection.selected_level >= 3) ducc0_v3::add_ducc0(m);
   else ducc0_v1::add_ducc0(m);
-  add_cpu_info(m, selection);
+  add_cpu_info(m, true, selection.usable_level, selection.selection_cap,
+               selection.selected_level);
 #else
   ducc0::add_ducc0(m);
+  add_cpu_info(m, false, 0, 0, 0);
 #endif
   }

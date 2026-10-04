@@ -121,6 +121,7 @@ sdist.include = [
     "src/ducc0/wgridder/wgridder.cc",
     "python/module_adders.h",
     "python/ducc_driver.cc",
+    "python/multiarch.h",
     "python/ducc.cc",
     "python/fft_pymod.cc",
     "python/nufft_pymod.cc",
