@@ -114,6 +114,16 @@ def test_l2error_scalar(a, b, expected):
     assert_allclose(ducc0.misc.l2error(np.array([a]), np.array([b])), expected)
 
 
+def test_vdot_unaligned_singleton_and_empty_strides():
+    singleton = np.lib.stride_tricks.as_strided(
+        np.array([2.]), shape=(1,), strides=(1,))
+    assert ducc0.misc.vdot(singleton, singleton) == 4.
+
+    empty = np.lib.stride_tricks.as_strided(
+        np.array([2.]), shape=(2, 0), strides=(1, 1))
+    assert ducc0.misc.vdot(empty, empty) == 0.
+
+
 def test_vdot_scalars_match_zero_dimensional_arrays():
     cases = ((2., 3.), (2., 3.+4.j), (1.+2.j, 3.+4.j),
              (np.float32(2.), np.float32(3.)),

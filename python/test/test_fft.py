@@ -26,6 +26,17 @@ import platform
 pmp = pytest.mark.parametrize
 
 
+def test_c2c_unaligned_singleton_strides():
+    source = np.lib.stride_tricks.as_strided(
+        np.array([2.+3.j]), shape=(1,), strides=(1,))
+    out = np.lib.stride_tricks.as_strided(
+        np.zeros(1, dtype=np.complex128), shape=(1,), strides=(1,))
+
+    result = ducc0.fft.c2c(source, out=out)
+    assert result is out
+    np.testing.assert_array_equal(out, np.array([2.+3.j]))
+
+
 def test_r2c_rejects_zero_length_transform_axis():
     with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
         ducc0.fft.r2c(np.empty((0,), dtype=np.float64))
