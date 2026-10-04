@@ -452,6 +452,32 @@ def test_bda_empty_rows_without_frequency_lists():
     assert vis.shape == (0,)
 
 
+@pmp(("nrow", "nchan"), [(0, 0), (1, 0)],
+     ids=("empty_rows", "empty_channels"))
+def test_empty_standard_channels(nrow, nchan):
+    dirty = ducc0.wgridder.vis2dirty(
+        uvw=np.zeros((nrow, 3)), freq=np.empty(nchan),
+        vis=np.empty((nrow, nchan), dtype=np.complex128),
+        npix_x=32, npix_y=32, pixsize_x=1.e-4, pixsize_y=1.e-4,
+        epsilon=1.e-5)
+    np.testing.assert_array_equal(dirty, np.zeros((32, 32)))
+
+
+def test_bda_empty_frequency_list():
+    common = _bda_edge_case_args(
+        freqlist_id=np.zeros(1, dtype=np.uint64),
+        freqlist_nfreqs=np.zeros(1, dtype=np.uint64),
+        freqlist_freqs=np.empty(0))
+    dirty = ducc0.wgridder.experimental.vis2dirty_bda(
+        **common, vis=np.empty(0, dtype=np.complex128),
+        npix_x=32, npix_y=32)
+    np.testing.assert_array_equal(dirty, np.zeros((32, 32)))
+
+    vis = ducc0.wgridder.experimental.dirty2vis_bda(
+        **common, dirty=dirty)
+    assert vis.shape == (0,)
+
+
 @pmp('nxdirty', [2, 16, 64])
 @pmp('nydirty', [2, 64])
 @pmp("nrow", (1, 100))

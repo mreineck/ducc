@@ -237,10 +237,10 @@ class Baselines
   {
   protected:
     vector<UVW> coord;
-    size_t nfreqs = 0;   // if 0, data set is "ragged", and we need
-                         // more complicated address calculations
-    vector<size_t> id;        // only allocated if nfreqs == 0
-    vector<size_t> ms_ofs;    // only allocated if nfreqs == 0
+    size_t nfreqs = 0;
+    bool ragged = false;
+    vector<size_t> id;        // only allocated if ragged
+    vector<size_t> ms_ofs;    // only allocated if ragged
     vector<size_t> freq_ofs;
     vector<double> f_over_c;
     double umax, vmax;
@@ -263,7 +263,11 @@ class Baselines
       MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
       if (nrows==0)
         {
-        nfreqs = 1;
+        if ((freqlist_nfreqs.shape(0)==1) &&
+            (freqlist_nfreqs(0)<=~size_t(0)))
+          nfreqs = size_t(freqlist_nfreqs(0));
+        else
+          nfreqs = 1;
         umax = vmax = 0;
         return;
         }
@@ -286,6 +290,7 @@ class Baselines
         }
       else
         {
+        ragged = true;
         id.resize(nrows);
         for (size_t i=0; i<nrows; ++i)
           id[i] = freqlist_id(i);
@@ -299,6 +304,7 @@ class Baselines
       double fcmax = 0;
       for (size_t i=0; i<=max_id; ++i)
         {
+        if (freq_ofs[i]==freq_ofs[i+1]) continue;
         MR_assert(freqlist_freqs(freq_ofs[i])>0, "negative channel frequency encountered");
         for (size_t j=freq_ofs[i]; j<freq_ofs[i+1]; ++j)
           {
@@ -328,12 +334,12 @@ class Baselines
       }
 
     size_t ofs_ms(size_t irow) const
-      { return nfreqs==0 ? ms_ofs[irow] : irow*nfreqs; }
+      { return ragged ? ms_ofs[irow] : irow*nfreqs; }
     size_t ofs_ms(size_t irow, size_t ichan) const
       { return ofs_ms(irow) + ichan; }
   private:
     size_t ofs_freq(size_t irow) const
-      { return nfreqs==0 ? freq_ofs[id[irow]] : 0; }
+      { return ragged ? freq_ofs[id[irow]] : 0; }
     size_t ofs_freq(size_t irow, size_t ichan) const
       { return ofs_freq(irow) + ichan; }
 
@@ -349,14 +355,16 @@ class Baselines
     void prefetchRow(size_t irow) const
       {
       DUCC0_PREFETCH_R(&coord[irow]);
-      if (nfreqs==0) DUCC0_PREFETCH_R(&id[irow]);
+      if (ragged) DUCC0_PREFETCH_R(&id[irow]);
       } // FIXME: prefetch channels?
     size_t Nrows() const { return coord.size(); }
-    size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
+    size_t Nchannels(size_t irow) const
+      { return coord.empty() ? nfreqs : (ragged ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs); }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
-    size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
-    bool BDA() const { return nfreqs==0; }
+    size_t Nvis() const
+      { return coord.empty() ? 0 : (ragged ? ms_ofs.back() : Nrows()*nfreqs); }
+    bool BDA() const { return ragged; }
     double Rl() const { return r_l; }
     double Rm() const { return r_m; }
   };
