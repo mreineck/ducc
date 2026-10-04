@@ -13,7 +13,7 @@ if(DEFINED ENV{DUCC0_OPTIMIZATION})
 else()
     set (OPTFLAGS "native-strip")
 endif()
-if (DEFINED ENV{DUCC0_MULTIARCH} AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+if (OPTFLAGS MATCHES "^multiarch" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
     set (MULTIARCH ON)
 else()
     set (MULTIARCH OFF)
@@ -162,14 +162,16 @@ if(DEFINED ENV{DUCC0_FLAGS})
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
-    list(APPEND DEFS DUCC0_NO_LOWLEVEL_THREADING)
+    SET (DEFS ${DEFS} DUCC0_NO_LOWLEVEL_THREADING)
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(${PKGNAME} PRIVATE Threads::Threads)
 endif()
 
+SET (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
+
 # settings for the final compile/link step
-target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME} PKGVERSION=${PKGVERSION})
+target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
 target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
 
