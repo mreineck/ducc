@@ -11,10 +11,10 @@ namespace py = pybind11;
 namespace {
 
 void add_cpu_info(py::module_ &m, bool multiarch, int usable_level,
-                  int selection_cap, int selected_level)
+                  int max_level, int selected_level)
   {
   m.attr("misc").attr("cpu_info") = py::cpp_function(
-    [multiarch, usable_level, selection_cap, selected_level]()
+    [multiarch, usable_level, max_level, selected_level]()
     {
     py::dict result;
     result["architecture"] = ducc0_multiarch::architecture_name();
@@ -26,8 +26,12 @@ void add_cpu_info(py::module_ &m, bool multiarch, int usable_level,
       compiled.append("x86-64-v3");
       compiled.append("x86-64-v4");
       result["compiled_levels"] = compiled;
-      result["usable_level"] = ducc0_multiarch::level_name(usable_level);
-      result["selection_cap"] = ducc0_multiarch::level_name(selection_cap);
+      py::list available;
+      if (usable_level >= 1) available.append("x86-64");
+      if (usable_level >= 3) available.append("x86-64-v3");
+      if (usable_level >= 4) available.append("x86-64-v4");
+      result["available_levels"] = available;
+      result["max_level"] = ducc0_multiarch::level_name(max_level);
       result["selected_level"] = ducc0_multiarch::level_name(selected_level);
       }
     return result;
@@ -193,7 +197,7 @@ int selection_cap()
 struct selection_state
   {
   int usable_level;
-  int selection_cap;
+  int max_level;
   int selected_level;
   };
 
@@ -239,7 +243,7 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
   if (selection.selected_level >= 4) ducc0_v4::add_ducc0(m);
   else if (selection.selected_level >= 3) ducc0_v3::add_ducc0(m);
   else ducc0_v1::add_ducc0(m);
-  add_cpu_info(m, true, selection.usable_level, selection.selection_cap,
+  add_cpu_info(m, true, selection.usable_level, selection.max_level,
                selection.selected_level);
 #else
   ducc0::add_ducc0(m);

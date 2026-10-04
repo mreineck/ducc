@@ -13,11 +13,13 @@ import sys
 import ducc0
 import numpy as np
 
-path, expected_level, expected_cap = sys.argv[1:]
+path, expected_level, expected_max, *expected_available = sys.argv[1:]
 info = ducc0.misc.cpu_info()
 assert info["multiarch"] is True, info
 assert info["selected_level"] == expected_level, info
-assert info["selection_cap"] == expected_cap, info
+assert info["max_level"] == expected_max, info
+assert info["available_levels"] == expected_available, info
+assert expected_level in expected_available, info
 
 x = np.arange(13, dtype=np.float64)
 z = np.sin(0.25*x) + 1j*np.cos(0.5*x)
@@ -44,12 +46,14 @@ def _level_number(level):
     return int(level[len(prefix):])
 
 
-def _run_level(path, cap, expected_level):
+def _run_level(path, level, available):
     env = os.environ.copy()
+    cap = _level_number(level)
+    max_level = "x86-64" if cap == 1 else f"x86-64-v{cap}"
     env["DUCC0_MAX_PSABI_LEVEL"] = str(cap)
     subprocess.run(
-        [sys.executable, "-c", _NUMERICS_SCRIPT, str(path), expected_level,
-         "x86-64" if cap == 1 else f"x86-64-v{cap}"],
+        [sys.executable, "-c", _NUMERICS_SCRIPT, str(path), level,
+         max_level, *available],
         check=True,
         env=env,
         cwd=Path(__file__).resolve().parents[2],
@@ -72,43 +76,33 @@ def test_multiarch_dispatch_matches_x86_64(tmp_path):
     print(f"CPU info: {info}", flush=True)
     if not info["multiarch"]:
         pytest.skip("not a multiarch build")
+    assert set(info) == {
+        "architecture", "multiarch", "compiled_levels", "available_levels",
+        "max_level", "selected_level",
+    }
     assert info["architecture"] == "x86-64"
     compiled = info["compiled_levels"]
-    compiled_numbers = [_level_number(level) for level in compiled]
-    assert compiled_numbers == sorted(set(compiled_numbers))
-    assert 1 in compiled_numbers
+    assert compiled == ["x86-64", "x86-64-v3", "x86-64-v4"]
+    available = info["available_levels"]
+    assert available
+    assert available == compiled[:len(available)]
+    assert available[0] == "x86-64"
 
-    usable_number = _level_number(info["usable_level"])
-    selection_limit = min(usable_number, _level_number(info["selection_cap"]))
-    expected_normal = next(level for level in reversed(compiled)
-                           if _level_number(level) <= selection_limit)
+    max_number = _level_number(info["max_level"])
+    expected_normal = next(level for level in reversed(available)
+                           if _level_number(level) <= max_number)
     assert info["selected_level"] == expected_normal
-    eligible = [level for level in compiled
-                if _level_number(level) <= usable_number]
-    assert eligible
+    assert info["selected_level"] in available
 
-    baseline_path = tmp_path / "x86-64.npz"
-    print("Testing x86-64 ... ", end="", flush=True)
-    _run_level(baseline_path, 1, "x86-64")
-    baseline = np.load(baseline_path)
-    print("PASS", flush=True)
-
-    for level in eligible:
-        if level == "x86-64":
-            continue
+    baseline = None
+    for level in available:
         path = tmp_path / f"{level}.npz"
-        cap = _level_number(level)
         print(f"Testing {level} ... ", end="", flush=True)
-        _run_level(path, cap, level)
-        _assert_numerics(np.load(path), baseline, level)
-        print("PASS", flush=True)
-
-    if max(compiled_numbers) > usable_number:
-        highest_usable = eligible[-1]
-        path = tmp_path / "cap-above-host.npz"
-        cap = max(compiled_numbers)
-        print(f"Testing cap {cap} (fallback to {highest_usable}) ... ",
-              end="", flush=True)
-        _run_level(path, cap, highest_usable)
-        _assert_numerics(np.load(path), baseline, highest_usable)
+        _run_level(path, level, available)
+        result = np.load(path)
+        if baseline is None:
+            assert level == "x86-64"
+            baseline = result
+        else:
+            _assert_numerics(result, baseline, level)
         print("PASS", flush=True)

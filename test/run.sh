@@ -24,9 +24,14 @@ echo "Building regression tests ..."
 "$CXX" "${CXXFLAGS[@]}" -fsanitize=address -fno-omit-frame-pointer \
   -o "$OUT/test_regressions" test/test_regressions.cc "${SOURCES[@]}" -pthread
 
+failures=()
 for name in swap_axes slice_wraparound wigner3j_oob template_kernel healpix_interpol; do
   echo "Running $name ..."
-  ASAN_OPTIONS=detect_leaks=0 "$OUT/test_regressions" "$name"
+  if ASAN_OPTIONS=detect_leaks=0 "$OUT/test_regressions" "$name"; then
+    :
+  else
+    failures+=("$name")
+  fi
 done
 
 echo "Compiling C++ API checks ..."
@@ -34,4 +39,15 @@ echo "Compiling C++ API checks ..."
 
 echo "Building selection-policy test ..."
 "$CXX" -std=c++17 -Ipython test/test_multiarch.cc -o "$OUT/test_multiarch"
-"$OUT/test_multiarch"
+if "$OUT/test_multiarch"; then
+  :
+else
+  failures+=("multiarch selection policy")
+fi
+
+if ((${#failures[@]})); then
+  echo "Failed C++ checks:"
+  printf '  %s\n' "${failures[@]}"
+  exit 1
+fi
+echo "PASS all C++ regression and selection-policy tests"
