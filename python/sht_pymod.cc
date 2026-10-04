@@ -280,13 +280,16 @@ static size_t min_mapdim(const cmav<size_t,1> &nphi,
   const cmav<size_t,1> &ringstart, ptrdiff_t pixstride)
   {
   size_t res=0;
+  bool anypix=false;
   for (size_t i=0; i<nphi.shape(0); ++i)
     {
+    if (nphi(i)==0) continue;
+    anypix=true;
     auto ilast = ptrdiff_t(ringstart(i)) + ptrdiff_t(nphi(i)-1)*pixstride;
     MR_assert(ilast>=0, "impossible map memory layout");
     res = max(res, max(ringstart(i), size_t(ilast)));
     }
-  return res+1;
+  return anypix ? res+1 : 0;
   }
 
 template<typename T> static NpArr Py2_alm2flm(const CNpArr &alm_, int spin,

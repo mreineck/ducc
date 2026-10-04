@@ -50,6 +50,35 @@ def myalmdot(a1, a2, lmax):
     return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm((a2), lmax))
 
 
+def test_map_leg_empty_rings():
+    nphi = np.array([0, 3], dtype=np.uint64)
+    phi0 = np.zeros(2)
+    ringstart = np.array([1, 0], dtype=np.uint64)
+    map = np.array([[1., 2., 4.]])
+
+    leg = ducc0.sht.map2leg(map=map, nphi=nphi, phi0=phi0,
+                            ringstart=ringstart, mmax=1)
+    ref_leg = ducc0.sht.map2leg(map=map, nphi=np.array([3], dtype=np.uint64),
+                                phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64),
+                                mmax=1)
+    np.testing.assert_array_equal(leg[:, 0, :], 0)
+    np.testing.assert_array_equal(leg[:, 1, :], ref_leg[:, 0, :])
+
+    mapped = ducc0.sht.leg2map(leg=leg, nphi=nphi, phi0=phi0,
+                               ringstart=ringstart)
+    ref_map = ducc0.sht.leg2map(leg=leg[:, 1:, :], nphi=np.array([3], dtype=np.uint64),
+                                phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64))
+    np.testing.assert_array_equal(mapped, ref_map)
+
+    empty_leg = ducc0.sht.map2leg(map=np.empty((1, 0)), nphi=np.array([0], dtype=np.uint64),
+                                  phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64),
+                                  mmax=2)
+    np.testing.assert_array_equal(empty_leg, np.zeros((1, 1, 3), dtype=np.complex128))
+    empty_map = ducc0.sht.leg2map(leg=empty_leg, nphi=np.array([0], dtype=np.uint64),
+                                  phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64))
+    assert empty_map.shape == (1, 0)
+
+
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))

@@ -1071,6 +1071,7 @@ template<typename T> void leg2map(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        if (nphi(ith)==0) continue;
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
@@ -1152,6 +1153,13 @@ template<typename T> void map2leg(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        if (nphi(ith)==0)
+          {
+          for (size_t icomp=0; icomp<ncomp; ++icomp)
+            for (size_t m=0; m<=mmax; ++m)
+              leg(icomp, ith, m) = complex<T>(0);
+          continue;
+          }
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
