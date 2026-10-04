@@ -279,6 +279,7 @@ static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart,
 static size_t min_mapdim(const cmav<size_t,1> &nphi,
   const cmav<size_t,1> &ringstart, ptrdiff_t pixstride)
   {
+  MR_assert(nphi.shape(0)==ringstart.shape(0), "inconsistent number of rings");
   size_t res=0;
   bool anypix=false;
   for (size_t i=0; i<nphi.shape(0); ++i)
