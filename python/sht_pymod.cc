@@ -250,6 +250,7 @@ numpy.ndarray((ntheta,), dtype=numpy.float64)
 static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride)
   {
+  if (mval.shape(0)==0) return 0;
   size_t res=0;
   for (size_t i=0; i<mval.shape(0); ++i)
     {
@@ -265,6 +266,7 @@ static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
 static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart,
   ptrdiff_t lstride)
   {
+  if (mstart.shape(0)==0) return 0;
   size_t res=0;
   for (size_t i=0; i<mstart.shape(0); ++i)
     {

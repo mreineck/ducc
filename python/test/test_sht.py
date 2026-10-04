@@ -93,6 +93,24 @@ def test_map_leg_rejects_mismatched_ring_metadata():
                           map=np.zeros((1, 1)))
 
 
+def test_empty_m_modes_in_alm_leg_transforms():
+    theta = np.array([0.2, 0.8])
+    mval = np.empty(0, dtype=np.int64)
+    mstart = np.empty(0, dtype=np.int64)
+
+    leg = ducc0.sht.alm2leg(alm=np.empty((1, 0), dtype=np.complex128),
+                            lmax=2, theta=theta, mval=mval, mstart=mstart)
+    assert leg.shape == (1, 2, 0)
+
+    alm = ducc0.sht.leg2alm(leg=leg, lmax=2, theta=theta,
+                            mval=mval, mstart=mstart)
+    assert alm.shape == (1, 0)
+
+    out = np.empty((1, 0), dtype=np.complex128)
+    assert ducc0.sht.leg2alm(leg=leg, lmax=2, theta=theta,
+                             mval=mval, mstart=mstart, alm=out) is out
+
+
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
