@@ -10,6 +10,7 @@ namespace py = pybind11;
 
 #include <cstdlib>
 #include <cstdint>
+#include "multiarch.h"
 
 using namespace std;
 
@@ -66,7 +67,7 @@ std::uint64_t read_xcr(std::uint32_t index)
 #endif
   }
 
-int psabi_level()
+int usable_psabi_level()
   {
   const auto leaf0 = cpuid(0, 0);
   const auto leaf1 = (leaf0.eax>=1) ? cpuid(1, 0) : cpuid_result{0,0,0,0};
@@ -141,22 +142,57 @@ int psabi_level()
   if ((lvl==3) && avx512_full_usable)
     lvl = 4;
 
-  // check if maximum level is limted by environment variable (typically for testing)
-  const auto *evar=getenv("DUCC0_MAX_PSABI_LEVEL");
-  if (evar!=nullptr)
-    {
-    int maxlvl = atoi(evar);
-    if (maxlvl<1) maxlvl=1;
-    if (lvl>maxlvl) lvl = maxlvl;
-    }
   return lvl;
   }
 
 #else
 
-int psabi_level() { return 0; }
+int usable_psabi_level() { return 0; }
 
 #endif
+
+int selection_cap()
+  {
+  const auto *evar = getenv("DUCC0_MAX_PSABI_LEVEL");
+  if (evar == nullptr) return 4;
+  int maxlvl = atoi(evar);
+  if (maxlvl < 1) maxlvl = 1;
+  if (maxlvl > 4) maxlvl = 4;
+  return maxlvl;
+  }
+
+struct selection_state
+  {
+  int usable_level;
+  int selection_cap;
+  int selected_level;
+  };
+
+selection_state current_selection()
+  {
+  const int usable = usable_psabi_level();
+  const int cap = selection_cap();
+  return {usable, cap,
+          ducc0_multiarch::select_psabi_level(usable, cap, true, true)};
+  }
+
+void add_cpu_info(py::module_ &m, const selection_state &selection)
+  {
+  m.attr("misc").attr("cpu_info") = py::cpp_function([selection]()
+    {
+    py::dict result;
+    py::list compiled;
+    compiled.append("x86-64");
+    compiled.append("x86-64-v3");
+    compiled.append("x86-64-v4");
+    result["architecture"] = "x86-64";
+    result["compiled_levels"] = compiled;
+    result["usable_level"] = ducc0_multiarch::level_name(selection.usable_level);
+    result["selection_cap"] = ducc0_multiarch::level_name(selection.selection_cap);
+    result["selected_level"] = ducc0_multiarch::level_name(selection.selected_level);
+    return result;
+    });
+  }
 
 }
 
@@ -188,10 +224,11 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
 #endif
 
 #ifdef DUCC0_MULTIARCH
-  auto lvl = psabi_level();
-  if (lvl>=4) return ducc0_v4::add_ducc0(m);
-  if (lvl>=3) return ducc0_v3::add_ducc0(m);
-  ducc0_v1::add_ducc0(m);
+  const auto selection = current_selection();
+  if (selection.selected_level >= 4) ducc0_v4::add_ducc0(m);
+  else if (selection.selected_level >= 3) ducc0_v3::add_ducc0(m);
+  else ducc0_v1::add_ducc0(m);
+  add_cpu_info(m, selection);
 #else
   ducc0::add_ducc0(m);
 #endif

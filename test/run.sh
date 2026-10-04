@@ -31,3 +31,7 @@ done
 
 echo "Compiling C++ API checks ..."
 "$CXX" "${CXXFLAGS[@]}" -c test/test_compile_api.cc -o "$OUT/test_compile_api.o"
+
+echo "Building selection-policy test ..."
+"$CXX" -std=c++17 -Ipython test/test_multiarch.cc -o "$OUT/test_multiarch"
+"$OUT/test_multiarch"
