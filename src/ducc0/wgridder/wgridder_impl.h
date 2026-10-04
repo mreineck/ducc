@@ -268,7 +268,11 @@ class Baselines
       freq_ofs.resize(max_id+2);
       freq_ofs[0] = 0;
       for (size_t i=0; i<=max_id; ++i)
-        freq_ofs[i+1] = freq_ofs[i] + freqlist_nfreqs(i);
+        {
+        auto nfreq=freqlist_nfreqs(i);
+        MR_assert(nfreq<=~size_t(0)-freq_ofs[i], "frequency list size overflow");
+        freq_ofs[i+1] = freq_ofs[i] + size_t(nfreq);
+        }
       MR_assert(freqlist_freqs.shape(0)>=freq_ofs.back(), "freqlist_freqs array is too small");
       if (max_id==0)  // simple case, we only have one frequency list
         {

@@ -384,7 +384,9 @@ template<typename T> static NpArr Py2_dirty2vis_bda(const CNpArr &uvw_,
     {
     auto id=freqlist_id(i);
     MR_assert(id<freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
-    vissize += size_t(freqlist_nfreqs(id));
+    auto nfreq=freqlist_nfreqs(id);
+    MR_assert(nfreq<=~size_t(0)-vissize, "too many visibility samples");
+    vissize += size_t(nfreq);
     }
   auto [vis, vis2] = get_OptNpArr_and_vmav<complex<T>,1>(vis_, {vissize});
   auto wgt = get_OptCNpArr<T>(wgt_, {vis2.shape(0)});
