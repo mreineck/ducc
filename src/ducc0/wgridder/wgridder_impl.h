@@ -261,6 +261,12 @@ class Baselines
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
       MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
+      if (nrows==0)
+        {
+        nfreqs = 1;
+        umax = vmax = 0;
+        return;
+        }
       uint64_t max_id = 0;
       for (size_t i=0; i<nrows; ++i)
         max_id = max(max_id, freqlist_id(i));
