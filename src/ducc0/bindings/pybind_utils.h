@@ -133,10 +133,9 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
   {
   stride_t res(size_t(arr.ndim()));
   bool zerosized = false;
-  if constexpr(rw)
-    for (size_t i=0; i<res.size(); ++i)
-      if (arr.shape(i)==0)
-        zerosized=true;
+  for (size_t i=0; i<res.size(); ++i)
+    if (arr.shape(i)==0)
+      zerosized=true;
   for (size_t i=0; i<res.size(); ++i)
     {
 #ifdef DUCC0_USE_NANOBIND
@@ -145,8 +144,13 @@ template<typename T, bool rw> stride_t copy_strides(const CNpArr &arr,
 #else
     auto tmp = arr.strides(int(i));
     constexpr auto st = ptrdiff_t(sizeof(T));
-    MR_assert((tmp/st)*st==tmp, spec, "bad stride");
-    res[i] = tmp/st;
+    if ((tmp/st)*st==tmp)
+      res[i] = tmp/st;
+    else
+      {
+      MR_assert(zerosized || arr.shape(int(i))==1, spec, "bad stride");
+      res[i] = 0;
+      }
 #endif
     if constexpr(rw)
       if (!zerosized)  // if the array has no elements, we needn't worry

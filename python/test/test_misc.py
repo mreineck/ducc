@@ -92,3 +92,13 @@ def test_special_add_at_complex(dtype):
     expected = np.array([1+2j, 3+4j + 5+6j, 0], dtype=dtype)
     out = special_add_at(a.copy(), axis=0, index=index, b=b)
     np.testing.assert_array_almost_equal(out, expected)
+
+
+def test_vdot_unaligned_singleton_and_empty_strides():
+    singleton = np.lib.stride_tricks.as_strided(
+        np.array([2.]), shape=(1,), strides=(1,))
+    assert ducc0.misc.vdot(singleton, singleton) == 4.
+
+    empty = np.lib.stride_tricks.as_strided(
+        np.array([2.]), shape=(2, 0), strides=(1, 1))
+    assert ducc0.misc.vdot(empty, empty) == 0.
