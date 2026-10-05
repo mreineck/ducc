@@ -70,9 +70,12 @@ template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
 #if 0
   arr.fill(T(0));
 #else
-  MR_assert((arr.stride(0)>0) && (arr.stride(1)>0), "bad memory ordering");
-  MR_assert(arr.stride(0)>=arr.stride(1), "bad memory ordering");
   size_t s0=arr.shape(0), s1=arr.shape(1);
+  if ((s0==0) || (s1==0)) return;
+  MR_assert(((s0==1) || (arr.stride(0)>0))
+         && ((s1==1) || (arr.stride(1)>0)), "bad memory ordering");
+  MR_assert((s0==1) || (s1==1) || (arr.stride(0)>=arr.stride(1)),
+    "bad memory ordering");
   execParallel(s0, nthreads, [&](size_t lo, size_t hi)
     {
     if (arr.stride(1)==1)

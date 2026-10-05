@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ducc0/infra/mav.h"
+#include "ducc0/wgridder/wgridder_impl.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/wigner3j.h"
@@ -317,6 +318,38 @@ static int test_null_backed_empty_subarrays()
   return 0;
   }
 
+static int test_singleton_slice_reversed_sources()
+  {
+  double raw[2]={10., 20.};
+  auto step=numeric_limits<ptrdiff_t>::min();
+
+  vmav<double,1> fixed_reversed(raw+1, {2}, {-1});
+  auto fixed_single=fixed_reversed.subarray<1>({slice(1, 0, step)});
+  if ((fixed_single.size()!=1) || (fixed_single.stride(0)!=0)
+      || (fixed_single(0)!=10.))
+    return 1;
+
+  fmav_info info({2}, {-1});
+  vfmav<double> dynamic_reversed(raw+1, info);
+  auto dynamic_single=dynamic_reversed.subarray({slice(1, 0, step)});
+  if ((dynamic_single.size()!=1) || (dynamic_single.stride(0)!=0)
+      || (dynamic_single(0)!=10.))
+    return 1;
+
+  cout << "PASS singleton_slice_reversed_sources\n";
+  return 0;
+  }
+
+static int test_quickzero_empty_views()
+  {
+  vmav<float,2> empty_leading({0,2});
+  vmav<float,2> empty_trailing({2,0});
+  detail_gridder::quickzero(empty_leading, 1);
+  detail_gridder::quickzero(empty_trailing, 1);
+  cout << "PASS quickzero_empty_views\n";
+  return 0;
+  }
+
 struct RegressionTest { const char *name; int (*run)(); };
 
 static constexpr RegressionTest regression_tests[] =
@@ -331,6 +364,8 @@ static constexpr RegressionTest regression_tests[] =
   {"build_noncritical_empty", test_build_noncritical_empty},
   {"reverse_slice_open_end", test_reverse_slice_open_end},
   {"slice_min_step", test_slice_min_step},
+  {"singleton_slice_reversed_sources", test_singleton_slice_reversed_sources},
+  {"quickzero_empty_views", test_quickzero_empty_views},
   };
 
 int main(int argc, char **argv)

@@ -31,6 +31,15 @@ pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
 
+def test_wgridding_accepts_singleton_workspace_views():
+    out = ng.vis2dirty(
+        uvw=np.zeros((1, 3)), freq=np.array([1e9]),
+        vis=np.ones((1, 1), dtype=np.complex128),
+        npix_x=2, npix_y=2, pixsize_x=1e-5, pixsize_y=1e-5,
+        epsilon=3e-5, do_wgridding=True, nthreads=2, verbosity=0)
+    assert out.shape == (2, 2)
+
+
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                      apply_w, mask, divide_by_n=True):
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],

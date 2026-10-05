@@ -409,7 +409,7 @@ class fmav_info
           {
           auto ext = slices[i].size(shp[i]);
           MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          nshp[i2]=ext; nstr[i2]=(ext==1) ? 0 : slices[i].step*str[i];
           ++i2;
           }
         }
@@ -618,7 +618,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
           {
           auto ext = slices[i].size(shp[i]);
           MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          nshp[i2]=ext; nstr[i2]=(ext==1) ? 0 : slices[i].step*str[i];
           ++i2;
           }
         }
