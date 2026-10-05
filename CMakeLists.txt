@@ -13,11 +13,72 @@ if(DEFINED ENV{DUCC0_OPTIMIZATION})
 else()
     set (OPTFLAGS "native-strip")
 endif()
-if (OPTFLAGS MATCHES "^multiarch" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+if (OPTFLAGS MATCHES "^multiarch"
+    AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+    AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
     set (MULTIARCH ON)
 else()
     set (MULTIARCH OFF)
 endif()
+
+if (MULTIARCH)
+    function(ducc0_check_multiarch_global_flags source flags)
+        if ("${flags}" STREQUAL "")
+            return()
+        endif()
+        separate_arguments(_tokens NATIVE_COMMAND "${flags}")
+        foreach(_flag IN LISTS _tokens)
+            string(TOLOWER "${_flag}" _lower_flag)
+            if (_lower_flag MATCHES "^-march=")
+                if (NOT _lower_flag STREQUAL "-march=x86-64")
+                    message(FATAL_ERROR
+                        "Multiarch profile contamination: ${source} contains ${_flag}; only -march=x86-64 is allowed globally.")
+                endif()
+            elseif (_lower_flag MATCHES "^-mcpu="
+                    OR _lower_flag MATCHES "^-m(avx|sse|fma|bmi|lzcnt|f16c|movbe)"
+                    OR _lower_flag MATCHES "^-m(cx16|sahf|popcnt|aes|pclmul|sha|gfni|vaes|vpclmul|amx|abm|adx|rtm|hle|rdrnd|rdseed|clflushopt|clwb|waitpkg|serialize)"
+                    OR _lower_flag MATCHES "^/arch:")
+                message(FATAL_ERROR
+                    "Multiarch profile contamination: ${source} contains ${_flag}; ISA flags must be set per profile.")
+            elseif (_lower_flag MATCHES "^-flto($|=)"
+                    OR _lower_flag STREQUAL "/gl")
+                message(FATAL_ERROR
+                    "Multiarch profile contamination: ${source} contains ${_flag}; global LTO is not allowed.")
+            endif()
+        endforeach()
+    endfunction()
+
+    set(_multiarch_flag_variables
+        CMAKE_C_FLAGS
+        CMAKE_CXX_FLAGS
+        CMAKE_EXE_LINKER_FLAGS
+        CMAKE_SHARED_LINKER_FLAGS
+        CMAKE_MODULE_LINKER_FLAGS)
+    foreach(_config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+        list(APPEND _multiarch_flag_variables
+            CMAKE_C_FLAGS_${_config}
+            CMAKE_CXX_FLAGS_${_config}
+            CMAKE_EXE_LINKER_FLAGS_${_config}
+            CMAKE_SHARED_LINKER_FLAGS_${_config}
+            CMAKE_MODULE_LINKER_FLAGS_${_config})
+    endforeach()
+    foreach(_variable IN LISTS _multiarch_flag_variables)
+        if (DEFINED ${_variable})
+            ducc0_check_multiarch_global_flags(
+                "${_variable}" "${${_variable}}")
+        endif()
+    endforeach()
+
+    foreach(_variable CFLAGS CPPFLAGS CXXFLAGS LDFLAGS
+                      DUCC0_CFLAGS DUCC0_FLAGS DUCC0_LFLAGS)
+        set(_value "$ENV{${_variable}}")
+        if (NOT "${_value}" STREQUAL "")
+            ducc0_check_multiarch_global_flags(
+                "environment variable ${_variable}" "${_value}")
+        endif()
+    endforeach()
+endif()
+
 set(PKGNAME ${SKBUILD_PROJECT_NAME})
 set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
@@ -45,6 +106,17 @@ if (MULTIARCH)
     add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set_property(TARGET ${PKGNAME}_lib_v1 PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+    set_property(TARGET ${PKGNAME}_lib_v3 PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+    set_property(TARGET ${PKGNAME}_lib_v4 PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+    foreach(_config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+        set_property(TARGET ${PKGNAME}_lib_v1
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${_config} FALSE)
+        set_property(TARGET ${PKGNAME}_lib_v3
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${_config} FALSE)
+        set_property(TARGET ${PKGNAME}_lib_v4
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${_config} FALSE)
+    endforeach()
 else()
     add_library(${PKGNAME}_lib OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
@@ -85,7 +157,10 @@ else()
     pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver.cc)
 endif()
 
-if (NOT MSVC)
+if (MULTIARCH)
+    set(DUCC0_ARCH_FLAGS "")
+    message(STATUS "Using per-profile x86-64 flags for multiarch build")
+elseif (NOT MSVC)
     if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc|ppc64|powerpc|powerpc64" OR (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "ppc|ppc64"))
         # PowerPC arch does not have -march flag.
         set(DUCC0_ARCH_FLAGS "-mtune=native" CACHE STRING "Compiler flags for specifying target architecture.")
@@ -172,7 +247,11 @@ SET (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
 
 # settings for the final compile/link step
 target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
-target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+if (MULTIARCH)
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS} -march=x86-64)
+else()
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+endif()
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
 
 # setting s for the library part(s)
