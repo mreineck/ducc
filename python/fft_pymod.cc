@@ -76,6 +76,8 @@ static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
     shape_t res(size_t(in.ndim()));
     for (size_t i=0; i<res.size(); ++i)
       res[i]=i;
+    if (res.empty())
+      throw runtime_error("no axes specified");
     return res;
     }
   auto tmp=axes.value();
