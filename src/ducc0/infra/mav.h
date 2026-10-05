@@ -1172,17 +1172,25 @@ template<typename Ttuple> inline Ttuple update_pointers_contiguous (const Ttuple
   }
 template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
   { tuple_for_each(ptrs, [](auto &&ptr) { ++ptr; }); }
-template<typename Ttuple> inline void advance (Ttuple &ptrs,
-  const vector<vector<ptrdiff_t>> &str, size_t idim)
+template<typename Ttuple, size_t N> inline void advance (Ttuple &ptrs,
+  const array<ptrdiff_t, N> &str)
   {
-  tuple_for_each_idx(ptrs, [idim,&str](auto &&ptr, size_t idx)
-                     { ptr += str[idx][idim]; });
+  tuple_for_each_idx(ptrs, [&str](auto &&ptr, size_t idx)
+                     { ptr += str[idx]; });
   }
 template<typename Ttuple> inline void advance_by_n (Ttuple &ptrs,
   const vector<vector<ptrdiff_t>> &str, size_t idim, size_t n)
   {
   tuple_for_each_idx(ptrs, [idim,n,&str](auto &&ptr, size_t idx)
                      { ptr += n*str[idx][idim]; });
+  }
+template<typename Ttuple> inline auto get_strides
+  (const vector<vector<ptrdiff_t>> &str, size_t idim)
+  {
+  array<ptrdiff_t, tuplelike_size<Ttuple>()> res;
+  for (size_t i=0; i<res.size(); ++i)
+    res[i] = str[i][idim];
+  return res;
   }
 
 // Multithreaded mav_apply (and its variants) distribute the work along axis 0
@@ -1244,16 +1252,18 @@ template<typename Ttuple, typename Func>
   auto leni=shp[idim], lenj=shp[idim+1];
   size_t nbi = (leni+bsi-1)/bsi;
   size_t nbj = (lenj+bsj-1)/bsj;
+  const auto stri = get_strides<Ttuple>(str, idim),
+             strj = get_strides<Ttuple>(str, idim+1);
   for (size_t bi=0; bi<nbi; ++bi)
     for (size_t bj=0; bj<nbj; ++bj)
       {
       auto locptrs(ptrs);
       advance_by_n(locptrs, str, idim, bi*bsi);
       advance_by_n(locptrs, str, idim+1, bj*bsj);
-      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, str, idim))
+      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, stri))
         {
         auto locptrs2(locptrs);
-        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, str, idim+1))
+        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, strj))
           call_with_tuple(func, to_ref(locptrs2));
         }
       }
@@ -1278,8 +1288,11 @@ template<typename Ttuple, typename Func>
       for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
         call_with_tuple(func, to_ref(locptrs));
     else
-      for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+      {
+      const auto locstr = get_strides<Ttuple>(str, idim);
+      for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
         call_with_tuple(func, to_ref(locptrs));
+      }
     }
   }
 template<typename Func, typename Ttuple>
@@ -1344,16 +1357,18 @@ template<typename ReduceType, typename Ttuple, typename Func>
   auto leni=shp[idim], lenj=shp[idim+1];
   size_t nbi = (leni+bsi-1)/bsi;
   size_t nbj = (lenj+bsj-1)/bsj;
+  const auto stri = get_strides<Ttuple>(str, idim),
+             strj = get_strides<Ttuple>(str, idim+1);
   for (size_t bi=0; bi<nbi; ++bi)
     for (size_t bj=0; bj<nbj; ++bj)
       {
       auto locptrs(ptrs);
       advance_by_n(locptrs, str, idim, bi*bsi);
       advance_by_n(locptrs, str, idim+1, bj*bsj);
-      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, str, idim))
+      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, stri))
         {
         auto locptrs2(locptrs);
-        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, str, idim+1))
+        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, strj))
           rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs2)));
         }
       }
@@ -1380,8 +1395,11 @@ template<typename ReduceType, typename Ttuple, typename Func>
       for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
         rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
     else
-      for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+      {
+      const auto locstr = get_strides<Ttuple>(str, idim);
+      for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
         rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+      }
     }
   return rt;
   }
@@ -1469,8 +1487,9 @@ template<typename Ttuple, typename Func>
   else
     {
     auto locptrs(ptrs);
+    const auto locstr = get_strides<Ttuple>(str, idim);
     auto idxbak = index[idim];
-    for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, str, idim))
+    for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, locstr))
       call_with_tuple_arg(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
     index[idim] = idxbak;
     }
@@ -1600,11 +1619,12 @@ template<typename Tptrs, typename Tinfos, typename Func>
   {
   auto len = shp[idim];
   auto locptrs(ptrs);
+  const auto locstr = get_strides<Tptrs>(str, idim);
   if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
       flexible_mav_applyHelper(idim+1, shp, str, locptrs, infos, func);
   else
-    for (size_t i=0; i<len; ++i, advance(locptrs, str, idim))
+    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
       call_with_tuple2(func, make_mavrefs(locptrs, infos));
   }
 template<typename Tptrs, typename Tinfos, typename Func>
