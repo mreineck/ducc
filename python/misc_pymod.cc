@@ -1110,13 +1110,27 @@ template<typename Ti, typename To> static NpArr roll_resize_roll(const CNpArr &i
   {
   auto inp(to_cfmav<Ti>(inp_));
   auto out(to_vfmav<To>(out_));
-  {
-  py::gil_scoped_release release;
   size_t ndim = inp.ndim();
   nthreads = adjust_nthreads(nthreads);
   MR_assert(out.ndim()==ndim, "dimensionality mismatch");
   MR_assert(ri_.size()==ndim, "dimensionality mismatch");
   MR_assert(ro_.size()==ndim, "dimensionality mismatch");
+  if (out.size()==0) return out_;
+  if (inp.size()==0)
+    {
+    {
+    py::gil_scoped_release release;
+    mav_apply([](To &v){v=To(0);}, nthreads, out);
+    }
+    return out_;
+    }
+  if (ndim==0)
+    {
+    out.data()[0] = To(inp.data()[0]);
+    return out_;
+    }
+  {
+  py::gil_scoped_release release;
   vector<size_t> ri, ro;
   for (size_t i=0; i<ndim; ++i)
     {
@@ -1156,12 +1170,14 @@ static NpArr Py_roll_resize_roll(const CNpArr &inp,
 constexpr const char *Py_roll_resize_roll_DS = R"""(
 Performs operations equivalent to
 
-tmp = np.roll(inp, roll_inp, axis=tuple(range(inp.ndim)))
+tmp = np.roll(inp, roll_inp, axis=tuple(range(inp.ndim)) or None)
 tmp2 = np.zeros(out.shape, dtype=inp.dtype)
 slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
 tmp2[slices] = tmp[slices]
-out[()] = np.roll(tmp2, roll_out, axis=tuple(range(out.ndim)))
+out[()] = np.roll(tmp2, roll_out, axis=tuple(range(out.ndim)) or None)
 return out
+
+For 0-D arrays, this copies the scalar from inp to out.
 
 Parameters
 ----------

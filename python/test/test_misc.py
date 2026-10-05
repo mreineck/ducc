@@ -89,6 +89,28 @@ def test_special_add_at_creative(a_shape, axis, index, b, expected, dtype):
     out = special_add_at(a, axis=axis, index=index, b=b)
     np.testing.assert_array_equal(out, expected)
 
+@pmp("inp_shape, out_shape", [((0, 3), (2, 4)), ((2, 0, 3), (3, 2, 4)),
+                             ((2, 3, 0), (3, 4, 2)), ((2, 3), (0, 4)),
+                             ((2, 3, 4), (3, 0, 2)), ((2, 3), (3, 0)),
+                             ((0, 3), (0, 4)), ((), ()), ((2, 3), (3, 2))])
+@pmp("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+@pmp("nthreads", [1, 2])
+def test_roll_resize_roll(inp_shape, out_shape, dtype, nthreads):
+    inp = (1 + np.arange(np.prod(inp_shape))).reshape(inp_shape).astype(dtype)
+    if np.iscomplexobj(inp):
+        inp += 1j*inp
+    out = np.full(out_shape, np.nan, dtype=dtype)
+    roll_inp = tuple(-i-1 for i in range(inp.ndim))
+    roll_out = tuple(i+1 for i in range(out.ndim))
+    tmp = np.roll(inp, roll_inp, axis=tuple(range(inp.ndim)) or None)
+    expected = np.zeros(out.shape, dtype=inp.dtype)
+    slices = tuple(slice(0, min(s1, s2)) for s1, s2 in zip(inp.shape, out.shape))
+    expected[slices] = tmp[slices]
+    expected = np.roll(expected, roll_out, axis=tuple(range(out.ndim)) or None)
+    res = ducc0.misc.roll_resize_roll(inp, out, roll_inp, roll_out, nthreads=nthreads)
+    assert res is out
+    np.testing.assert_array_equal(res, expected)
+
 
 @pytest.mark.parametrize("dtype", [np.complex64, np.complex128])
 def test_special_add_at_complex(dtype):
