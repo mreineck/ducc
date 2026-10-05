@@ -96,11 +96,11 @@ using namespace std;
 namespace {
 
 template<typename T> constexpr inline size_t fft_simdlen
-  = min<size_t>(8, native_simd<T>::size());
+  = min<size_t>(16, native_simd<T>::size());
 template<> constexpr inline size_t fft_simdlen<double>
-  = min<size_t>(4, native_simd<double>::size());
+  = min<size_t>(8, native_simd<double>::size());
 template<> constexpr inline size_t fft_simdlen<float>
-  = min<size_t>(8, native_simd<float>::size());
+  = min<size_t>(16, native_simd<float>::size());
 template<typename T> using fft_simd = typename simd_select<T,fft_simdlen<T>>::type;
 template<typename T> constexpr inline bool fft_simd_exists = (fft_simdlen<T> > 1);
 
@@ -405,8 +405,8 @@ template<typename T, typename T0> class TmpStorage
       dstride = bufsize_data;
       dofs = bufsize_trafo;
       // critical stride avoidance
-      if ((dstride&256)==0) dstride+=16;
-      if ((dofs&256)==0) dofs += 16;
+      if ((dstride!=0)&&((dstride&256)==0)) dstride+=16;
+      if ((dofs!=0)&&((dofs&256)==0)) dofs += 16;
       d.realloc(buffct*dofs + datafct*dstride);
       }
 
@@ -438,6 +438,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
   constexpr auto vlen=Tsimd::size();
   const Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = src.data();
   for (size_t i=0; i<it.length_in(); ++i)
+#if 0
     {
     Cmplx<Tsimd> tmp;
     for (size_t j=0; j<vlen; ++j)
@@ -447,6 +448,13 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
       }
     dst[i] = tmp;
     }
+#else
+    for (size_t j=0; j<vlen; ++j)
+      {
+      dst[i].r[j] = ptr[it.iofs(j,i)].r;
+      dst[i].i[j] = ptr[it.iofs(j,i)].i;
+      }
+#endif
   }
 
 template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -456,10 +464,15 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
   const typename Tsimd::value_type * DUCC0_RESTRICT ptr = src.data();
   for (size_t i=0; i<it.length_in(); ++i)
     {
-    typename Tsimd::value_type tmp[vlen];
+#if 0
+    Tsimd tmp;
     for (size_t j=0; j<vlen; ++j)
       tmp[j] = ptr[it.iofs(j,i)];
-    dst[i] = loadu<Tsimd>(&tmp[0]);
+    dst[i] = tmp;
+#else
+    for (size_t j=0; j<vlen; ++j)
+      dst[i][j] = ptr[it.iofs(j,i)];
+#endif
     }
   }
 
@@ -478,11 +491,16 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   constexpr auto vlen=Tsimd::size();
   Cmplx<typename Tsimd::value_type> * DUCC0_RESTRICT ptr = dst.data();
   for (size_t i=0; i<it.length_out(); ++i)
+#if 0
     {
     Cmplx<Tsimd> tmp(src[i]);
     for (size_t j=0; j<vlen; ++j)
       ptr[it.oofs(j,i)].Set(tmp.r[j],tmp.i[j]);
     }
+#else
+    for (size_t j=0; j<vlen; ++j)
+      ptr[it.oofs(j,i)].Set(src[i].r[j], src[i].i[j]);
+#endif
   }
 
 template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
@@ -491,11 +509,16 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
   constexpr auto vlen=Tsimd::size();
   typename Tsimd::value_type * DUCC0_RESTRICT ptr = dst.data();
   for (size_t i=0; i<it.length_out(); ++i)
+#if 0
     {
     Tsimd tmp = src[i];
     for (size_t j=0; j<vlen; ++j)
       ptr[it.oofs(j,i)] = tmp[j];
     }
+#else
+    for (size_t j=0; j<vlen; ++j)
+      ptr[it.oofs(j,i)] = src[i][j];
+#endif
   }
 
 template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
@@ -514,15 +537,23 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j0=0; j0<nvec; ++j0)
       {
-      typename Tsimd::value_type tmp[2*vlen];
+#if 0
+      Tsimd tmp[2];
       for (size_t j1=0; j1<vlen; ++j1)
         {
-        tmp[j1] = ptr[it.iofs(j0*vlen+j1,i)].r;
-        tmp[j1+vlen] = ptr[it.iofs(j0*vlen+j1,i)].i;
+        tmp[0][j1] = ptr[it.iofs(j0*vlen+j1,i)].r;
+        tmp[1][j1] = ptr[it.iofs(j0*vlen+j1,i)].i;
         }
 
-      dst[j0*vstr+i].r = loadu<Tsimd>(&tmp[0]);
-      dst[j0*vstr+i].i = loadu<Tsimd>(&tmp[vlen]);
+      dst[j0*vstr+i].r = tmp[0];
+      dst[j0*vstr+i].i = tmp[1];
+#else
+      for (size_t j1=0; j1<vlen; ++j1)
+        {
+        dst[j0*vstr+i].r[j1] = ptr[it.iofs(j0*vlen+j1,i)].r;
+        dst[j0*vstr+i].i[j1] = ptr[it.iofs(j0*vlen+j1,i)].i;
+        }
+#endif
       }
   }
 template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
@@ -542,10 +573,15 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
   for (size_t i=0; i<it.length_in(); ++i)
     for (size_t j0=0; j0<nvec; ++j0)
       {
-      typename Tsimd::value_type tmp[vlen];
+#if 0
+      Tsimd tmp;
       for (size_t j1=0; j1<vlen; ++j1)
         tmp[j1] = ptr[it.iofs(j0*vlen+j1,i)];
-      dst[j0*vstr+i] = loadu<Tsimd>(&tmp[0]);
+      dst[j0*vstr+i] = tmp;
+#else
+      for (size_t j1=0; j1<vlen; ++j1)
+        dst[j0*vstr+i][j1] = ptr[it.iofs(j0*vlen+j1,i)];
+#endif
       }
   }
 
