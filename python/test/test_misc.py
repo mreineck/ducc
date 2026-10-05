@@ -112,3 +112,11 @@ def test_special_add_at_complex(dtype):
 def test_l2error_scalar(a, b, expected):
     assert_allclose(ducc0.misc.l2error(a, b), expected)
     assert_allclose(ducc0.misc.l2error(np.array([a]), np.array([b])), expected)
+
+
+def test_vdot_scalars_match_zero_dimensional_arrays():
+    cases = ((2., 3.), (2., 3.+4.j), (1.+2.j, 3.+4.j),
+             (np.float32(2.), np.float32(3.)),
+             (np.complex64(1.+2.j), np.complex64(3.+4.j)))
+    for a, b in cases:
+        assert ducc0.misc.vdot(a, b) == ducc0.misc.vdot(np.array(a), np.array(b))
