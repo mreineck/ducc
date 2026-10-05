@@ -151,6 +151,31 @@ static int test_build_noncritical_empty()
   else cout << "FAIL build_noncritical_empty\n";
   return ok ? 0 : 1;
   }
+
+/* The MAXIDX end marker represents an open end and must work with reverse
+   slices as well as forward slices. */
+static int test_reverse_slice_open_end()
+  {
+  vmav<double,1> arr({4});
+  for (size_t i=0; i<4; ++i) arr(i)=double(i);
+  bool ok=true;
+  try
+    {
+    auto rev=arr.subarray<1>({slice(3, MAXIDX, -1)});
+    if ((rev.shape(0)!=4) || (rev.stride(0)!=-1)) ok=false;
+    for (size_t i=0; i<4; ++i)
+      if (rev(i)!=double(3-i)) ok=false;
+    }
+  catch (const exception &e)
+    {
+    cout << "reverse open-end slice was rejected: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS reverse_slice_open_end\n";
+  else cout << "FAIL reverse_slice_open_end\n";
+  return ok ? 0 : 1;
+  }
+
 /* Wigner3j_direct::calc() (src/ducc0/math/wigner3j.h:191) evaluates
    `g[ofs-1]` for the EE/TE terms; the intended call pattern starts at
    ofs=0 (mcm.h: sum_wig_general), i.e. one double *before* the `g` table
@@ -278,6 +303,7 @@ static constexpr RegressionTest regression_tests[] =
   {"subarray_empty_axis", test_subarray_empty_axis},
   {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
   {"build_noncritical_empty", test_build_noncritical_empty},
+  {"reverse_slice_open_end", test_reverse_slice_open_end},
   };
 
 int main(int argc, char **argv)
