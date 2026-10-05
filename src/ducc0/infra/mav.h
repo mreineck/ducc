@@ -177,10 +177,12 @@ struct slice
     {
     if (beg==end) return 0;
     if (step>0) return (min(shp,end)-beg+step-1)/step;
+    size_t step_size = size_t(-(step+1))+1;
     // negative step
     if (end==MAXIDX)
-      return (beg-step)/(-step);
-    return (beg-end-step-1)/(-step);
+      return beg/step_size+1;
+    size_t dist = beg-end;
+    return dist/step_size + (dist%step_size!=0);
     }
   };
 

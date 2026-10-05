@@ -14,6 +14,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <new>
 #include <string>
 #include <vector>
@@ -176,6 +177,31 @@ static int test_reverse_slice_open_end()
   return ok ? 0 : 1;
   }
 
+/* Negative step magnitude must be computed without overflowing at PTRDIFF_MIN. */
+static int test_slice_min_step()
+  {
+  vmav<double,1> arr({2});
+  arr(0)=10.;
+  arr(1)=20.;
+  auto step=std::numeric_limits<ptrdiff_t>::min();
+  bool ok=true;
+  try
+    {
+    auto finite=arr.subarray<1>({slice(1, 0, step)});
+    auto open=arr.subarray<1>({slice(1, MAXIDX, step)});
+    if ((finite.size()!=1) || (finite(0)!=20.)) ok=false;
+    if ((open.size()!=1) || (open(0)!=20.)) ok=false;
+    }
+  catch (const exception &e)
+    {
+    cout << "PTRDIFF_MIN slice failed: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS slice_min_step\n";
+  else cout << "FAIL slice_min_step\n";
+  return ok ? 0 : 1;
+  }
+
 /* Wigner3j_direct::calc() (src/ducc0/math/wigner3j.h:191) evaluates
    `g[ofs-1]` for the EE/TE terms; the intended call pattern starts at
    ofs=0 (mcm.h: sum_wig_general), i.e. one double *before* the `g` table
@@ -304,6 +330,7 @@ static constexpr RegressionTest regression_tests[] =
   {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
   {"build_noncritical_empty", test_build_noncritical_empty},
   {"reverse_slice_open_end", test_reverse_slice_open_end},
+  {"slice_min_step", test_slice_min_step},
   };
 
 int main(int argc, char **argv)
