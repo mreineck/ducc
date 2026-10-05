@@ -23,6 +23,7 @@
 #include "ducc0/wgridder/wgridder_impl.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/math_utils.h"
 #include "ducc0/math/wigner3j.h"
 #include "ducc0/healpix/healpix_base.h"
 
@@ -299,6 +300,37 @@ static int test_healpix_interpol()
   return 0;
   }
 
+
+/* isqrt (src/ducc0/math/math_utils.h): for 64-bit arguments where the
+   result is near 2^32-1, (res+1)*(res+1) can overflow 64-bit arithmetic.
+   isqrt must return the floor integer square root up to UINT64_MAX. */
+static int test_isqrt()
+  {
+  bool ok = true;
+  uint64_t max32 = 0xFFFFFFFFULL;
+  uint64_t sq_max32 = max32 * max32;
+  if (isqrt(sq_max32) != max32)
+    {
+    cout << "isqrt(" << sq_max32 << ") = " << isqrt(sq_max32)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(~0ULL) != max32)
+    {
+    cout << "isqrt(UINT64_MAX) = " << isqrt(~0ULL)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(sq_max32 - 1) != max32 - 1)
+    {
+    cout << "isqrt(" << sq_max32 - 1 << ") = " << isqrt(sq_max32 - 1)
+         << ", expected " << max32 - 1 << "\n";
+    ok = false;
+    }
+  if (ok) cout << "PASS isqrt\n";
+  return ok ? 0 : 1;
+  }
+
 static int test_null_backed_empty_subarrays()
   {
   vmav<double,1> fixed(static_cast<double *>(nullptr), {0}, {1});
@@ -366,6 +398,7 @@ static constexpr RegressionTest regression_tests[] =
   {"slice_min_step", test_slice_min_step},
   {"singleton_slice_reversed_sources", test_singleton_slice_reversed_sources},
   {"quickzero_empty_views", test_quickzero_empty_views},
+  {"isqrt", test_isqrt},
   };
 
 int main(int argc, char **argv)
