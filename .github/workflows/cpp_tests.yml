@@ -1,0 +1,17 @@
+name: ducc-cpp-tests
+on: [workflow_dispatch]
+
+#on:
+#  push:
+#    branches:
+#      - ducc0
+#  pull_request:
+
+jobs:
+  cpp-tests:
+    name: C++ unit tests (ASAN)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run C++ unit tests
+        run: ./test_cpp/run.sh
