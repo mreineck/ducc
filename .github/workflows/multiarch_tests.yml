@@ -2,49 +2,21 @@ name: ducc-multiarch-tests
 on: [workflow_dispatch]
 
 jobs:
-  test-non-multiarch:
-    name: non-multiarch / ${{ matrix.optimization }}
-    runs-on: ubuntu-24.04
+  test:
+    name: ${{ matrix.mode }}
+    runs-on: ubuntu-26.04
     env:
       DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
     strategy:
       fail-fast: false
       matrix:
-        optimization:
-          - native
-          - portable
-
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-
-      - name: Build and install
-        run: python -m pip install --user .
-
-      - name: CPU info
-        run: |
-          python - <<'PY'
-          import ducc0
-          info = ducc0.misc.cpu_info()
-          print(info)
-          assert info["architecture"] == "x86-64"
-          assert info["multiarch"] is False
-          assert set(info) == {"architecture", "multiarch"}
-          PY
-
-  test-multiarch:
-    name: multiarch / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    env:
-      DUCC0_OPTIMIZATION: multiarch-strip
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-24.04
-          - ubuntu-26.04
+        include:
+          - mode: native
+            optimization: native
+          - mode: portable
+            optimization: portable
+          - mode: multiarch
+            optimization: multiarch-strip
 
     steps:
       - uses: actions/checkout@v7
@@ -53,39 +25,36 @@ jobs:
           python-version: '3.11'
 
       - name: Install test dependencies
+        if: matrix.mode == 'multiarch'
         run: python -m pip install --user --upgrade pytest numpy scipy
 
       - name: Build and install
         run: python -m pip install --user .
 
       - name: CPU info
+        id: cpu_info
+        run: python .github/scripts/check_cpu_info.py "${{ matrix.mode }}"
+
+      - name: Run tests / x86-64
+        if: matrix.mode == 'multiarch'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '1'
         run: |
-          python - <<'PY'
-          import ducc0
-          info = ducc0.misc.cpu_info()
-          print(info)
-          assert set(info) == {
-              "architecture",
-              "multiarch",
-              "compiled_levels",
-              "available_levels",
-              "max_level",
-              "selected_level",
-          }
-          assert info["multiarch"] is True
-          assert info["architecture"] == "x86-64"
-          assert info["compiled_levels"] == [
-              "x86-64",
-              "x86-64-v3",
-              "x86-64-v4",
-          ]
-          assert info["available_levels"]
-          assert info["available_levels"][0] == "x86-64"
-          assert info["max_level"] == "x86-64-v4"
-          PY
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64", info'
+          python -m pytest python/test -x
 
-      - name: Test CPU dispatch
-        run: python -m pytest -q -s python/test/test_multiarch.py
+      - name: Run tests / x86-64-v3
+        if: matrix.mode == 'multiarch' && steps.cpu_info.outputs.v3 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '3'
+        run: |
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64-v3", info'
+          python -m pytest python/test -x
 
-      - name: Run tests
-        run: python -m pytest python/test -x
+      - name: Run tests / x86-64-v4
+        if: matrix.mode == 'multiarch' && steps.cpu_info.outputs.v4 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '4'
+        run: |
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64-v4", info'
+          python -m pytest python/test -x
