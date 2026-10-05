@@ -23,6 +23,20 @@ import matplotlib.pyplot as plt
 rng = np.random.default_rng(42)
 
 
+def measure_pocketfft(a, nrepeat, nthr,  inplace=False):
+    import pypocketfft
+    times = []
+    work = a.copy()
+    for i in range(nrepeat):
+        if inplace:
+            work[()] = a
+        inp = work if inplace else a
+        t0 = time()
+        b = pypocketfft.c2c(inp, out=work, forward=True, nthreads=nthr)
+        t1 = time()
+        times.append(t1-t0)
+    return times, work
+
 def measure_fftw(a, nrepeat, nthr,  inplace=False, flags=('FFTW_MEASURE',), timelimit=None):
     import pyfftw
     f1 = pyfftw.empty_aligned(a.shape, dtype=a.dtype)
