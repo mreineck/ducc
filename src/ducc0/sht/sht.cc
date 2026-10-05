@@ -1018,7 +1018,6 @@ template<typename T> void leg2map(  // FFT
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
-  MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");
@@ -1097,7 +1096,6 @@ template<typename T> void map2leg(  // FFT
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
-  MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");

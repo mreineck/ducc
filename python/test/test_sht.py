@@ -79,6 +79,18 @@ def test_map_leg_empty_rings():
     assert empty_map.shape == (1, 0)
 
 
+def test_map_leg_zero_rings():
+    empty_n = np.empty(0, dtype=np.uint64)
+    empty_f = np.empty(0, dtype=np.float64)
+    leg = ducc0.sht.map2leg(map=np.empty((1, 0)), nphi=empty_n,
+                            phi0=empty_f, ringstart=empty_n, mmax=2)
+    assert leg.shape == (1, 0, 3)
+
+    map = ducc0.sht.leg2map(leg=np.empty((1, 0, 3), dtype=np.complex128),
+                            nphi=empty_n, phi0=empty_f, ringstart=empty_n)
+    assert map.shape == (1, 0)
+
+
 def test_map_leg_rejects_mismatched_ring_metadata():
     nphi = np.array([1], dtype=np.uint64)
     phi0 = np.zeros(1)
