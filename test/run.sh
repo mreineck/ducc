@@ -38,7 +38,8 @@ echo "Compiling C++ API checks ..."
 "$CXX" "${CXXFLAGS[@]}" -c test/test_compile_api.cc -o "$OUT/test_compile_api.o"
 
 echo "Building selection-policy test ..."
-"$CXX" -std=c++17 -Ipython test/test_multiarch.cc -o "$OUT/test_multiarch"
+"$CXX" -std=c++17 -Ipython test/test_multiarch.cc python/multiarch.cc \
+  -o "$OUT/test_multiarch"
 if "$OUT/test_multiarch"; then
   :
 else

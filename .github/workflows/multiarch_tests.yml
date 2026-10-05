@@ -40,7 +40,7 @@ jobs:
         env:
           DUCC0_MAX_PSABI_LEVEL: '1'
         run: |
-          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64", info'
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64", info'
           python -m pytest python/test -x
 
       - name: Run tests / x86-64-v3
@@ -48,7 +48,7 @@ jobs:
         env:
           DUCC0_MAX_PSABI_LEVEL: '3'
         run: |
-          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64-v3", info'
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64-v3", info'
           python -m pytest python/test -x
 
       - name: Run tests / x86-64-v4
@@ -56,5 +56,5 @@ jobs:
         env:
           DUCC0_MAX_PSABI_LEVEL: '4'
         run: |
-          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["selected_level"] == "x86-64-v4", info'
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64-v4", info'
           python -m pytest python/test -x

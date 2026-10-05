@@ -5,40 +5,40 @@
 
 int main()
   {
-  constexpr unsigned all_profiles = ducc0_multiarch::psabi_level_bit(1)
-    | ducc0_multiarch::psabi_level_bit(2)
-    | ducc0_multiarch::psabi_level_bit(3)
-    | ducc0_multiarch::psabi_level_bit(4);
-  constexpr unsigned v2_baseline_profiles = ducc0_multiarch::psabi_level_bit(2)
-    | ducc0_multiarch::psabi_level_bit(3)
-    | ducc0_multiarch::psabi_level_bit(4);
-  constexpr unsigned v1_v3_profiles = ducc0_multiarch::psabi_level_bit(1)
-    | ducc0_multiarch::psabi_level_bit(3);
-  constexpr unsigned v1_only_profiles = ducc0_multiarch::psabi_level_bit(1);
+  constexpr auto all_profiles = ducc0_multiarch::profile_bit(1)
+    | ducc0_multiarch::profile_bit(2)
+    | ducc0_multiarch::profile_bit(3)
+    | ducc0_multiarch::profile_bit(4);
+  constexpr auto v2_baseline_profiles = ducc0_multiarch::profile_bit(2)
+    | ducc0_multiarch::profile_bit(3)
+    | ducc0_multiarch::profile_bit(4);
+  constexpr auto v1_v3_profiles = ducc0_multiarch::profile_bit(1)
+    | ducc0_multiarch::profile_bit(3);
+  constexpr auto v1_only_profiles = ducc0_multiarch::profile_bit(1);
 
   struct TestCase
     {
-    int usable;
-    int max_level;
-    unsigned profiles;
+    int host_psabi_level;
+    int configured_limit;
+    ducc0_multiarch::profile_mask profiles;
     int expected;
     const char *name;
     };
 
   const TestCase cases[] = {
-    {1, 4, ducc0_multiarch::ducc_compiled_psabi_mask, 1,
+    {1, 4, ducc0_multiarch::ducc_compiled_profiles_mask, 1,
       "host v1, max v4, compiled {1,3,4}"},
-    {2, 4, ducc0_multiarch::ducc_compiled_psabi_mask, 1,
+    {2, 4, ducc0_multiarch::ducc_compiled_profiles_mask, 1,
       "host v2, max v4, compiled {1,3,4}"},
-    {3, 4, ducc0_multiarch::ducc_compiled_psabi_mask, 3,
+    {3, 4, ducc0_multiarch::ducc_compiled_profiles_mask, 3,
       "host v3, max v4, compiled {1,3,4}"},
-    {4, 4, ducc0_multiarch::ducc_compiled_psabi_mask, 4,
+    {4, 4, ducc0_multiarch::ducc_compiled_profiles_mask, 4,
       "host v4, max v4, compiled {1,3,4}"},
-    {4, 3, ducc0_multiarch::ducc_compiled_psabi_mask, 3,
+    {4, 3, ducc0_multiarch::ducc_compiled_profiles_mask, 3,
       "host v4, max v3, compiled {1,3,4}"},
-    {4, 2, ducc0_multiarch::ducc_compiled_psabi_mask, 1,
+    {4, 2, ducc0_multiarch::ducc_compiled_profiles_mask, 1,
       "host v4, max v2, compiled {1,3,4}"},
-    {3, 2, ducc0_multiarch::ducc_compiled_psabi_mask, 1,
+    {3, 2, ducc0_multiarch::ducc_compiled_profiles_mask, 1,
       "host v3, max v2, compiled {1,3,4}"},
     {4, 4, v1_v3_profiles, 3,
       "v4 implementation absent, host v4, max v4"},
@@ -55,8 +55,8 @@ int main()
   bool ok = true;
   for (const auto &test : cases)
     {
-    const auto result = ducc0_multiarch::select_psabi_level(
-      test.usable, test.max_level, test.profiles);
+    const auto result = ducc0_multiarch::select_profile(
+      test.host_psabi_level, test.configured_limit, test.profiles);
     if (result != test.expected)
       {
       std::cerr << "FAIL " << test.name << ": got " << result
@@ -65,9 +65,9 @@ int main()
       }
     }
 
-  const auto check_levels = [&ok](const char *name,
-                                  const std::vector<int> &actual,
-                                  const std::vector<int> &expected)
+  const auto check_profiles = [&ok](const char *name,
+                                    const std::vector<int> &actual,
+                                    const std::vector<int> &expected)
     {
     if (actual != expected)
       {
@@ -75,16 +75,19 @@ int main()
       ok = false;
       }
     };
-  check_levels("compiled DUCC profiles",
-    ducc0_multiarch::compiled_levels(), {1, 3, 4});
-  check_levels("available DUCC profiles on v2 host",
-    ducc0_multiarch::available_levels(
-      ducc0_multiarch::ducc_compiled_psabi_mask, 2), {1});
-  check_levels("available DUCC profiles on v3 host",
-    ducc0_multiarch::available_levels(
-      ducc0_multiarch::ducc_compiled_psabi_mask, 3), {1, 3});
-  check_levels("available all profiles on v2 host",
-    ducc0_multiarch::available_levels(all_profiles, 2), {1, 2});
+  check_profiles("compiled DUCC profiles",
+    ducc0_multiarch::compiled_profiles(), {1, 3, 4});
+  check_profiles("available DUCC profiles on v2 host",
+    ducc0_multiarch::available_profiles(
+      ducc0_multiarch::ducc_compiled_profiles_mask, 2), {1});
+  check_profiles("available DUCC profiles on v3 host",
+    ducc0_multiarch::available_profiles(
+      ducc0_multiarch::ducc_compiled_profiles_mask, 3), {1, 3});
+  check_profiles("available DUCC profiles on v4 host",
+    ducc0_multiarch::available_profiles(
+      ducc0_multiarch::ducc_compiled_profiles_mask, 4), {1, 3, 4});
+  check_profiles("available all profiles on v2 host",
+    ducc0_multiarch::available_profiles(all_profiles, 2), {1, 2});
 
   if (ok) std::cout << "PASS multiarch selection policy\n";
   return ok ? 0 : 1;

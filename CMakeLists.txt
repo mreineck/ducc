@@ -35,8 +35,8 @@ if (MULTIARCH)
                         "Multiarch profile contamination: ${source} contains ${_flag}; only -march=x86-64 is allowed globally.")
                 endif()
             elseif (_lower_flag MATCHES "^-mcpu="
-                    OR _lower_flag MATCHES "^-m(avx|sse|fma|bmi|lzcnt|f16c|movbe)"
-                    OR _lower_flag MATCHES "^-m(cx16|sahf|popcnt|aes|pclmul|sha|gfni|vaes|vpclmul|amx|abm|adx|rtm|hle|rdrnd|rdseed|clflushopt|clwb|waitpkg|serialize)"
+                    OR _lower_flag MATCHES "^-m(no-)?(avx|sse|fma|bmi|lzcnt|f16c|movbe)"
+                    OR _lower_flag MATCHES "^-m(no-)?(cx16|sahf|popcnt|aes|pclmul|sha|gfni|vaes|vpclmul|amx|abm|adx|rtm|hle|rdrnd|rdseed|clflushopt|clwb|waitpkg|serialize)"
                     OR _lower_flag MATCHES "^/arch:")
                 message(FATAL_ERROR
                     "Multiarch profile contamination: ${source} contains ${_flag}; ISA flags must be set per profile.")
@@ -140,7 +140,9 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
     else()
         nanobind_compile_options(${PKGNAME}_lib)
     endif()
-    nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE python/ducc_driver.cc)
+    nanobind_add_module(${PKGNAME}
+        FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
+        python/ducc_driver.cc python/multiarch.cc)
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
 # Enable this if stubs are required
 #    nanobind_add_stub(
@@ -154,7 +156,8 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
 else()
     find_package(pybind11 REQUIRED)
     set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
-    pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver.cc)
+    pybind11_add_module(${PKGNAME} NO_EXTRAS
+        python/ducc_driver.cc python/multiarch.cc)
 endif()
 
 if (MULTIARCH)

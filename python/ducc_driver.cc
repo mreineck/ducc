@@ -10,11 +10,11 @@ namespace py = pybind11;
 
 namespace {
 
-void add_cpu_info(py::module_ &m, bool multiarch, int usable_level,
-                  int max_level, int selected_level)
+void add_cpu_info(py::module_ &m, bool multiarch,
+                  ducc0_multiarch::profile_state state)
   {
   m.attr("misc").attr("cpu_info") = py::cpp_function(
-    [multiarch, usable_level, max_level, selected_level]()
+    [multiarch, state]()
     {
     py::dict result;
     result["architecture"] = ducc0_multiarch::architecture_name();
@@ -22,17 +22,20 @@ void add_cpu_info(py::module_ &m, bool multiarch, int usable_level,
     if (multiarch)
       {
       py::list compiled;
-      for (int level : ducc0_multiarch::compiled_levels())
-        compiled.append(ducc0_multiarch::level_name(level));
-      result["compiled_levels"] = compiled;
+      for (int profile : ducc0_multiarch::compiled_profiles())
+        compiled.append(ducc0_multiarch::profile_name(profile));
+      result["compiled_profiles"] = compiled;
 
       py::list available;
-      for (int level : ducc0_multiarch::available_levels(
-             ducc0_multiarch::ducc_compiled_psabi_mask, usable_level))
-        available.append(ducc0_multiarch::level_name(level));
-      result["available_levels"] = available;
-      result["max_level"] = ducc0_multiarch::level_name(max_level);
-      result["selected_level"] = ducc0_multiarch::level_name(selected_level);
+      for (int profile : ducc0_multiarch::available_profiles(
+             ducc0_multiarch::ducc_compiled_profiles_mask,
+             state.host_psabi_level))
+        available.append(ducc0_multiarch::profile_name(profile));
+      result["available_profiles"] = available;
+      result["configured_limit"] =
+        ducc0_multiarch::profile_name(state.configured_limit);
+      result["active_profile"] =
+        ducc0_multiarch::profile_name(state.active_profile);
       }
     return result;
     });
@@ -66,16 +69,13 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
 #endif
 
 #ifdef DUCC0_MULTIARCH
-  const int usable_level = ducc0_multiarch::usable_psabi_level();
-  const int max_level = ducc0_multiarch::max_psabi_level();
-  const int selected_level = ducc0_multiarch::select_psabi_level(
-    usable_level, max_level, ducc0_multiarch::ducc_compiled_psabi_mask);
-  if (selected_level >= 4) ducc0_v4::add_ducc0(m);
-  else if (selected_level >= 3) ducc0_v3::add_ducc0(m);
+  const auto state = ducc0_multiarch::current_profile_state();
+  if (state.active_profile >= 4) ducc0_v4::add_ducc0(m);
+  else if (state.active_profile >= 3) ducc0_v3::add_ducc0(m);
   else ducc0_v1::add_ducc0(m);
-  add_cpu_info(m, true, usable_level, max_level, selected_level);
+  add_cpu_info(m, true, state);
 #else
   ducc0::add_ducc0(m);
-  add_cpu_info(m, false, 0, 0, 0);
+  add_cpu_info(m, false, {});
 #endif
   }

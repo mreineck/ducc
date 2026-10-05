@@ -122,6 +122,7 @@ sdist.include = [
     "python/module_adders.h",
     "python/ducc_driver.cc",
     "python/multiarch.h",
+    "python/multiarch.cc",
     "python/ducc.cc",
     "python/fft_pymod.cc",
     "python/nufft_pymod.cc",
