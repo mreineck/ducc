@@ -534,7 +534,9 @@ static double Py_l2error(const CNpArr &a, const CNpArr &b)
   }
 double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
   {
-  auto res = abs(a-b)/max(abs(a), abs(b));
+  auto maxval = max(abs(a), abs(b));
+  if (maxval==0.) return 0.;
+  auto res = abs(a-b)/maxval;
   return double(res);
   }
 
