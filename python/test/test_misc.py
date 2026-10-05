@@ -102,3 +102,11 @@ def test_vdot_unaligned_singleton_and_empty_strides():
     empty = np.lib.stride_tricks.as_strided(
         np.array([2.]), shape=(2, 0), strides=(1, 1))
     assert ducc0.misc.vdot(empty, empty) == 0.
+
+
+def test_vdot_scalars_match_zero_dimensional_arrays():
+    cases = ((2., 3.), (2., 3.+4.j), (1.+2.j, 3.+4.j),
+             (np.float32(2.), np.float32(3.)),
+             (np.complex64(1.+2.j), np.complex64(3.+4.j)))
+    for a, b in cases:
+        assert ducc0.misc.vdot(a, b) == ducc0.misc.vdot(np.array(a), np.array(b))

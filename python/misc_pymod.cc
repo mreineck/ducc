@@ -125,6 +125,14 @@ static FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
 #endif
   MR_fail("type matching failed");
   }
+static FloatOrComplex Py_vdot_scalar(const complex<double> &a,
+  const complex<double> &b)
+  {
+  complex<long double> acc = conj(complex<long double>(a))
+                           * complex<long double>(b);
+  return (acc.imag()==0) ? FloatOrComplex(double(acc.real()))
+                         : FloatOrComplex(complex<double>(acc));
+  }
 
 
 constexpr const char *Py_special_add_at_DS = R"""(
@@ -1919,6 +1927,7 @@ void add_misc(py::module_ &msup)
   auto m2 = m.def_submodule("experimental");
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
+  m.def("vdot", Py_vdot_scalar, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error_scalar, Py_l2error_DS, "a"_a, "b"_a);
   m.def("special_add_at", Py_special_add_at, Py_special_add_at_DS,
