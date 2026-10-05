@@ -400,6 +400,19 @@ def test_conv2(L1,L2,dtype):
     eps = tol[x2.real.dtype.type]
     _assert_close(x, x2, eps)
 
+def test_convolve_axis_zero_sized_output():
+    a = np.ones((10, 5), dtype=np.float64)
+    out = np.empty((10, 0), dtype=np.float64)
+    k = np.ones((5,), dtype=np.float64)
+    res = ducc0.fft.convolve_axis(a, out, 1, k)
+    assert res.shape == (10, 0)
+
+    ac = np.ones((10, 5), dtype=np.complex128)
+    outc = np.empty((10, 0), dtype=np.complex128)
+    kc = np.ones((5,), dtype=np.complex128)
+    resc = ducc0.fft.convolve_axis(ac, outc, 1, kc)
+    assert resc.shape == (10, 0)
+
 
 def test_multi_iter_bug():
     a=np.zeros((128000,),dtype=np.complex128)
