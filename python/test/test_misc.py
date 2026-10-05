@@ -23,6 +23,18 @@ from numpy.testing import assert_allclose
 
 pmp = pytest.mark.parametrize
 
+@pmp("shape", [(6,), (2, 3)])
+@pmp("dtype", [np.float32, np.float64, np.complex64, np.complex128]
+     + ([np.longdouble, np.clongdouble] if ducc0.__wrapper__ != "nanobind" else []))
+@pmp("nthreads", [0, 1, 2])
+def test_empty_noncritical(shape, dtype, nthreads):
+    out = ducc0.misc.empty_noncritical(shape, dtype, nthreads=nthreads)
+    assert out.shape == shape
+    assert out.dtype == dtype
+    # Page-in writes a byte marker; zero initialization would erase it.
+    # This checks a deliberate write, independent of allocator contents.
+    assert out.view(np.uint8).flat[0] == 1
+
 
 @pmp("shape", ([43], [654, 23], [32, 3, 11]))
 @pmp("dtype_cov", (np.float32, np.float64))

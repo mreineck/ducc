@@ -290,7 +290,7 @@ template<typename T> auto make_Pyarr_and_vfmav
 template<typename T> NpArr make_noncritical_Pyarr(const shape_t &shape, bool zero=false, size_t nthreads=1)
   {
   auto ndim = shape.size();
-  if (ndim==1) return make_Pyarr<T>(shape);
+  if (ndim==1) return make_Pyarr<T>(shape, zero, nthreads);
   auto shape2 = noncritical_shape(shape, sizeof(T));
   NpArr res;
 #ifdef DUCC0_USE_NANOBIND

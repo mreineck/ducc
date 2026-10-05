@@ -679,18 +679,18 @@ static NpArr Py_empty_noncritical(const vector<size_t> &shape,
   {
   auto dtype = normalizeDtype(dtype_);
   if (isDtype<float>(dtype))
-    return make_noncritical_Pyarr<float>(shape, nthreads);
+    return make_noncritical_Pyarr<float>(shape, false, nthreads);
   if (isDtype<complex<float>>(dtype))
-    return make_noncritical_Pyarr<complex<float>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<float>>(shape, false, nthreads);
   if (isDtype<double>(dtype))
-    return make_noncritical_Pyarr<double>(shape);
+    return make_noncritical_Pyarr<double>(shape, false, nthreads);
   if (isDtype<complex<double>>(dtype))
-    return make_noncritical_Pyarr<complex<double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<double>>(shape, false, nthreads);
 #ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
-    return make_noncritical_Pyarr<long double>(shape, nthreads);
+    return make_noncritical_Pyarr<long double>(shape, false, nthreads);
   if (isDtype<complex<long double>>(dtype))
-    return make_noncritical_Pyarr<complex<long double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<long double>>(shape, false, nthreads);
 #endif
   MR_fail("unsupported datatype");
   }
