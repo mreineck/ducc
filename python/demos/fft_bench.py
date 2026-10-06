@@ -73,6 +73,8 @@ def measure_duccfft(a, nrepeat, nthr, inplace=False, noncritical=False):
     for i in range(nrepeat):
         if inplace:
             work[()] = a
+        else:
+            work[()] = 1  # touch the array to page in everything
         inp = work if inplace else a
         t0 = time()
         b = ducc0.fft.c2c(inp, out=work, forward=True, nthreads=nthr)
@@ -166,7 +168,10 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.show()
     plt.close()
 
-f1 = lambda a, nrepeat, nthr: measure_duccfft(a, nrepeat, nthr, inplace=True, noncritical=True)
+ducc0.misc.preallocate_memory(1)
+
+f1 = lambda a, nrepeat, nthr: measure_duccfft(a, nrepeat, nthr, inplace=True, noncritical=False)
+#f2 = lambda a, nrepeat, nthr: measure_pocketfft(a, nrepeat, nthr, inplace=True)
 f2 = lambda a, nrepeat, nthr: measure_fftw(a, nrepeat, nthr, flags=('FFTW_MEASURE',), timelimit=20)
 funcs = (f1, f2)
 ttl = "duccfft/FFTW"

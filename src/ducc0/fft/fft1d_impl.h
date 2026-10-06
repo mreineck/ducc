@@ -86,13 +86,7 @@ using namespace std;
 namespace {
 
 template<typename T> constexpr inline size_t fft1d_simdlen
-  = min<size_t>(16, native_simd<T>::size());
-template<> constexpr inline size_t fft1d_simdlen<double>
-  = min<size_t>(8, native_simd<double>::size());
-template<> constexpr inline size_t fft1d_simdlen<float>
-  = min<size_t>(16, native_simd<float>::size());
-template<typename T> using fft1d_simd = typename simd_select<T,fft1d_simdlen<T>>::type;
-template<typename T> constexpr inline bool fft1d_simd_exists = (fft1d_simdlen<T> > 1);
+  = native_simd<T>::size();
 
 template<bool fwd, typename T> void ROTX90(Cmplx<T> &a)
   { auto tmp_= fwd ? -a.r : a.r; a.r = fwd ? a.i : -a.i; a.i=tmp_; }
@@ -1257,9 +1251,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && fft1d_simd_exists<Tfs>) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && simd_exists<Tfs, native_simd<Tfs>::size()>) // we can vectorize!
           {
-          using Tfv = fft1d_simd<Tfs>;
+          using Tfv = native_simd<Tfs>;
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
