@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds and runs the focused C++ regression and selection-policy tests.
+# Builds and runs the consolidated C++ regression, API, and selection tests.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -19,36 +19,51 @@ SOURCES=(
 )
 OUT="$(mktemp -d "${TMPDIR:-/tmp}/ducc0-cpp-tests.XXXXXX")"
 trap 'rm -rf "$OUT"' EXIT
-
-echo "Building regression tests ..."
-"$CXX" "${CXXFLAGS[@]}" -fsanitize=address -fno-omit-frame-pointer \
-  -o "$OUT/test_regressions" test/test_regressions.cc "${SOURCES[@]}" -pthread
-
 failures=()
-for name in swap_axes slice_wraparound wigner3j_oob template_kernel healpix_interpol; do
-  echo "Running $name ..."
-  if ASAN_OPTIONS=detect_leaks=0 "$OUT/test_regressions" "$name"; then
-    :
+passed=0
+
+record() {
+  local name="$1"
+  shift
+  if "$@"; then
+    echo "PASS $name"
+    passed=$((passed+1))
   else
+    echo "FAIL $name"
     failures+=("$name")
   fi
-done
+}
 
-echo "Compiling C++ API checks ..."
-"$CXX" "${CXXFLAGS[@]}" -c test/test_compile_api.cc -o "$OUT/test_compile_api.o"
-
-echo "Building selection-policy test ..."
-"$CXX" -std=c++17 -Ipython test/test_multiarch.cc python/multiarch.cc \
-  -o "$OUT/test_multiarch"
-if "$OUT/test_multiarch"; then
-  :
-else
-  failures+=("multiarch selection policy")
+echo "Building regression test binary ..."
+record "build regression tests" "$CXX" "${CXXFLAGS[@]}" \
+  -fsanitize=address -fno-omit-frame-pointer \
+  -o "$OUT/test_regressions" test/test_regressions.cc "${SOURCES[@]}" -pthread
+if [[ -x "$OUT/test_regressions" ]]; then
+  for name in swap_axes slice_wraparound wigner3j_oob template_kernel healpix_interpol; do
+    record "regression $name" env ASAN_OPTIONS=detect_leaks=0 \
+      "$OUT/test_regressions" "$name"
+  done
 fi
 
+for source in \
+    test/test_compile_api.cc \
+    test/test_sphere_interpol_api.cc \
+    test/test_wgridder_custom_buffer_1d.cc \
+    test/test_wgridder_custom_buffer_2d.cc; do
+  object="$OUT/$(basename "${source%.cc}").o"
+  echo "Compiling $source ..."
+  record "compile $source" "$CXX" "${CXXFLAGS[@]}" -c "$source" -o "$object"
+done
+
+record "build multiarch selection test" "$CXX" -std=c++17 -Ipython \
+  test/test_multiarch.cc python/multiarch.cc -o "$OUT/test_multiarch"
+if [[ -x "$OUT/test_multiarch" ]]; then
+  record "multiarch selection policy" "$OUT/test_multiarch"
+fi
+
+echo "$passed passed, ${#failures[@]} failed"
 if ((${#failures[@]})); then
-  echo "Failed C++ checks:"
+  printf 'Failed C++ checks:\n'
   printf '  %s\n' "${failures[@]}"
   exit 1
 fi
-echo "PASS all C++ regression and selection-policy tests"
