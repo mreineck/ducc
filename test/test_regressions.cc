@@ -1,13 +1,10 @@
-/* C++ unit tests for bugs found during the 2026-09 bug hunt of ducc0.
+/* C++ regression checks for array handling, mathematical kernels, and
+   HEALPix interpolation.
 
-   Each test fails while its bug is present and passes once the bug is
-   fixed, then remains as a regression test.
+   The swap_axes and Wigner 3j checks use AddressSanitizer to detect invalid
+   memory accesses (see run.sh).
 
-   The swap_axes and wigner3j tests detect out-of-bounds accesses via
-   AddressSanitizer, so this binary must be built with -fsanitize=address
-   (see run.sh).
-
-   Usage: bugtests <name>
+   Usage: test_regressions <name>
    where <name> is one of: swap_axes, slice_wraparound, wigner3j_oob,
                            template_kernel, healpix_interpol
 */

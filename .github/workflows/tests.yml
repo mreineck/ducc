@@ -130,6 +130,9 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
+      - name: CPU info
+        run: python -c "import json, ducc0; print(json.dumps(ducc0.misc.cpu_info(), indent=2))"
+
       - name: Run tests
         run: python -m pytest python/test -x
 
@@ -167,6 +170,9 @@ jobs:
 
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: CPU info
+        run: python -c "import json, ducc0; print(json.dumps(ducc0.misc.cpu_info(), indent=2))"
 
       - name: Run tests
         run: python -m pytest python/test -x
@@ -206,5 +212,6 @@ jobs:
               DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
                 ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
               python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
+              python -c "import json, ducc0; print(json.dumps(ducc0.misc.cpu_info(), indent=2))"
               python -m pytest python/test -x
             '

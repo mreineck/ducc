@@ -1,0 +1,60 @@
+name: ducc-multiarch-tests
+on: [workflow_dispatch, pull_request]
+
+jobs:
+  test:
+    name: ${{ matrix.mode }}
+    runs-on: ubuntu-26.04
+    env:
+      DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: native
+            optimization: native
+          - mode: portable
+            optimization: portable
+          - mode: multiarch
+            optimization: multiarch-strip
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        if: matrix.mode == 'multiarch'
+        run: python -m pip install --user --upgrade pytest numpy scipy
+
+      - name: Build and install
+        run: python -m pip install --user .
+
+      - name: CPU info
+        id: cpu_info
+        run: python .github/scripts/check_cpu_info.py "${{ matrix.mode }}"
+
+      - name: Run tests / x86-64
+        if: matrix.mode == 'multiarch'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '1'
+        run: |
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64", info'
+          python -m pytest python/test -x
+
+      - name: Run tests / x86-64-v3
+        if: matrix.mode == 'multiarch' && steps.cpu_info.outputs.v3 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '3'
+        run: |
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64-v3", info'
+          python -m pytest python/test -x
+
+      - name: Run tests / x86-64-v4
+        if: matrix.mode == 'multiarch' && steps.cpu_info.outputs.v4 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '4'
+        run: |
+          python -c 'import ducc0; info = ducc0.misc.cpu_info(); assert info["active_profile"] == "x86-64-v4", info'
+          python -m pytest python/test -x
