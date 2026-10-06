@@ -13,7 +13,9 @@ if(DEFINED ENV{DUCC0_OPTIMIZATION})
 else()
     set (OPTFLAGS "native-strip")
 endif()
-if (OPTFLAGS MATCHES "^multiarch" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+if (OPTFLAGS MATCHES "^multiarch"
+    AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+    AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
     set (MULTIARCH ON)
 else()
     set (MULTIARCH OFF)
@@ -45,6 +47,12 @@ if (MULTIARCH)
     add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set_property(TARGET ${PKGNAME}_lib_v1
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+    set_property(TARGET ${PKGNAME}_lib_v3
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+    set_property(TARGET ${PKGNAME}_lib_v4
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
 else()
     add_library(${PKGNAME}_lib OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
@@ -68,7 +76,9 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
     else()
         nanobind_compile_options(${PKGNAME}_lib)
     endif()
-    nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE python/ducc_driver.cc)
+    nanobind_add_module(${PKGNAME}
+        FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
+        python/ducc_driver.cc python/multiarch.cc)
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
 # Enable this if stubs are required
 #    nanobind_add_stub(
@@ -82,7 +92,8 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
 else()
     find_package(pybind11 REQUIRED)
     set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
-    pybind11_add_module(${PKGNAME} NO_EXTRAS python/ducc_driver.cc)
+    pybind11_add_module(${PKGNAME} NO_EXTRAS
+        python/ducc_driver.cc python/multiarch.cc)
 endif()
 
 if (NOT MSVC)
@@ -172,7 +183,11 @@ SET (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
 
 # settings for the final compile/link step
 target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
-target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+if (MULTIARCH)
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS} -march=x86-64)
+else()
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+endif()
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
 
 # setting s for the library part(s)
