@@ -3,6 +3,23 @@
 #include <iostream>
 #include <vector>
 
+namespace {
+
+ducc0_multiarch::detail::x86_features complete_x86_features()
+  {
+  ducc0_multiarch::detail::x86_features features;
+  features.sse3 = features.ssse3 = features.sse41 = features.sse42 = true;
+  features.cx16 = features.lahf_sahf = features.popcnt = true;
+  features.avx = features.xsave = features.osxsave = true;
+  features.ymm_state = features.avx2 = features.bmi1 = features.bmi2 = true;
+  features.f16c = features.fma = features.lzcnt = features.movbe = true;
+  features.avx512f = features.avx512dq = features.avx512cd = true;
+  features.avx512bw = features.avx512vl = features.zmm_state = true;
+  return features;
+  }
+
+} // namespace
+
 int main()
   {
   constexpr auto all_profiles = ducc0_multiarch::profile_bit(1)
@@ -15,6 +32,8 @@ int main()
   constexpr auto v1_v3_profiles = ducc0_multiarch::profile_bit(1)
     | ducc0_multiarch::profile_bit(3);
   constexpr auto v1_only_profiles = ducc0_multiarch::profile_bit(1);
+  constexpr auto v3_v4_profiles = ducc0_multiarch::profile_bit(3)
+    | ducc0_multiarch::profile_bit(4);
 
   struct TestCase
     {
@@ -50,6 +69,8 @@ int main()
       "host v2, max v4, compiled {2,3,4}"},
     {2, 4, v1_v3_profiles, 1,
       "host v2, max v4, compiled {1,3}"},
+    {1, 4, v3_v4_profiles, 0,
+      "host v1, max v4, compiled {3,4}"},
     };
 
   bool ok = true;
@@ -65,16 +86,31 @@ int main()
       }
     }
 
-  if (!ducc0_multiarch::usable_psabi_v2(true, true, true, true, true, true,
-                                        true))
+  const auto complete = complete_x86_features();
+  if (ducc0_multiarch::detail::psabi_level(complete) != 4)
     {
-    std::cerr << "FAIL complete x86-64-v2 feature set\n";
+    std::cerr << "FAIL complete x86-64-v4 feature set\n";
     ok = false;
     }
-  if (ducc0_multiarch::usable_psabi_v2(true, false, true, true, true, true,
-                                       true))
+  auto missing_v4 = complete;
+  missing_v4.avx512vl = false;
+  if (ducc0_multiarch::detail::psabi_level(missing_v4) != 3)
     {
-    std::cerr << "FAIL x86-64-v2 without LAHF/SAHF\n";
+    std::cerr << "FAIL missing v4 feature falls back to v3\n";
+    ok = false;
+    }
+  auto missing_v3 = complete;
+  missing_v3.avx2 = false;
+  if (ducc0_multiarch::detail::psabi_level(missing_v3) != 2)
+    {
+    std::cerr << "FAIL missing v3 feature falls back to v2\n";
+    ok = false;
+    }
+  auto missing_lahf = complete;
+  missing_lahf.lahf_sahf = false;
+  if (ducc0_multiarch::detail::psabi_level(missing_lahf) != 1)
+    {
+    std::cerr << "FAIL x86-64-v2 without LAHF/SAHF falls back to v1\n";
     ok = false;
     }
 

@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import sys
@@ -15,14 +14,31 @@ def _profile_number(profile):
 
 
 def test_cpu_info_metadata_and_selector():
+    assert "features" in (ducc0.misc.cpu_info.__doc__ or "")
     info = ducc0.misc.cpu_info()
+    assert isinstance(info.get("architecture"), str)
+    assert info["architecture"]
+    assert isinstance(info.get("features"), list)
+    assert all(isinstance(feature, str) for feature in info["features"])
+    assert isinstance(info.get("multiarch"), bool)
+
+    features = info["features"]
+    if info["architecture"] == "x86-64":
+        if sys.platform.startswith("linux"):
+            assert "sse2" in features
+        assert "avx2" not in features or "avx" in features
+        assert "avx512" not in features or "avx2" in features
+    elif info["architecture"] == "aarch64":
+        assert set(features) <= {"neon", "sve", "sve2"}
+
     if not info["multiarch"]:
-        assert set(info) == {"architecture", "multiarch"}
+        assert set(info) == {"architecture", "features", "multiarch"}
         assert info["multiarch"] is False
         return
 
     assert set(info) == {
         "architecture",
+        "features",
         "multiarch",
         "compiled_profiles",
         "available_profiles",
@@ -45,18 +61,17 @@ def test_cpu_info_metadata_and_selector():
     assert info["active_profile"] == expected
 
 
-def test_malformed_configured_limit_uses_baseline():
+def test_malformed_configured_limit_fails_clearly():
     if not ducc0.misc.cpu_info()["multiarch"]:
         return
 
     env = os.environ.copy()
     env["DUCC0_MAX_PSABI_LEVEL"] = "3invalid"
-    output = subprocess.check_output(
-        [sys.executable, "-c",
-         "import json, ducc0; print(json.dumps(ducc0.misc.cpu_info()))"],
+    result = subprocess.run(
+        [sys.executable, "-c", "import ducc0"],
         env=env,
+        capture_output=True,
         text=True,
     )
-    info = json.loads(output)
-    assert info["configured_limit"] == "x86-64"
-    assert info["active_profile"] == "x86-64"
+    assert result.returncode != 0
+    assert "DUCC0_MAX_PSABI_LEVEL" in result.stderr
