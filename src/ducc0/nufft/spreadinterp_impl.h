@@ -323,7 +323,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             px0r(bufr.data()), px0i(bufi.data()), mutexes(mutexes_) {}
         ~HelperNu2u() { dump(); }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -375,7 +375,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             bufr({size_t(suvec)}), bufi({size_t(suvec)}),
             px0r(bufr.data()), px0i(bufi.data()) {}
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -718,7 +718,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return sv; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -815,7 +815,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return 2*svvec; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -903,7 +903,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return svvec; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -1314,7 +1314,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return sw; }
         constexpr int planeJump() const { return sv*sw; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
 
@@ -1420,7 +1420,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return 2*swvec; }
         constexpr int planeJump() const { return 2*sv*swvec; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -1515,7 +1515,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return sw; }
         constexpr int planeJump() const { return sv*sw; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
 

@@ -68,7 +68,7 @@ template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
 #endif
   }
 
-DUCC0_ALWAYS_INLINE [[gnu::hot]]
+[[gnu::hot]] DUCC0_ALWAYS_INLINE
 auto comp_indices(size_t idx, size_t nuni, size_t nbig, bool fft_order)
   {
   int icf = abs(int(nuni/2)-int(idx));

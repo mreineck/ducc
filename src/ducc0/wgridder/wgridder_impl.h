@@ -1027,7 +1027,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(const UVW &in,
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(const UVW &in,
           [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
@@ -1118,7 +1118,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        DUCC0_ALWAYS_INLINE [[gnu::hot]] void prep(const UVW &in,
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(const UVW &in,
           [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
