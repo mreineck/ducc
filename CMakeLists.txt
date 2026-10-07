@@ -44,6 +44,9 @@ set(PYMOD_SOURCES
 
 if (MULTIARCH)
     set (DEFS ${DEFS} DUCC0_MULTIARCH)
+    # We only build libraries for PSABI levels 1, 3, and 4.
+    # Level 2 will most likely not be much faster than level 1,
+    # so we save the space and fall back to level 1 if level 2 is detected.
     add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
