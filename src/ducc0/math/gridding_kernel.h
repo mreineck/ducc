@@ -221,7 +221,7 @@ class KernelCorrection
   public:
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    template<typename T> [[gnu::always_inline]] T corfunc(T v) const
+    template<typename T> DUCC0_ALWAYS_INLINE T corfunc(T v) const
       {
       T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
@@ -372,7 +372,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
       return res;
       }
 
-    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {
       z = (z-nth)*2+(W-1);
       T x2=x*x, y2=y*y, z2=z*z;
@@ -432,7 +432,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           }
         }
       }
-    [[gnu::always_inline]] void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x;
 
@@ -453,7 +453,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           res[j2/vlen][j2%vlen] = T(tmp[j]);
         }
       }
-    [[gnu::always_inline]] void eval2(T x, T y, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval2(T x, T y, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x, y2=y*y;
 
@@ -481,7 +481,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           }
         }
       }
-    [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x, y2=y*y, z2=z*z;
 

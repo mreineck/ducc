@@ -667,7 +667,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       timers.pop();
       }
 
-    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+    DUCC0_ALWAYS_INLINE void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
       u = u_in*pixsize_x;
       u = (u-floor(u))*nu;
@@ -679,7 +679,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t row, uint32_t ch)
+    DUCC0_ALWAYS_INLINE Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t row, uint32_t ch)
       {
       auto uvw = uvwbase*bl.ffact(row, ch);
       double udum, vdum;
@@ -1027,7 +1027,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in,
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(const UVW &in,
           [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
@@ -1118,7 +1118,7 @@ timers.pop();
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(const UVW &in,
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(const UVW &in,
           [[maybe_unused]] size_t nth=0)
           {
           double ufrac, vfrac;
