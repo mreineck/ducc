@@ -89,9 +89,9 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
 #endif
 
 #ifdef DUCC0_MULTIARCH
-  const auto cpu_features = ducc0_multiarch::detect_cpu_features();
+  const auto cpu = ducc0_multiarch::detect_cpu_capabilities();
   const auto state = ducc0_multiarch::current_profile_state(
-    cpu_features.host_psabi_level);
+    cpu.x86_psabi_level);
   switch (state.active_profile)
     {
     case 4:
@@ -106,10 +106,10 @@ PYBIND11_MODULE(PKGNAME, m, py::mod_gil_not_used())
     default:
       throw std::runtime_error("no compatible DUCC0 multiarch profile");
     }
-  add_cpu_info(m, true, state, cpu_features.names);
+  add_cpu_info(m, true, state, cpu.features);
 #else
   ducc0::add_ducc0(m);
-  const auto cpu_features = ducc0_multiarch::detect_cpu_features();
-  add_cpu_info(m, false, {}, cpu_features.names);
+  const auto cpu = ducc0_multiarch::detect_cpu_capabilities();
+  add_cpu_info(m, false, {}, cpu.features);
 #endif
   }

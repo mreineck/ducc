@@ -62,6 +62,13 @@ constexpr bool usable_avx(const x86_features &features)
 constexpr bool usable_avx2(const x86_features &features)
   { return usable_avx(features) && features.avx2; }
 
+constexpr bool usable_avx512(const x86_features &features)
+  {
+  return usable_avx(features) && features.avx512f && features.avx512dq
+      && features.avx512cd && features.avx512bw && features.avx512vl
+      && features.zmm_state;
+  }
+
 constexpr bool usable_psabi_v2(const x86_features &features)
   {
   return features.cx16 && features.lahf_sahf && features.popcnt
@@ -76,11 +83,7 @@ constexpr bool usable_psabi_v3(const x86_features &features)
   }
 
 constexpr bool usable_psabi_v4(const x86_features &features)
-  {
-  return usable_psabi_v3(features) && features.avx512f && features.avx512dq
-      && features.avx512cd && features.avx512bw && features.avx512vl
-      && features.zmm_state;
-  }
+  { return usable_psabi_v3(features) && usable_avx512(features); }
 
 constexpr int psabi_level(const x86_features &features)
   {
@@ -92,14 +95,14 @@ constexpr int psabi_level(const x86_features &features)
 
 } // namespace detail
 
-struct detected_cpu_features
+struct cpu_capabilities
   {
-  int host_psabi_level;
-  std::vector<std::string> names;
+  int x86_psabi_level = 0;
+  std::vector<std::string> features;
   };
 
 const char *architecture_name();
-detected_cpu_features detect_cpu_features();
+cpu_capabilities detect_cpu_capabilities();
 int configured_psabi_limit();
 std::vector<int> compiled_profiles(
   profile_mask profiles = ducc_compiled_profiles_mask);

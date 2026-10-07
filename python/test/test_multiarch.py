@@ -27,7 +27,7 @@ def test_cpu_info_metadata_and_selector():
         if sys.platform.startswith("linux"):
             assert "sse2" in features
         assert "avx2" not in features or "avx" in features
-        assert "avx512" not in features or "avx2" in features
+        assert "avx512" not in features or "avx" in features
     elif info["architecture"] == "aarch64":
         assert set(features) <= {"neon", "sve", "sve2"}
 

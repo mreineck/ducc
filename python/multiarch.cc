@@ -169,7 +169,7 @@ detail::x86_features detect_x86_features()
 
 } // namespace
 
-detected_cpu_features detect_cpu_features()
+cpu_capabilities detect_cpu_capabilities()
   {
   const auto features = detect_x86_features();
   std::vector<std::string> names{"sse2"};
@@ -179,13 +179,13 @@ detected_cpu_features detect_cpu_features()
   if (features.sse42) names.emplace_back("sse4.2");
   if (detail::usable_avx(features)) names.emplace_back("avx");
   if (detail::usable_avx2(features)) names.emplace_back("avx2");
-  if (detail::usable_psabi_v4(features)) names.emplace_back("avx512");
+  if (detail::usable_avx512(features)) names.emplace_back("avx512");
   return {detail::psabi_level(features), names};
   }
 
 #else
 
-detected_cpu_features detect_cpu_features()
+cpu_capabilities detect_cpu_capabilities()
   {
   std::vector<std::string> names;
 #if defined(__linux__) && defined(__aarch64__)
