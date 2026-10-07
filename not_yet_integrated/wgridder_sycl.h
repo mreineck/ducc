@@ -222,7 +222,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
     static_assert(sizeof(Tms)<=sizeof(Tcalc), "bad type combination");
     static_assert(sizeof(Timg)<=sizeof(Tcalc), "bad type combination");
 
-    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+    DUCC0_ALWAYS_INLINE void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
       u = u_in*pixsize_x;
       u = (u-floor(u))*nu;
@@ -234,7 +234,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> class Wgrid
       v -= iv0;
       }
 
-    [[gnu::always_inline]] Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t ch)
+    DUCC0_ALWAYS_INLINE Uvwidx get_uvwidx(const UVW &uvwbase, uint32_t ch)
       {
       auto uvw = uvwbase*bl.ffact(ch);
       double udum, vdum;
@@ -963,7 +963,7 @@ class CoordCalculator
     CoordCalculator (size_t nu_, size_t nv_, int maxiu0_, int maxiv0_, double pixsize_x_, double pixsize_y_, double ushift_, double vshift_)
       : nu(nu_), nv(nv_), maxiu0(maxiu0_), maxiv0(maxiv0_), pixsize_x(pixsize_x_), pixsize_y(pixsize_y_), ushift(ushift_), vshift(vshift_) {}
 
-    [[gnu::always_inline]] void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
+    DUCC0_ALWAYS_INLINE void getpix(double u_in, double v_in, double &u, double &v, int &iu0, int &iv0) const
       {
       u = u_in*pixsize_x;
       u = (u-sycl::floor(u))*nu;
