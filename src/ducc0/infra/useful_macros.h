@@ -1,7 +1,7 @@
 /*
 This file is part of the ducc library.
 
-Copyright (C) 2010-2022 Max-Planck-Society
+Copyright (C) 2010-2026 Max-Planck-Society
 
 Author: Martin Reinecke
 */
@@ -53,6 +53,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifndef DUCC0_USEFUL_MACROS_H
 #define DUCC0_USEFUL_MACROS_H
+
+// In the case that DUCC0_NAMESPACE is not externally #defined,
+// fall back to "ducc0".
+#ifndef DUCC0_NAMESPACE
+#define DUCC0_NAMESPACE ducc0
+#endif
 
 #if defined(__GNUC__)
 #define DUCC0_NOINLINE [[gnu::noinline]]

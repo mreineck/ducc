@@ -37,6 +37,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "ducc0/infra/useful_macros.h"
+
 namespace DUCC0_NAMESPACE {
 
 namespace detail_math_utils {
