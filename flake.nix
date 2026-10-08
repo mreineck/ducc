@@ -28,7 +28,7 @@
           DUCC0_OPTIMIZATION = "portable";
           build-system = with py-pkgs; [
             pkgs.cmake
-            nanobind
+            nanobind_3
             ninja
             scikit-build-core
             setuptools-scm
