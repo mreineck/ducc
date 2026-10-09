@@ -28,7 +28,7 @@
           DUCC0_OPTIMIZATION = "portable";
           build-system = with py-pkgs; [
             pkgs.cmake
-            nanobind
+            nanobind_3
             ninja
             scikit-build-core
             setuptools-scm
@@ -51,9 +51,22 @@
           '';
         };
 
+        cpp-src = pkgs.lib.fileset.toSource {
+          root = ./.;
+          fileset = pkgs.lib.fileset.unions [ ./src ./test_cpp ];
+        };
+        cpp-tests = pkgs.runCommandCC "ducc0-cpp-tests" { } ''
+          bash ${cpp-src}/test_cpp/run.sh
+          touch $out
+        '';
+
       in {
-        # Run `nix build .` to build the python ducc package and run the tests.
+        # Run `nix build .` to build the python ducc package and run the python tests
         packages.default = ducc;
+        packages.cpp-tests = cpp-tests;
+
+        # Run `nix flake check` to run both the python and the C++ tests.
+        checks = { inherit ducc cpp-tests; };
 
         # Run `nix develop .` to enter the development shell. Then compile ducc
         # with, e.g., `pip3 install .`
