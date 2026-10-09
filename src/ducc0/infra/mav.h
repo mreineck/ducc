@@ -2,7 +2,9 @@
  *  Classes for dealing with multidimensional arrays
  *
  *  \copyright Copyright (C) 2019-2026 Max-Planck-Society
+ *  \copyright Copyright (C) 2026 Philipp Arras
  *  \author Martin Reinecke
+ *  \author Philipp Arras
  *  */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
