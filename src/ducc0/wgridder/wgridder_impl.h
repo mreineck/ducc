@@ -49,7 +49,7 @@
 #include "ducc0/math/rangeset.h"
 #include "ducc0/wgridder/wgridder.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gridder {
 
@@ -1843,6 +1843,6 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2
 using detail_gridder::ms2dirty;
 using detail_gridder::dirty2ms;
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif

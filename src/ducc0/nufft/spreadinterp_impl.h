@@ -28,7 +28,7 @@
 #include "ducc0/nufft/spreadinterp.h"
 #include "ducc0/nufft/nufft_common.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_nufft {
 

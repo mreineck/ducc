@@ -25,7 +25,7 @@
 #include "ducc0/math/space_filling.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 #ifndef DUCC0_USE_PDEP_PEXT
 

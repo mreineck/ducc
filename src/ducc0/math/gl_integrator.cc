@@ -27,7 +27,7 @@
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/gl_integrator.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gl_integrator {
 

@@ -31,7 +31,7 @@
 #include <vector>
 #include "ducc0/infra/mav.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_wigner3j {
 

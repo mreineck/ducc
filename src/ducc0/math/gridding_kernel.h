@@ -40,7 +40,7 @@
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gridding_kernel {
 

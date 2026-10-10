@@ -34,7 +34,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gl_integrator {
 

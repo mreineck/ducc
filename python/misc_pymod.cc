@@ -43,7 +43,7 @@
 #include <complex>
 
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_misc {
 
@@ -896,7 +896,7 @@ static double get_max_kernel_error(const function<vector<double>(const vector<do
   }
   const auto &lam(*lamptr);
 
-  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
+  DUCC0_NAMESPACE::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
 
   corr=Corr.corfunc(nx, 1./(2*N));
 

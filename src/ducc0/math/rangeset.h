@@ -39,7 +39,7 @@
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/math_utils.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 /// Class for storing sets of ranges of integer numbers
 template<typename T> class rangeset
