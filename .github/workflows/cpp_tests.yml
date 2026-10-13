@@ -6,6 +6,6 @@ jobs:
     name: C++ tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run C++ unit tests
         run: ./test/run.sh
