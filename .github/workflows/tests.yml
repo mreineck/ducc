@@ -19,10 +19,12 @@ on:
         options:
           - native
           - portable
-          - both
+          - multiarch
+          - all
 
 jobs:
   test:
+    if: inputs.optimization != 'multiarch'
     name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -83,7 +85,7 @@ jobs:
           - name: windows-11-arm
             os: windows-11-arm
         binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
-        optimization: ${{ fromJSON(inputs.optimization == 'both' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
+        optimization: ${{ fromJSON(inputs.optimization == 'all' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
         exclude:
           - binding: nanobind
             optimization: portable
@@ -130,10 +132,68 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
+      - name: Check CPU info
+        run: python python/test/check_cpu_info.py
+
       - name: Run tests
         run: python -m pytest python/test -x
 
+  test-multiarch:
+    if: inputs.optimization == 'multiarch' || inputs.optimization == 'all'
+    name: multiarch / ${{ matrix.binding }}
+    runs-on: ubuntu-26.04
+    env:
+      DUCC0_OPTIMIZATION: multiarch-strip
+    strategy:
+      fail-fast: false
+      matrix:
+        binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install --user --upgrade pytest numpy scipy
+
+      - name: Build and install
+        shell: bash
+        run: ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --user .
+
+      - name: Verify binding
+        run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
+
+      - name: Check CPU info
+        id: cpu_info
+        run: python python/test/check_cpu_info.py --require-multiarch --write-github-output
+
+      - name: Run x86-64-v1 tests
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '1'
+        run: |
+          python python/test/check_cpu_info.py --require-active-profile x86-64
+          python -m pytest python/test -x
+
+      - name: Run x86-64-v3 tests
+        if: steps.cpu_info.outputs.v3 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '3'
+        run: |
+          python python/test/check_cpu_info.py --require-active-profile x86-64-v3
+          python -m pytest python/test -x
+
+      - name: Run x86-64-v4 tests
+        if: steps.cpu_info.outputs.v4 == 'true'
+        env:
+          DUCC0_MAX_PSABI_LEVEL: '4'
+        run: |
+          python python/test/check_cpu_info.py --require-active-profile x86-64-v4
+          python -m pytest python/test -x
+
   test-pyodide:
+    if: inputs.optimization == 'portable' || inputs.optimization == 'all'
     name: pyodide / ${{ matrix.binding }} / portable
     runs-on: ubuntu-26.04
     env:
@@ -168,10 +228,14 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
+      - name: Check CPU info
+        run: python python/test/check_cpu_info.py
+
       - name: Run tests
         run: python -m pytest python/test -x
 
   test-docker:
+    if: inputs.optimization == 'portable' || inputs.optimization == 'all'
     name: i686 / ${{ matrix.binding }} / portable
     runs-on: ubuntu-24.04
     env:
@@ -206,5 +270,6 @@ jobs:
               DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
                 ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
               python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
+              python python/test/check_cpu_info.py
               python -m pytest python/test -x
             '

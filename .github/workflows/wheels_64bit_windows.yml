@@ -18,7 +18,7 @@ jobs:
           CIBW_SKIP:
           CIBW_ENVIRONMENT: DUCC0_OPTIMIZATION=portable
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: python -m pytest -x {project}/python/test
+          CIBW_TEST_COMMAND: python {project}/python/test/check_cpu_info.py && python -m pytest -x {project}/python/test
           CIBW_TEST_SKIP: cp38-* cp39-* cp310-* cp311-* cp312-*
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_I686_IMAGE: manylinux_2_28
