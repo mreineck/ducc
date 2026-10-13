@@ -9,6 +9,11 @@
 
    Usage: test_regressions --list or test_regressions <name>
 */
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <stdexcept>
+#include <thread>
 #include <cmath>
 #include <complex>
 #include <cstring>
@@ -20,6 +25,7 @@
 #include <vector>
 
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/threading.h"
 #include "ducc0/wgridder/wgridder_impl.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
@@ -382,6 +388,68 @@ static int test_quickzero_empty_views()
   return 0;
   }
 
+class TestThreadPool: public thread_pool
+  {
+  private:
+    vector<thread> workers;
+  public:
+    ~TestThreadPool() override
+      { for (auto &worker: workers) worker.join(); }
+    size_t nthreads() const override { return 1; }
+    size_t adjust_nthreads(size_t nthreads) const override
+      { return min<size_t>(2, nthreads); }
+    void submit(function<void()> work) override
+      { workers.emplace_back(move(work)); }
+  };
+
+struct ActiveCallbackGuard
+  {
+  atomic<size_t> &active;
+  explicit ActiveCallbackGuard(atomic<size_t> &active_): active(active_)
+    { active.fetch_add(1); }
+  ~ActiveCallbackGuard() { active.fetch_sub(1); }
+  };
+
+static int test_callback_exception_wait()
+  {
+  for (size_t throwing_thread: {size_t(0), size_t(1)})
+    {
+    TestThreadPool pool;
+    ScopedUseThreadPool pool_guard(pool);
+    atomic<size_t> started{0}, active{0};
+    atomic<bool> other_done{false}, throwing_callback_ready{false};
+    bool caught=false;
+    try
+      {
+      execParallel(2, [&](Scheduler &sched)
+        {
+        ActiveCallbackGuard active_guard(active);
+        size_t tid=sched.thread_num();
+        started.fetch_or(size_t(1)<<tid);
+        if (tid==throwing_thread)
+          {
+          while ((started.load() & (size_t(1)<<(1-tid)))==0)
+            this_thread::yield();
+          if (tid==1)
+            while (!other_done.load()) this_thread::yield();
+          throwing_callback_ready.store(true);
+          throw runtime_error("callback failure");
+          }
+        if (throwing_thread==0)
+          this_thread::sleep_for(chrono::milliseconds(20));
+        other_done.store(true);
+        });
+      }
+    catch (const runtime_error &e)
+      { caught=string(e.what())=="callback failure"; }
+    if (!caught || (started.load()!=3) || active.load()!=0
+        || !other_done.load() || !throwing_callback_ready.load())
+      return 1;
+    }
+  cout << "PASS callback_exception_wait\n";
+  return 0;
+  }
+
 struct RegressionTest { const char *name; int (*run)(); };
 
 static constexpr RegressionTest regression_tests[] =
@@ -399,6 +467,7 @@ static constexpr RegressionTest regression_tests[] =
   {"singleton_slice_reversed_sources", test_singleton_slice_reversed_sources},
   {"quickzero_empty_views", test_quickzero_empty_views},
   {"isqrt", test_isqrt},
+  {"callback_exception_wait", test_callback_exception_wait},
   };
 
 int main(int argc, char **argv)
