@@ -82,7 +82,7 @@ template<typename T> inline void PMINPLACE(T &a, T &b)
   { T t = a; a+=b; b=t-b; }
 template<typename T> inline void MPINPLACE(T &a, T &b)
   { T t = a; a-=b; b=t+b; }
-template<bool fwd, typename T, typename T2> void special_mul (const Cmplx<T> &v1, const Cmplx<T2> &v2, Cmplx<T> &res)
+template<bool fwd, typename T, typename T2> DUCC0_ALWAYS_INLINE void special_mul (const Cmplx<T> &v1, const Cmplx<T2> &v2, Cmplx<T> &res)
   {
   res = fwd ? Cmplx<T>(v1.r*v2.r+v1.i*v2.i, v1.i*v2.r-v1.r*v2.i)
             : Cmplx<T>(v1.r*v2.r-v1.i*v2.i, v1.r*v2.i+v1.i*v2.r);

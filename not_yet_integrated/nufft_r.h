@@ -195,7 +195,7 @@ ru0=rv0=rw0=100000; ru1=rv1=rw1=-10;
         constexpr int lineJump() const { return sw; }
         constexpr int planeJump() const { return sv*sw; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           
@@ -278,7 +278,7 @@ rw1=max<int>(rw1,i0[2]-b0[2]+supp);
         constexpr int lineJump() const { return swvec; }
         constexpr int planeJump() const { return sv*swvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;

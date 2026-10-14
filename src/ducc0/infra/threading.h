@@ -111,6 +111,9 @@ class thread_pool
       { MR_fail("Resizing is not supported by this thread pool"); }
     virtual size_t adjust_nthreads(size_t nthreads_in) const = 0;
     virtual void submit(std::function<void()> work) = 0;
+    // NB: "work" needs to be "noexcept", but std::function doesn't allow to specify this
+    virtual void parallel_for(size_t nthreads,
+                              std::function<void(size_t)> work);
   };
 
 }}
