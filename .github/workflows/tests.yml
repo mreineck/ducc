@@ -54,6 +54,36 @@ jobs:
           - name: python-3.15t
             os: ubuntu-24.04
             python: '3.15t'
+          - name: python-3.14t-linux-arm64
+            os: ubuntu-24.04-arm
+            python: '3.14t'
+          - name: python-3.15t-linux-arm64
+            os: ubuntu-24.04-arm
+            python: '3.15t'
+          - name: python-3.14t-macos-x64
+            os: macos-15-intel
+            python: '3.14t'
+          - name: python-3.15t-macos-x64
+            os: macos-15-intel
+            python: '3.15t'
+          - name: python-3.14t-macos-arm64
+            os: macos-15
+            python: '3.14t'
+          - name: python-3.15t-macos-arm64
+            os: macos-15
+            python: '3.15t'
+          - name: python-3.14t-windows-x64
+            os: windows-2025
+            python: '3.14t'
+          - name: python-3.15t-windows-x64
+            os: windows-2025
+            python: '3.15t'
+          - name: python-3.14t-windows-arm64
+            os: windows-11-arm
+            python: '3.14t'
+          - name: python-3.15t-windows-arm64
+            os: windows-11-arm
+            python: '3.15t'
           - name: ubuntu-22.04
             os: ubuntu-22.04
           - name: ubuntu-24.04-intel
@@ -96,6 +126,10 @@ jobs:
         with:
           python-version: ${{ matrix.platform.python || '3.11' }}
           allow-prereleases: true
+
+      - name: Verify free-threaded interpreter
+        if: endsWith(matrix.platform.python, 't')
+        run: python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
 
       - name: Install dependencies
         run: python -m pip install --user --upgrade pytest numpy scipy
