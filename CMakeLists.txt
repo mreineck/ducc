@@ -1,7 +1,7 @@
 # TODO:
 # - make multiarch work on Windows x86_64? Do we care enough?
 # - make multiarch work on ARM?
-cmake_minimum_required(VERSION 3.15...3.27)
+cmake_minimum_required(VERSION 3.30.3)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -23,6 +23,9 @@ set(PKGNAME ${SKBUILD_PROJECT_NAME})
 set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
+
+# On free-threaded Windows Python this includes Py_GIL_DISABLED=1.
+list(APPEND DEFS ${Python_DEFINITIONS})
 
 set(CXX_SOURCES
     src/ducc0/fft/fft_inst1.cc src/ducc0/fft/fft_inst2.cc
@@ -78,6 +81,17 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
     nanobind_add_module(${PKGNAME}
         FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
         python/ducc_driver.cc python/multiarch.cc)
+    # The binding object libraries do not inherit the module's definitions.
+    if (NB_FREE_THREADED)
+        if (MULTIARCH)
+            set(_nb_targets
+                ${PKGNAME}_lib_v1 ${PKGNAME}_lib_v3 ${PKGNAME}_lib_v4)
+        else()
+            set(_nb_targets ${PKGNAME}_lib)
+        endif()
+        set_property(TARGET ${_nb_targets} APPEND
+            PROPERTY COMPILE_DEFINITIONS NB_FREE_THREADED)
+    endif()
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
 # Enable this if stubs are required
 #    nanobind_add_stub(
