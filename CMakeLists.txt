@@ -4,7 +4,6 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION True)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -43,6 +42,8 @@ set(PYMOD_SOURCES
     python/pointingprovider_pymod.cc python/ducc.cc)
 
 if (MULTIARCH)
+    # If IPO is on, we risk leaking unknown instruction into lower ABI levels
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
     set (DEFS ${DEFS} DUCC0_MULTIARCH)
     # We only build libraries for PSABI levels 1, 3, and 4.
     # Level 2 will most likely not be much faster than level 1,
@@ -50,13 +51,8 @@ if (MULTIARCH)
     add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
     add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
-    set_property(TARGET ${PKGNAME}_lib_v1
-        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
-    set_property(TARGET ${PKGNAME}_lib_v3
-        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
-    set_property(TARGET ${PKGNAME}_lib_v4
-        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
 else()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     add_library(${PKGNAME}_lib OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
 endif()
 
