@@ -69,7 +69,7 @@ will install a pre-compiled binary package, which makes the installation process
 much quicker and does not require any compilers to be installed on the system.
 
 On x86_64 hardware, the binary package will contain multiple variants of the
-package for different CPU feature sets, the best of which is loaded at import time.
+library for different CPU feature sets, the best of which is loaded at import time.
 This will result in a much smaller performance gap compared to a self-compiled
 package. This multiarch approach will likely be extended to other CPU architectures
 in future releases.
