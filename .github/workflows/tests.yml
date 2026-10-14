@@ -25,7 +25,11 @@ on:
 jobs:
   test:
     if: inputs.optimization != 'multiarch'
-    name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
+    name: >-
+      ${{ matrix.platform.os }} /
+      Python ${{ matrix.platform.python || '3.11' }}${{ matrix.platform.compiler && format(' ({0})', matrix.platform.compiler) || '' }} /
+      ${{ matrix.binding }} /
+      ${{ matrix.optimization }}
     runs-on: ${{ matrix.platform.os }}
     env:
       DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
