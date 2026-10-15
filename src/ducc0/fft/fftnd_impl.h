@@ -162,7 +162,7 @@ struct util // hack to avoid duplicate symbols
     size_t size = info.size();
     if (size<=32768) return 1;  // not worth opening a parallel region
     size_t max_parallel = size / (info.shape(axis)*vlen);
-    size_t max_threads = ducc0::adjust_nthreads(nthreads);
+    size_t max_threads = adjust_nthreads(nthreads);
     return std::max(size_t(1), std::min(max_parallel, max_threads));
     }
   };
