@@ -26,12 +26,12 @@
 
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/threading.h"
-#include "ducc0/wgridder/wgridder_impl.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/wigner3j.h"
 #include "ducc0/healpix/healpix_base.h"
+#include "ducc0/wgridder/wgridder_impl.h"
 
 using namespace ducc0;
 using namespace std;
@@ -306,6 +306,37 @@ static int test_healpix_interpol()
   return 0;
   }
 
+/* Repeated BDA frequency lists can overflow the cumulative visibility
+   offsets even when the unique frequency lists fit in size_t. Reject this
+   before allocating frequency data or using the wrapped Nvis() value. */
+static int test_bda_visibility_offset_overflow()
+  {
+  size_t half=numeric_limits<size_t>::max()/2;
+  uint64_t ids_data[] = {0,1,0};
+  uint64_t nfreqs_data[] = {uint64_t(half), uint64_t(half)};
+  double dummy=1.;
+  cmav<double,2> coord(&dummy, {3,3}, {0,0});
+  cmav<uint64_t,1> ids(ids_data, {3}, {1});
+  cmav<uint64_t,1> nfreqs(nfreqs_data, {2}, {1});
+  cmav<double,1> freqs(&dummy, {~size_t(0)-1}, {0});
+
+  bool rejected=false;
+  try
+    {
+    detail_gridder::Baselines baselines(coord, ids, nfreqs, freqs);
+    (void)baselines;
+    }
+  catch (const exception &e)
+    {
+    rejected=string(e.what()).find("BDA visibility count overflow")
+      !=string::npos;
+    if (!rejected) cout << "unexpected BDA validation error: " << e.what() << "\n";
+    }
+  if (rejected) cout << "PASS bda_visibility_offset_overflow\n";
+  else cout << "FAIL bda_visibility_offset_overflow\n";
+  return rejected ? 0 : 1;
+  }
+
 
 /* isqrt (src/ducc0/math/math_utils.h): for 64-bit arguments where the
    result is near 2^32-1, (res+1)*(res+1) can overflow 64-bit arithmetic.
@@ -468,6 +499,7 @@ static constexpr RegressionTest regression_tests[] =
   {"quickzero_empty_views", test_quickzero_empty_views},
   {"isqrt", test_isqrt},
   {"callback_exception_wait", test_callback_exception_wait},
+  {"bda_visibility_offset_overflow", test_bda_visibility_offset_overflow},
   };
 
 int main(int argc, char **argv)

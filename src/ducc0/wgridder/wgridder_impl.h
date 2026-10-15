@@ -300,7 +300,12 @@ class Baselines
         ms_ofs.resize(nrows+1);
         ms_ofs[0] = 0;
         for (size_t i=0; i<nrows; ++i)
-          ms_ofs[i+1] = ms_ofs[i] + freqlist_nfreqs(id[i]);
+          {
+          auto nfreq=freqlist_nfreqs(id[i]);
+          MR_assert(nfreq<=~size_t(0)-ms_ofs[i],
+            "BDA visibility count overflow");
+          ms_ofs[i+1] = ms_ofs[i] + size_t(nfreq);
+          }
         }
 
       f_over_c.resize(freq_ofs.back());
