@@ -24,6 +24,12 @@
             substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6",' ""
           '';
 
+          # __FILE__ ends up in error messages; strip the build directory
+          # (randomised per build on darwin) to keep the build reproducible.
+          preBuild = ''
+            export NIX_CFLAGS_COMPILE+=" -ffile-prefix-map=$PWD/="
+          '';
+
           DUCC0_USE_NANOBIND = "";
           DUCC0_OPTIMIZATION = "portable";
           build-system = with py-pkgs; [
@@ -34,6 +40,9 @@
             setuptools-scm
           ];
           dontUseCmakeConfigure = true;
+          nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.cc.isClang [
+            pkgs.llvmPackages.llvm
+          ];
           dependencies = with py-pkgs; [ numpy ];
 
           nativeCheckInputs = with py-pkgs; [
@@ -45,6 +54,9 @@
           pytestFlags = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
 
+          preCheck = ''
+            bash test/run.sh
+          '';
           postInstall = ''
             mkdir -p $out/include/ducc0
             cp -r $src/src/ducc0/* $out/include/ducc0
