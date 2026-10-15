@@ -59,6 +59,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Do not delete this #include or move it farther below!
 #include <cstdint>
 
+#include "ducc0/infra/useful_macros.h"
+
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
 // so we don't use the standard library SIMD support on MacOS.
 // In fact, we only trust libstdc++ at the moment to implement this fully.
@@ -70,7 +72,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <experimental/simd>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 
@@ -192,7 +194,7 @@ template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *p
 
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 

@@ -22,7 +22,7 @@
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_nufft {
 
