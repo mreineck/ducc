@@ -7,7 +7,7 @@
    AddressSanitizer, so this binary must be built with -fsanitize=address
    (see run.sh).
 
-   Usage: bugtests <name>
+   Usage: test_regressions <name>
    where <name> is one of: swap_axes, slice_wraparound, wigner3j_oob,
                            template_kernel, healpix_interpol
 */

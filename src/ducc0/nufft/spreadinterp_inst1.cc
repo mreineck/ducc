@@ -19,7 +19,7 @@
 
 #include "ducc0/nufft/spreadinterp_impl.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 namespace detail_nufft {
 
 #define BOILERPLATE \

@@ -24,7 +24,7 @@
 #ifndef DUCC0_SHT_INNER_LOOP_H
 #define DUCC0_SHT_INNER_LOOP_H
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sht {
 

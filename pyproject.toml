@@ -15,6 +15,7 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: C++",
   "Programming Language :: Python",
+  "Programming Language :: Python :: Free Threading :: 2 - Beta",
 ]
 requires-python = ">=3.8"
 dependencies = ["numpy>=1.17.0"]
@@ -34,7 +35,7 @@ requires = [
     # FIXME: scikit-build-core limited to <1.1 for the moment, because otherwise CI breaks for Python 3.14t and 3.15t
     "scikit-build-core>=1.0,<1.1",
     "nanobind>=2.5.0,<2.10.0; python_version == '3.8'",
-    "nanobind>=2.5.0; python_version >= '3.9'",
+    "nanobind>=2.12.0,<3; python_version >= '3.9'",
     "pybind11>=2.13.6",
     "numpy>=1.17.0",
 ]
@@ -120,6 +121,9 @@ sdist.include = [
     "src/ducc0/wgridder/wgridder_inst3.cc",
     "src/ducc0/wgridder/wgridder.cc",
     "python/module_adders.h",
+    "python/ducc_driver.cc",
+    "python/multiarch.h",
+    "python/multiarch.cc",
     "python/ducc.cc",
     "python/fft_pymod.cc",
     "python/nufft_pymod.cc",
@@ -137,6 +141,9 @@ sdist.include = [
     "python/test/test_totalconvolve.py",
     "python/test/test_wgridder.py",
     "python/test/test_nufft.py",
+    "python/test/test_multiarch.py",
+    "python/test/test_free_threading.py",
+    "python/test/check_cpu_info.py",
     "python/demos/fft_bench.py",
     "python/demos/fft_stress.py",
     "python/demos/healpix_perftest.py",

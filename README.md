@@ -52,8 +52,8 @@ and that it should not be considered stable.
 
 ### Installation
 
-For best performance (especially on x86 platforms), it is recommended to
-compile DUCC from source, optimizing for the specific CPU on the system.
+For best performance it is recommended to compile DUCC from source,
+optimizing for the specific CPU on the system.
 This can be done using the command
 
     pip3 install --no-binary ducc0 --user ducc0
@@ -67,8 +67,12 @@ Alternatively, a simple
 
 will install a pre-compiled binary package, which makes the installation process
 much quicker and does not require any compilers to be installed on the system.
-However, the code will most likely perform significantly worse (by a factor of
-two to three for some functions) than a custom built version.
+
+On Linux and x86_64 hardware, the binary package will contain multiple variants of the
+library for different CPU feature sets, the best of which is loaded at import time.
+This will result in a much smaller performance gap compared to a self-compiled
+package. This multiarch approach will likely be extended to other CPU architectures
+in future releases.
 
 Additionally, pre-compiled binaries are distributed for the following systems:
 
@@ -127,7 +131,7 @@ The central algorithms are derived from Paul Swarztrauber's
 - achieves very high accuracy for all transforms
 - supports multidimensional arrays and selection of the axes to be transformed
 - supports single, double, and long double precision
-- makes use of CPU vector instructions, except for short 1D transforms 
+- makes use of CPU vector instructions, except for short 1D transforms
 - supports prime-length transforms without degrading to O(N**2) performance
 - has optional multi-threading support for all transforms except short 1D ones.
 

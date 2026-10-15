@@ -51,7 +51,7 @@
 #include "ducc0/nufft/nufft_common.h"
 #include "ducc0/nufft/spreadinterp.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_nufft {
 
@@ -821,6 +821,6 @@ using detail_nufft::nu2nu;
 using detail_nufft::Nufft;
 using detail_nufft::Nufft3;
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif

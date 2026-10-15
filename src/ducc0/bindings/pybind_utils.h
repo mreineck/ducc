@@ -78,7 +78,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 #ifdef DUCC0_USE_NANOBIND
 namespace py = nanobind;

@@ -57,7 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_misc_utils {
 
