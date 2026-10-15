@@ -25,7 +25,11 @@ on:
 jobs:
   test:
     if: inputs.optimization != 'multiarch'
-    name: ${{ matrix.platform.name }} / ${{ matrix.binding }} / ${{ matrix.optimization }}
+    name: >-
+      ${{ matrix.platform.os }} /
+      ${{ matrix.platform.python || '3.11' }}${{ matrix.platform.compiler && format(' ({0})', matrix.platform.compiler) || '' }} /
+      ${{ matrix.binding }} /
+      ${{ matrix.optimization }}
     runs-on: ${{ matrix.platform.os }}
     env:
       DUCC0_OPTIMIZATION: ${{ matrix.optimization }}
@@ -33,57 +37,56 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - name: python-3.11
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.11'
-          - name: python-3.12
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.12'
-          - name: python-3.13
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.13'
-          - name: python-3.14
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.14'
-          - name: python-3.14t
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.14t'
-          - name: python-3.15
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.15'
-          - name: python-3.15t
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             python: '3.15t'
-          - name: ubuntu-22.04
-            os: ubuntu-22.04
-          - name: ubuntu-24.04-intel
-            os: ubuntu-24.04
+          - os: ubuntu-24.04-arm
+            python: '3.14t'
+          - os: ubuntu-24.04-arm
+            python: '3.15t'
+          - os: macos-15-intel
+            python: '3.14t'
+          - os: macos-15-intel
+            python: '3.15t'
+          - os: macos-15
+            python: '3.14t'
+          - os: macos-15
+            python: '3.15t'
+          - os: windows-2025
+            python: '3.14t'
+          - os: windows-2025
+            python: '3.15t'
+          - os: windows-11-arm
+            python: '3.14t'
+          - os: windows-11-arm
+            python: '3.15t'
+          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             compiler: intel
-          - name: ubuntu-24.04-clang
-            os: ubuntu-24.04
+          - os: ubuntu-24.04
             compiler: clang
-          - name: ubuntu-26.04
-            os: ubuntu-26.04
-          - name: ubuntu-22.04-arm
-            os: ubuntu-22.04-arm
-          - name: ubuntu-24.04-arm
-            os: ubuntu-24.04-arm
-          - name: ubuntu-26.04-arm
-            os: ubuntu-26.04-arm
-          - name: macos-15-intel
-            os: macos-15-intel
-          - name: macos-26-intel
-            os: macos-26-intel
-          - name: macos-15
-            os: macos-15
-          - name: macos-26
-            os: macos-26
-          - name: windows-2022
-            os: windows-2022
-          - name: windows-2025
-            os: windows-2025
-          - name: windows-11-arm
-            os: windows-11-arm
+          - os: ubuntu-26.04
+          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm
+          - os: ubuntu-26.04-arm
+          - os: macos-15-intel
+          - os: macos-26-intel
+          - os: macos-15
+          - os: macos-26
+          - os: windows-2022
+          - os: windows-2025
+          - os: windows-11-arm
         binding: ${{ fromJSON(inputs.binding == 'both' && '["pybind11","nanobind"]' || format('["{0}"]', inputs.binding)) }}
         optimization: ${{ fromJSON(inputs.optimization == 'all' && '["native","portable"]' || format('["{0}"]', inputs.optimization)) }}
         exclude:
@@ -96,6 +99,10 @@ jobs:
         with:
           python-version: ${{ matrix.platform.python || '3.11' }}
           allow-prereleases: true
+
+      - name: Verify free-threaded interpreter
+        if: endsWith(matrix.platform.python, 't')
+        run: python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
 
       - name: Install dependencies
         run: python -m pip install --user --upgrade pytest numpy scipy
@@ -140,7 +147,7 @@ jobs:
 
   test-multiarch:
     if: inputs.optimization == 'multiarch' || inputs.optimization == 'all'
-    name: multiarch / ${{ matrix.binding }}
+    name: ubuntu-26.04 / 3.11 / ${{ matrix.binding }} / multiarch
     runs-on: ubuntu-26.04
     env:
       DUCC0_OPTIMIZATION: multiarch-strip
@@ -194,7 +201,7 @@ jobs:
 
   test-pyodide:
     if: inputs.optimization == 'portable' || inputs.optimization == 'all'
-    name: pyodide / ${{ matrix.binding }} / portable
+    name: pyodide / 3.14 / ${{ matrix.binding }} / portable
     runs-on: ubuntu-26.04
     env:
       DUCC0_OPTIMIZATION: portable
@@ -236,7 +243,7 @@ jobs:
 
   test-docker:
     if: inputs.optimization == 'portable' || inputs.optimization == 'all'
-    name: i686 / ${{ matrix.binding }} / portable
+    name: i686 / 3.12 / ${{ matrix.binding }} / portable
     runs-on: ubuntu-24.04
     env:
       DUCC0_OPTIMIZATION: portable
