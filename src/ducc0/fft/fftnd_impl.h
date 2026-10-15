@@ -87,7 +87,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * \authors Martin Reinecke, Peter Bell
  */
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_fft {
 
@@ -1895,6 +1895,6 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &
 
 } // namespace detail_fft
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif // POCKETFFT_HDRONLY_H

@@ -1,16 +1,31 @@
-cmake_minimum_required(VERSION 3.15...3.27)
+# TODO:
+# - make multiarch work on Windows x86_64? Do we care enough?
+# - make multiarch work on ARM?
+cmake_minimum_required(VERSION 3.30.3)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_STANDARD 17)
 
 if(DEFINED ENV{DUCC0_OPTIMIZATION})
     set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
 else()
     set (OPTFLAGS "native-strip")
 endif()
-
+if (OPTFLAGS MATCHES "^multiarch"
+    AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+    AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set (MULTIARCH ON)
+else()
+    set (MULTIARCH OFF)
+endif()
 set(PKGNAME ${SKBUILD_PROJECT_NAME})
 set(PKGVERSION ${SKBUILD_PROJECT_VERSION})
 
 find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
+
+# On free-threaded Windows Python this includes Py_GIL_DISABLED=1.
+list(APPEND DEFS ${Python_DEFINITIONS})
 
 set(CXX_SOURCES
     src/ducc0/fft/fft_inst1.cc src/ducc0/fft/fft_inst2.cc
@@ -29,14 +44,54 @@ set(PYMOD_SOURCES
     python/misc_pymod.cc python/healpix_pymod.cc
     python/pointingprovider_pymod.cc python/ducc.cc)
 
+if (MULTIARCH)
+    # If IPO is on, we risk leaking unknown instruction into lower ABI levels
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
+    set (DEFS ${DEFS} DUCC0_MULTIARCH)
+    # We only build libraries for PSABI levels 1, 3, and 4.
+    # Level 2 will most likely not be much faster than level 1,
+    # so we save the space and fall back to level 1 if level 2 is detected.
+    add_library(${PKGNAME}_lib_v1 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    add_library(${PKGNAME}_lib_v3 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+    add_library(${PKGNAME}_lib_v4 OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+else()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    add_library(${PKGNAME}_lib OBJECT ${PYMOD_SOURCES} ${CXX_SOURCES})
+endif()
+
 if (DEFINED ENV{DUCC0_USE_NANOBIND})
     execute_process(
             COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
             OUTPUT_STRIP_TRAILING_WHITESPACE
             OUTPUT_VARIABLE NB_DIR)
+    execute_process(
+            COMMAND "${Python_EXECUTABLE}" -m nanobind --include_dir
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            OUTPUT_VARIABLE NB_INCDIR)
     list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
     find_package(nanobind CONFIG REQUIRED)
-    nanobind_add_module(${PKGNAME} FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set(INC_DIRS ${INC_DIRS} ${NB_INCDIR} ${Python_INCLUDE_DIRS})
+    if (MULTIARCH)
+        nanobind_compile_options(${PKGNAME}_lib_v1)
+        nanobind_compile_options(${PKGNAME}_lib_v3)
+        nanobind_compile_options(${PKGNAME}_lib_v4)
+    else()
+        nanobind_compile_options(${PKGNAME}_lib)
+    endif()
+    nanobind_add_module(${PKGNAME}
+        FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
+        python/ducc_driver.cc python/multiarch.cc)
+    # The binding object libraries do not inherit the module's definitions.
+    if (NB_FREE_THREADED)
+        if (MULTIARCH)
+            set(_nb_targets
+                ${PKGNAME}_lib_v1 ${PKGNAME}_lib_v3 ${PKGNAME}_lib_v4)
+        else()
+            set(_nb_targets ${PKGNAME}_lib)
+        endif()
+        set_property(TARGET ${_nb_targets} APPEND
+            PROPERTY COMPILE_DEFINITIONS NB_FREE_THREADED)
+    endif()
     set (DEFS ${DEFS} DUCC0_USE_NANOBIND)
 # Enable this if stubs are required
 #    nanobind_add_stub(
@@ -49,10 +104,10 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
 #    )
 else()
     find_package(pybind11 REQUIRED)
-    pybind11_add_module(${PKGNAME} NO_EXTRAS ${PYMOD_SOURCES} ${CXX_SOURCES})
+    set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
+    pybind11_add_module(${PKGNAME} NO_EXTRAS
+        python/ducc_driver.cc python/multiarch.cc)
 endif()
-
-set (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
 
 if (NOT MSVC)
     if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc|ppc64|powerpc|powerpc64" OR (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "ppc|ppc64"))
@@ -131,17 +186,40 @@ if(DEFINED ENV{DUCC0_FLAGS})
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
-    list(APPEND DEFS DUCC0_NO_LOWLEVEL_THREADING)
+    SET (DEFS ${DEFS} DUCC0_NO_LOWLEVEL_THREADING)
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(${PKGNAME} PRIVATE Threads::Threads)
 endif()
 
-target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
-target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
-target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
-target_compile_features(${PKGNAME} PRIVATE cxx_std_17)
+SET (DEFS ${DEFS} PKGVERSION=${PKGVERSION})
 
-set_property(TARGET ${PKGNAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+# settings for the final compile/link step
+target_compile_definitions(${PKGNAME} PRIVATE ${DEFS} PKGNAME=${PKGNAME})
+if (MULTIARCH)
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS} -march=x86-64)
+else()
+    target_compile_options(${PKGNAME} PRIVATE ${COMP_OPTS})
+endif()
+target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
+
+# setting s for the library part(s)
+if (MULTIARCH)
+    target_include_directories(${PKGNAME}_lib_v1 SYSTEM PRIVATE ${INC_DIRS})
+    target_include_directories(${PKGNAME}_lib_v3 SYSTEM PRIVATE ${INC_DIRS})
+    target_include_directories(${PKGNAME}_lib_v4 SYSTEM PRIVATE ${INC_DIRS})
+    target_compile_definitions(${PKGNAME}_lib_v1 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v1)
+    target_compile_definitions(${PKGNAME}_lib_v3 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v3)
+    target_compile_definitions(${PKGNAME}_lib_v4 PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME}_v4)
+    target_compile_options(${PKGNAME}_lib_v1 PRIVATE ${COMP_OPTS} -march=x86-64)
+    target_compile_options(${PKGNAME}_lib_v3 PRIVATE ${COMP_OPTS} -march=x86-64-v3)
+    target_compile_options(${PKGNAME}_lib_v4 PRIVATE ${COMP_OPTS} -march=x86-64-v4)
+    target_link_libraries(${PKGNAME} PRIVATE ${PKGNAME}_lib_v1 ${PKGNAME}_lib_v3 ${PKGNAME}_lib_v4)
+else()
+    target_include_directories(${PKGNAME}_lib SYSTEM PRIVATE ${INC_DIRS})
+    target_compile_definitions(${PKGNAME}_lib PRIVATE ${DEFS} DUCC0_NAMESPACE=${PKGNAME})
+    target_compile_options(${PKGNAME}_lib PRIVATE ${COMP_OPTS})
+    target_link_libraries(${PKGNAME} PRIVATE ${PKGNAME}_lib)
+endif()
 
 install(TARGETS ${PKGNAME} LIBRARY DESTINATION .)

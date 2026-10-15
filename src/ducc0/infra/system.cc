@@ -30,7 +30,7 @@
 #include "ducc0/infra/system.h"
 #include "ducc0/infra/string_utils.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_system {
 

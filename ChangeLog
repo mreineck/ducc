@@ -1,5 +1,9 @@
 0.42.0:
 - general:
+  - Support for multiarch compilation on x86_64 platforms, resulting
+    in wheels that select the appropriate variant of the package at
+    import time. For most users of binary ducc0 wheels on x64_64, this
+    should provide significant performance improvements.
   - Significantly enhanced CI functionality, contributed by
     Albert M. W. Yau
   - the Python module declares that the GIL need not be held while

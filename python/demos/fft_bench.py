@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 rng = np.random.default_rng(42)
 
 
-def measure_pocketfft(a, nrepeat, nthr,  inplace=False):
+def measure_pocketfft(a, nrepeat, nthr, inplace=False):
     import pypocketfft
     times = []
     work = a.copy()
@@ -168,7 +168,7 @@ def bench_nd(ndim, nmax, nthr, ntry, tp, funcs, nrepeat, ttl="", filename="",
     plt.show()
     plt.close()
 
-ducc0.misc.preallocate_memory(1)
+# ducc0.misc.preallocate_memory(1)
 
 f1 = lambda a, nrepeat, nthr: measure_duccfft(a, nrepeat, nthr, inplace=True, noncritical=False)
 #f2 = lambda a, nrepeat, nthr: measure_pocketfft(a, nrepeat, nthr, inplace=True)

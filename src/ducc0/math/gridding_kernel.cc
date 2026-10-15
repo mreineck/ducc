@@ -19,7 +19,7 @@
 
 #include "ducc0/math/gridding_kernel.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gridding_kernel {
 
