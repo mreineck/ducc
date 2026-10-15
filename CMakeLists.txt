@@ -203,7 +203,7 @@ else()
 endif()
 target_link_options(${PKGNAME} PRIVATE ${LINK_OPTS})
 
-# setting s for the library part(s)
+# settings for the library part(s)
 if (MULTIARCH)
     target_include_directories(${PKGNAME}_lib_v1 SYSTEM PRIVATE ${INC_DIRS})
     target_include_directories(${PKGNAME}_lib_v3 SYSTEM PRIVATE ${INC_DIRS})
