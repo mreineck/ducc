@@ -378,9 +378,16 @@ template<typename T> static NpArr Py2_dirty2vis_bda(const CNpArr &uvw_,
   auto freqlist_nfreqs = to_cmav<uint64_t,1>(freqlist_nfreqs_);
   auto freqlist_freqs = to_cmav<double,1>(freqlist_freqs_);
   auto dirty = to_cmav<T,2>(dirty_);
+  MR_assert(freqlist_id.shape(0)==uvw.shape(0), "freqlist_id dimension mismatch");
   size_t vissize = 0;
   for (size_t i=0; i<freqlist_id.shape(0); ++i)
-    vissize += freqlist_nfreqs(freqlist_id(i));
+    {
+    auto id=freqlist_id(i);
+    MR_assert(id<freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
+    auto nfreq=freqlist_nfreqs(id);
+    MR_assert(nfreq<=~size_t(0)-vissize, "too many visibility samples");
+    vissize += size_t(nfreq);
+    }
   auto [vis, vis2] = get_OptNpArr_and_vmav<complex<T>,1>(vis_, {vissize});
   auto wgt = get_OptCNpArr<T>(wgt_, {vis2.shape(0)});
   auto wgt2 = to_cmav<T,1>(wgt);

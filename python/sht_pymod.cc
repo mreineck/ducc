@@ -37,6 +37,9 @@
 
 #include <vector>
 #include <complex>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
 
 namespace DUCC0_NAMESPACE {
 
@@ -153,6 +156,33 @@ It is the user's responsibility to choose a sufficiently high value for
 mmax_out. For every mmax_out smaller than lmax, information may be lost.
 )""";
 
+template<typename TMval, typename TMstart> static void getmstuff_typed(
+  size_t lmax, const CNpArr &mval_, const CNpArr &mstart_,
+  vmav<size_t,1> &mval, vmav<size_t,1> &mstart)
+  {
+  auto tmval = to_cmav<TMval,1>(mval_, "mval");
+  auto tmstart = to_cmav<TMstart,1>(mstart_, "mstart");
+  size_t nm = tmval.shape(0);
+  MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
+  vmav<size_t,1> tmv({nm}, UNINITIALIZED);
+  mval.assign(tmv);
+  vmav<size_t,1> tms({nm}, UNINITIALIZED);
+  mstart.assign(tms);
+  for (size_t i=0; i<nm; ++i)
+    {
+    auto mv = tmval(i);
+    if constexpr (is_signed<TMval>::value)
+      MR_assert(mv>=0, "bad m value");
+    MR_assert(uintmax_t(mv)<=lmax, "bad m value");
+    mval(i) = size_t(mv);
+
+    auto ms = tmstart(i);
+    if constexpr (is_unsigned<TMstart>::value)
+      MR_assert(uintmax_t(ms)<=uintmax_t(numeric_limits<ptrdiff_t>::max()),
+        "bad mstart value");
+    mstart(i) = size_t(ms);
+    }
+  }
 static void getmstuff(size_t lmax, const OptCNpArr &mval_,
   const OptCNpArr &mstart_, vmav<size_t,1> &mval, vmav<size_t,1> &mstart)
   {
@@ -172,21 +202,25 @@ static void getmstuff(size_t lmax, const OptCNpArr &mval_,
     }
   else
     {
-    auto tmval = to_cmav<int64_t,1>(mval_.value(), "mval");
-    auto tmstart = to_cmav<int64_t,1>(mstart_.value(), "mstart");
-    size_t nm = tmval.shape(0);
-    MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
-    vmav<size_t,1> tmv({nm}, UNINITIALIZED);
-    mval.assign(tmv);
-    vmav<size_t,1> tms({nm}, UNINITIALIZED);
-    mstart.assign(tms);
-    for (size_t i=0; i<nm; ++i)
+    auto tmval = mval_.value();
+    auto tmstart = mstart_.value();
+    if (isPyarr<int64_t>(tmval))
       {
-      auto m = tmval(i);
-      MR_assert((m>=0) && (m<=int64_t(lmax)), "bad m value");
-      mval(i) = size_t(m);
-      mstart(i) = size_t(tmstart(i));
+      if (isPyarr<int64_t>(tmstart))
+        getmstuff_typed<int64_t,int64_t>(lmax, tmval, tmstart, mval, mstart);
+      else if (isPyarr<uint64_t>(tmstart))
+        getmstuff_typed<int64_t,uint64_t>(lmax, tmval, tmstart, mval, mstart);
+      else MR_fail("data type mismatch");
       }
+    else if (isPyarr<uint64_t>(tmval))
+      {
+      if (isPyarr<int64_t>(tmstart))
+        getmstuff_typed<uint64_t,int64_t>(lmax, tmval, tmstart, mval, mstart);
+      else if (isPyarr<uint64_t>(tmstart))
+        getmstuff_typed<uint64_t,uint64_t>(lmax, tmval, tmstart, mval, mstart);
+      else MR_fail("data type mismatch");
+      }
+    else MR_fail("data type mismatch");
     }
   }
 static cmav<size_t,1> get_mstart(size_t lmax, const OptSizeT &mmax_,
@@ -250,6 +284,7 @@ numpy.ndarray((ntheta,), dtype=numpy.float64)
 static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
   const cmav<size_t,1> &mstart, ptrdiff_t lstride)
   {
+  if (mval.shape(0)==0) return 0;
   size_t res=0;
   for (size_t i=0; i<mval.shape(0); ++i)
     {
@@ -265,6 +300,7 @@ static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mval,
 static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart,
   ptrdiff_t lstride)
   {
+  if (mstart.shape(0)==0) return 0;
   size_t res=0;
   for (size_t i=0; i<mstart.shape(0); ++i)
     {
@@ -279,14 +315,18 @@ static size_t min_almdim(size_t lmax, const cmav<size_t,1> &mstart,
 static size_t min_mapdim(const cmav<size_t,1> &nphi,
   const cmav<size_t,1> &ringstart, ptrdiff_t pixstride)
   {
+  MR_assert(nphi.shape(0)==ringstart.shape(0), "inconsistent number of rings");
   size_t res=0;
+  bool anypix=false;
   for (size_t i=0; i<nphi.shape(0); ++i)
     {
+    if (nphi(i)==0) continue;
+    anypix=true;
     auto ilast = ptrdiff_t(ringstart(i)) + ptrdiff_t(nphi(i)-1)*pixstride;
     MR_assert(ilast>=0, "impossible map memory layout");
     res = max(res, max(ringstart(i), size_t(ilast)));
     }
-  return res+1;
+  return anypix ? res+1 : 0;
   }
 
 template<typename T> static NpArr Py2_alm2flm(const CNpArr &alm_, int spin,

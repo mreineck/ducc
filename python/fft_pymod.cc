@@ -76,6 +76,8 @@ static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
     shape_t res(size_t(in.ndim()));
     for (size_t i=0; i<res.size(); ++i)
       res[i]=i;
+    if (res.empty())
+      throw runtime_error("no axes specified");
     return res;
     }
   auto tmp=axes.value();
@@ -288,7 +290,17 @@ NpArr dst(const CNpArr &in, int type, const OptAxes &axes_,
     out_, nthreads))
   }
 
-template<typename T> static NpArr c2r_internal(const NpArr &in,
+static bool is_writeable(CNpArr arr)
+  {
+#ifdef DUCC0_USE_NANOBIND
+  auto obj = arr.cast();
+  return py::cast<bool>(obj.attr("flags").attr("writeable"));
+#else
+  return arr.writeable();
+#endif
+  }
+
+template<typename T> static NpArr c2r_internal(const CNpArr &in,
   const OptAxes &axes_, size_t lastsize, bool forward, int inorm,
   const OptNpArr &out_, size_t nthreads, bool allow_overwriting_input)
   {
@@ -302,9 +314,10 @@ template<typename T> static NpArr c2r_internal(const NpArr &in,
   dims_out[axis] = lastsize;
   auto [out, aout] = get_OptNpArr_and_vfmav<T>(out_, dims_out, "out");
   T fct = norm_fct<T>(inorm, aout.shape(), axes);
-  if (allow_overwriting_input)
+  if (allow_overwriting_input && is_writeable(in))
     {
-    auto ain = to_vfmav<complex<T>>(in, "a");
+    NpArr in_mut(in);
+    auto ain = to_vfmav<complex<T>>(in_mut, "a");
     {
     py::gil_scoped_release release;
     DUCC0_NAMESPACE::c2r_mut(ain, aout, axes, forward, fct, nthreads);
@@ -318,7 +331,7 @@ template<typename T> static NpArr c2r_internal(const NpArr &in,
   return out;
   }
 
-NpArr c2r(NpArr &in, const OptAxes &axes_, size_t lastsize,
+NpArr c2r(const CNpArr &in, const OptAxes &axes_, size_t lastsize,
   bool forward, int inorm, const OptNpArr &out_, size_t nthreads,
   bool allow_overwriting_input)
   {

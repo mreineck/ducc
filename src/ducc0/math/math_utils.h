@@ -91,11 +91,14 @@ template<typename I> inline uint32_t isqrt (I arg)
   {
   if constexpr (sizeof(I)<=4)
     return uint32_t (sqrt(arg+0.5));
-  I res = I(sqrt(double(arg)+0.5));
-  if (uint64_t(arg)<(uint64_t(1)<<50)) return uint32_t(res);
-  if (res*res>arg)
+  uint64_t uarg = uint64_t(arg);
+  if (uarg<(uint64_t(1)<<50)) return uint32_t(sqrt(double(uarg)+0.5));
+  uint64_t res = uint64_t(sqrt(double(uarg)+0.5));
+  if (res >= 0x100000000ULL)
+    res = 0xFFFFFFFFULL;
+  if (res*res>uarg)
     --res;
-  else if ((res+1)*(res+1)<=arg)
+  else if (res<0xFFFFFFFFULL && (res+1)*(res+1)<=uarg)
     ++res;
   return uint32_t(res);
   }

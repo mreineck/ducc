@@ -177,12 +177,17 @@ struct slice
     {
     if (beg==end) return 0;
     if (step>0) return (min(shp,end)-beg+step-1)/step;
+    size_t step_size = size_t(-(step+1))+1;
     // negative step
     if (end==MAXIDX)
-      return (beg-step)/(-step);
-    return (beg-end-step-1)/(-step);
+      return beg/step_size+1;
+    size_t dist = beg-end;
+    return dist/step_size + (dist%step_size!=0);
     }
   };
+
+template<typename T> static T *offset_ptr(T *ptr, ptrdiff_t offset)
+  { return (offset==0) ? ptr : ptr+offset; }
 
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
@@ -389,18 +394,27 @@ class fmav_info
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-// FIXME: this doesn't work when working on dimensions of size 0.
-// Do we want to fix this?
+        if (shp[i]==0)
+          {
+          MR_assert(slices[i].beg==0 && slices[i].beg!=slices[i].end,
+            "bad subset");
+          nshp[i2]=0;
+          nstr[i2]=0;
+          ++i2;
+          continue;
+          }
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)
           {
           auto ext = slices[i].size(shp[i]);
           MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          nshp[i2]=ext; nstr[i2]=(ext==1) ? 0 : slices[i].step*str[i];
           ++i2;
           }
         }
+      if (find(nshp.begin(), nshp.end(), size_t(0))!=nshp.end())
+        nofs=0;
       return make_tuple(fmav_info(nshp, nstr), nofs);
       }
   };
@@ -589,18 +603,27 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-// FIXME: this doesn't work when working on dimensions of size 0.
-// Do we want to fix this?
+        if (shp[i]==0)
+          {
+          MR_assert(slices[i].beg==0 && slices[i].beg!=slices[i].end,
+            "bad subset");
+          nshp[i2]=0;
+          nstr[i2]=0;
+          ++i2;
+          continue;
+          }
         MR_assert(slices[i].beg<shp[i], "bad subset");
         nofs+=slices[i].beg*str[i];
         if (slices[i].beg!=slices[i].end)
           {
           auto ext = slices[i].size(shp[i]);
           MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          nshp[i2]=ext; nstr[i2]=(ext==1) ? 0 : slices[i].step*str[i];
           ++i2;
           }
         }
+      if (find(nshp.begin(), nshp.end(), size_t(0))!=nshp.end())
+        nofs=0;
       return make_tuple(mav_info_proto<Tcontainer, nd2>(nshp, nstr), nofs);
       }
   };
@@ -683,7 +706,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     cfmav subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = subdata(slices);
-      return cfmav(ninfo, tbuf::d+nofs, *this);
+      return cfmav(ninfo, offset_ptr(tbuf::d, nofs), *this);
       }
     cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
       {
@@ -777,7 +800,7 @@ template<typename T> class vfmav: public cfmav<T>
     vfmav subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::subdata(slices);
-      return vfmav(ninfo, data()+nofs, *this);
+      return vfmav(ninfo, offset_ptr(data(), nofs), *this);
       }
     /** Returns a writable fmav with the specified shape.
      *  The strides are chosen in such a way that critical strides (multiples
@@ -790,7 +813,8 @@ template<typename T> class vfmav: public cfmav<T>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray(slc);
       }
     /** Returns a writable fmav with the specified shape.
@@ -805,7 +829,8 @@ template<typename T> class vfmav: public cfmav<T>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2, UNINITIALIZED);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray(slc);
       }
     static vfmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
@@ -815,7 +840,8 @@ template<typename T> class vfmav: public cfmav<T>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2, page_in);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray(slc);
       }
     vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
@@ -896,7 +922,7 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
-      return cmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
+      return cmav<T,nd2> (ninfo, offset_ptr(tbuf::d, nofs), *this);
       }
     template<size_t nd2>
     cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
@@ -1009,7 +1035,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
-      return vmav<T,nd2> (ninfo, data()+nofs, *this);
+      return vmav<T,nd2> (ninfo, offset_ptr(data(), nofs), *this);
       }
 
     T *data() const
@@ -1030,7 +1056,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
     static vmav build_noncritical(const shape_t &shape, uninitialized_dummy)
@@ -1039,7 +1066,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, UNINITIALIZED);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
     static vmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
@@ -1048,7 +1076,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, page_in);
       vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      for (size_t i=0; i<ndim; ++i)
+        slc[i] = (shape[i]==0) ? slice() : slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
     vmav transpose(const shape_t &axes) const

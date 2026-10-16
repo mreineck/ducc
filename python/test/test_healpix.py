@@ -114,3 +114,17 @@ def test_scheme(scheme, expected):
     result = ph.Healpix_Base(1, scheme).scheme()
     assert isinstance(result, str)
     assert result == expected
+
+
+def test_nside_pixel_count_overflow():
+    max_nside = math.isqrt(np.iinfo(np.int64).max // 12)
+    base = ph.Healpix_Base(max_nside, "RING")
+    assert base.npix() == 12*max_nside*max_nside
+    assert base.pix_area() > 0
+    angles = base.pix2ang(np.array([0, base.npix()-1], dtype=np.int64))
+    assert np.all(np.isfinite(angles))
+
+    with pytest.raises(RuntimeError, match="Nside too large"):
+        ph.Healpix_Base(max_nside+1, "RING")
+    with pytest.raises(RuntimeError, match="Nside too large"):
+        ph.Healpix_Base(1 << 30, "NEST")

@@ -7,24 +7,31 @@
    AddressSanitizer, so this binary must be built with -fsanitize=address
    (see run.sh).
 
-   Usage: test_regressions <name>
-   where <name> is one of: swap_axes, slice_wraparound, wigner3j_oob,
-                           template_kernel, healpix_interpol
+   Usage: test_regressions --list or test_regressions <name>
 */
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <stdexcept>
+#include <thread>
 #include <cmath>
 #include <complex>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <new>
 #include <string>
 #include <vector>
 
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/threading.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
+#include "ducc0/math/math_utils.h"
 #include "ducc0/math/wigner3j.h"
 #include "ducc0/healpix/healpix_base.h"
+#include "ducc0/wgridder/wgridder_impl.h"
 
 using namespace ducc0;
 using namespace std;
@@ -88,6 +95,118 @@ static int test_slice_wraparound()
   catch (const exception &)
     { cout << "slice(2, 5, -1) rejected as expected\n"; }
   if (ok) cout << "PASS slice_wraparound\n";
+  return ok ? 0 : 1;
+  }
+
+/* fmav_info::subdata() must preserve a full slice of an empty dimension.
+   Empty subviews are used when batched Python APIs select a transform whose
+   point dimension is zero. */
+static int test_subarray_empty_axis()
+  {
+  bool ok=true;
+  double dummy=0;
+  vmav<double,2> fixed(&dummy, {2,0}, {100,1});
+  auto fixed_sub=fixed.subarray<1>({slice(1), slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0)
+      || (fixed_sub.data()!=fixed.data()))
+    ok=false;
+
+  fmav_info info({2,0}, {100,1});
+  vfmav<double> dynamic(&dummy, info);
+  auto dynamic_sub=dynamic.subarray({slice(1), slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0)
+      || (dynamic_sub.data()!=dynamic.data()))
+    ok=false;
+
+  if (ok) cout << "PASS subarray_empty_axis\n";
+  else cout << "FAIL subarray_empty_axis\n";
+  return ok ? 0 : 1;
+  }
+
+/* build_noncritical() must preserve zero-length axes in the returned view. */
+static int test_build_noncritical_empty()
+  {
+  bool ok=true;
+  auto check = [&ok](const auto &arr, size_t n0, size_t n1)
+    {
+    if ((arr.shape(0)!=n0) || (arr.shape(1)!=n1) || (arr.size()!=0))
+      ok=false;
+    };
+  try
+    {
+    auto fixed_1d=vmav<double,1>::build_noncritical({0});
+    if ((fixed_1d.shape(0)!=0) || (fixed_1d.size()!=0)) ok=false;
+    auto fixed=vmav<double,2>::build_noncritical({2,0});
+    check(fixed, 2, 0);
+    auto fixed_uninit=vmav<double,2>::build_noncritical({0,2}, UNINITIALIZED);
+    check(fixed_uninit, 0, 2);
+    auto fixed_pagein=vmav<double,2>::build_noncritical({2,0}, PAGE_IN(1));
+    check(fixed_pagein, 2, 0);
+    auto fixed_padded=vmav<double,2>::build_noncritical({0,512}, UNINITIALIZED);
+    check(fixed_padded, 0, 512);
+    auto dynamic=vfmav<double>::build_noncritical({2,0});
+    check(dynamic, 2, 0);
+    auto dynamic_uninit=vfmav<double>::build_noncritical({0,2}, UNINITIALIZED);
+    check(dynamic_uninit, 0, 2);
+    auto dynamic_pagein=vfmav<double>::build_noncritical({0,2}, PAGE_IN(1));
+    check(dynamic_pagein, 0, 2);
+    }
+  catch (const exception &e)
+    {
+    cout << "build_noncritical rejected an empty shape: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS build_noncritical_empty\n";
+  else cout << "FAIL build_noncritical_empty\n";
+  return ok ? 0 : 1;
+  }
+
+/* The MAXIDX end marker represents an open end and must work with reverse
+   slices as well as forward slices. */
+static int test_reverse_slice_open_end()
+  {
+  vmav<double,1> arr({4});
+  for (size_t i=0; i<4; ++i) arr(i)=double(i);
+  bool ok=true;
+  try
+    {
+    auto rev=arr.subarray<1>({slice(3, MAXIDX, -1)});
+    if ((rev.shape(0)!=4) || (rev.stride(0)!=-1)) ok=false;
+    for (size_t i=0; i<4; ++i)
+      if (rev(i)!=double(3-i)) ok=false;
+    }
+  catch (const exception &e)
+    {
+    cout << "reverse open-end slice was rejected: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS reverse_slice_open_end\n";
+  else cout << "FAIL reverse_slice_open_end\n";
+  return ok ? 0 : 1;
+  }
+
+/* Negative step magnitude must be computed without overflowing at PTRDIFF_MIN. */
+static int test_slice_min_step()
+  {
+  vmav<double,1> arr({2});
+  arr(0)=10.;
+  arr(1)=20.;
+  auto step=std::numeric_limits<ptrdiff_t>::min();
+  bool ok=true;
+  try
+    {
+    auto finite=arr.subarray<1>({slice(1, 0, step)});
+    auto open=arr.subarray<1>({slice(1, MAXIDX, step)});
+    if ((finite.size()!=1) || (finite(0)!=20.)) ok=false;
+    if ((open.size()!=1) || (open(0)!=20.)) ok=false;
+    }
+  catch (const exception &e)
+    {
+    cout << "PTRDIFF_MIN slice failed: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS slice_min_step\n";
+  else cout << "FAIL slice_min_step\n";
   return ok ? 0 : 1;
   }
 
@@ -187,19 +306,216 @@ static int test_healpix_interpol()
   return 0;
   }
 
+/* Repeated BDA frequency lists can overflow the cumulative visibility
+   offsets even when the unique frequency lists fit in size_t. Reject this
+   before allocating frequency data or using the wrapped Nvis() value. */
+static int test_bda_visibility_offset_overflow()
+  {
+  size_t half=numeric_limits<size_t>::max()/2;
+  uint64_t ids_data[] = {0,1,0};
+  uint64_t nfreqs_data[] = {uint64_t(half), uint64_t(half)};
+  double dummy=1.;
+  cmav<double,2> coord(&dummy, {3,3}, {0,0});
+  cmav<uint64_t,1> ids(ids_data, {3}, {1});
+  cmav<uint64_t,1> nfreqs(nfreqs_data, {2}, {1});
+  cmav<double,1> freqs(&dummy, {~size_t(0)-1}, {0});
+
+  bool rejected=false;
+  try
+    {
+    detail_gridder::Baselines baselines(coord, ids, nfreqs, freqs);
+    (void)baselines;
+    }
+  catch (const exception &e)
+    {
+    rejected=string(e.what()).find("BDA visibility count overflow")
+      !=string::npos;
+    if (!rejected) cout << "unexpected BDA validation error: " << e.what() << "\n";
+    }
+  if (rejected) cout << "PASS bda_visibility_offset_overflow\n";
+  else cout << "FAIL bda_visibility_offset_overflow\n";
+  return rejected ? 0 : 1;
+  }
+
+
+/* isqrt (src/ducc0/math/math_utils.h): for 64-bit arguments where the
+   result is near 2^32-1, (res+1)*(res+1) can overflow 64-bit arithmetic.
+   isqrt must return the floor integer square root up to UINT64_MAX. */
+static int test_isqrt()
+  {
+  bool ok = true;
+  uint64_t max32 = 0xFFFFFFFFULL;
+  uint64_t sq_max32 = max32 * max32;
+  if (isqrt(sq_max32) != max32)
+    {
+    cout << "isqrt(" << sq_max32 << ") = " << isqrt(sq_max32)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(~0ULL) != max32)
+    {
+    cout << "isqrt(UINT64_MAX) = " << isqrt(~0ULL)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(sq_max32 - 1) != max32 - 1)
+    {
+    cout << "isqrt(" << sq_max32 - 1 << ") = " << isqrt(sq_max32 - 1)
+         << ", expected " << max32 - 1 << "\n";
+    ok = false;
+    }
+  if (ok) cout << "PASS isqrt\n";
+  return ok ? 0 : 1;
+  }
+
+static int test_null_backed_empty_subarrays()
+  {
+  vmav<double,1> fixed(static_cast<double *>(nullptr), {0}, {1});
+  auto fixed_sub=fixed.subarray<1>({slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0)
+      || (fixed_sub.data()!=nullptr))
+    return 1;
+
+  fmav_info info({0}, {1});
+  vfmav<double> dynamic(static_cast<double *>(nullptr), info);
+  auto dynamic_sub=dynamic.subarray({slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0)
+      || (dynamic_sub.data()!=nullptr))
+    return 1;
+
+  cout << "PASS null_backed_empty_subarrays\n";
+  return 0;
+  }
+
+static int test_singleton_slice_reversed_sources()
+  {
+  double raw[2]={10., 20.};
+  auto step=numeric_limits<ptrdiff_t>::min();
+
+  vmav<double,1> fixed_reversed(raw+1, {2}, {-1});
+  auto fixed_single=fixed_reversed.subarray<1>({slice(1, 0, step)});
+  if ((fixed_single.size()!=1) || (fixed_single.stride(0)!=0)
+      || (fixed_single(0)!=10.))
+    return 1;
+
+  fmav_info info({2}, {-1});
+  vfmav<double> dynamic_reversed(raw+1, info);
+  auto dynamic_single=dynamic_reversed.subarray({slice(1, 0, step)});
+  if ((dynamic_single.size()!=1) || (dynamic_single.stride(0)!=0)
+      || (dynamic_single(0)!=10.))
+    return 1;
+
+  cout << "PASS singleton_slice_reversed_sources\n";
+  return 0;
+  }
+
+static int test_quickzero_empty_views()
+  {
+  vmav<float,2> empty_leading({0,2});
+  vmav<float,2> empty_trailing({2,0});
+  detail_gridder::quickzero(empty_leading, 1);
+  detail_gridder::quickzero(empty_trailing, 1);
+  cout << "PASS quickzero_empty_views\n";
+  return 0;
+  }
+
+class TestThreadPool: public thread_pool
+  {
+  private:
+    vector<thread> workers;
+  public:
+    ~TestThreadPool() override
+      { for (auto &worker: workers) worker.join(); }
+    size_t nthreads() const override { return 1; }
+    size_t adjust_nthreads(size_t nthreads) const override
+      { return min<size_t>(2, nthreads); }
+    void submit(function<void()> work) override
+      { workers.emplace_back(move(work)); }
+  };
+
+struct ActiveCallbackGuard
+  {
+  atomic<size_t> &active;
+  explicit ActiveCallbackGuard(atomic<size_t> &active_): active(active_)
+    { active.fetch_add(1); }
+  ~ActiveCallbackGuard() { active.fetch_sub(1); }
+  };
+
+static int test_callback_exception_wait()
+  {
+  for (size_t throwing_thread: {size_t(0), size_t(1)})
+    {
+    TestThreadPool pool;
+    ScopedUseThreadPool pool_guard(pool);
+    atomic<size_t> started{0}, active{0};
+    atomic<bool> other_done{false}, throwing_callback_ready{false};
+    bool caught=false;
+    try
+      {
+      execParallel(2, [&](Scheduler &sched)
+        {
+        ActiveCallbackGuard active_guard(active);
+        size_t tid=sched.thread_num();
+        started.fetch_or(size_t(1)<<tid);
+        if (tid==throwing_thread)
+          {
+          while ((started.load() & (size_t(1)<<(1-tid)))==0)
+            this_thread::yield();
+          if (tid==1)
+            while (!other_done.load()) this_thread::yield();
+          throwing_callback_ready.store(true);
+          throw runtime_error("callback failure");
+          }
+        if (throwing_thread==0)
+          this_thread::sleep_for(chrono::milliseconds(20));
+        other_done.store(true);
+        });
+      }
+    catch (const runtime_error &e)
+      { caught=string(e.what())=="callback failure"; }
+    if (!caught || (started.load()!=3) || active.load()!=0
+        || !other_done.load() || !throwing_callback_ready.load())
+      return 1;
+    }
+  cout << "PASS callback_exception_wait\n";
+  return 0;
+  }
+
+struct RegressionTest { const char *name; int (*run)(); };
+
+static constexpr RegressionTest regression_tests[] =
+  {
+  {"swap_axes", test_swap_axes},
+  {"slice_wraparound", test_slice_wraparound},
+  {"wigner3j_oob", test_wigner3j_oob},
+  {"template_kernel", test_template_kernel},
+  {"healpix_interpol", test_healpix_interpol},
+  {"subarray_empty_axis", test_subarray_empty_axis},
+  {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
+  {"build_noncritical_empty", test_build_noncritical_empty},
+  {"reverse_slice_open_end", test_reverse_slice_open_end},
+  {"slice_min_step", test_slice_min_step},
+  {"singleton_slice_reversed_sources", test_singleton_slice_reversed_sources},
+  {"quickzero_empty_views", test_quickzero_empty_views},
+  {"isqrt", test_isqrt},
+  {"callback_exception_wait", test_callback_exception_wait},
+  {"bda_visibility_offset_overflow", test_bda_visibility_offset_overflow},
+  };
+
 int main(int argc, char **argv)
   {
-  if (argc != 2)
+  if ((argc==2) && (string(argv[1])=="--list"))
     {
-    cerr << "usage: " << argv[0] << " <swap_axes|slice_wraparound|wigner3j_oob|template_kernel|healpix_interpol>\n";
+    for (const auto &test: regression_tests) cout << test.name << "\n";
+    return 0;
+    }
+  if (argc!=2)
+    {
+    cerr << "usage: " << argv[0] << " [--list|<test-name>]\n";
     return 2;
     }
-  string which = argv[1];
-  if (which == "swap_axes") return test_swap_axes();
-  if (which == "slice_wraparound") return test_slice_wraparound();
-  if (which == "wigner3j_oob") return test_wigner3j_oob();
-  if (which == "template_kernel") return test_template_kernel();
-  if (which == "healpix_interpol") return test_healpix_interpol();
-  cerr << "unknown test '" << which << "'\n";
+  for (const auto &test: regression_tests)
+    if (string(argv[1])==test.name) return test.run();
+  cerr << "unknown test '" << argv[1] << "'\n";
   return 2;
   }
