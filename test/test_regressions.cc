@@ -7,9 +7,7 @@
    AddressSanitizer, so this binary must be built with -fsanitize=address
    (see run.sh).
 
-   Usage: test_regressions <name>
-   where <name> is one of: swap_axes, slice_wraparound, wigner3j_oob,
-                           template_kernel, healpix_interpol
+   Usage: test_regressions --list or test_regressions <name>
 */
 #include <cmath>
 #include <complex>
@@ -187,19 +185,31 @@ static int test_healpix_interpol()
   return 0;
   }
 
+struct RegressionTest { const char *name; int (*run)(); };
+
+static constexpr RegressionTest regression_tests[] =
+  {
+  {"swap_axes", test_swap_axes},
+  {"slice_wraparound", test_slice_wraparound},
+  {"wigner3j_oob", test_wigner3j_oob},
+  {"template_kernel", test_template_kernel},
+  {"healpix_interpol", test_healpix_interpol},
+  };
+
 int main(int argc, char **argv)
   {
-  if (argc != 2)
+  if ((argc==2) && (string(argv[1])=="--list"))
     {
-    cerr << "usage: " << argv[0] << " <swap_axes|slice_wraparound|wigner3j_oob|template_kernel|healpix_interpol>\n";
+    for (const auto &test: regression_tests) cout << test.name << "\n";
+    return 0;
+    }
+  if (argc!=2)
+    {
+    cerr << "usage: " << argv[0] << " [--list|<test-name>]\n";
     return 2;
     }
-  string which = argv[1];
-  if (which == "swap_axes") return test_swap_axes();
-  if (which == "slice_wraparound") return test_slice_wraparound();
-  if (which == "wigner3j_oob") return test_wigner3j_oob();
-  if (which == "template_kernel") return test_template_kernel();
-  if (which == "healpix_interpol") return test_healpix_interpol();
-  cerr << "unknown test '" << which << "'\n";
+  for (const auto &test: regression_tests)
+    if (string(argv[1])==test.name) return test.run();
+  cerr << "unknown test '" << argv[1] << "'\n";
   return 2;
   }
