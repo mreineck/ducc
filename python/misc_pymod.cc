@@ -1195,7 +1195,7 @@ theta : numpy.ndarray((nrings,), dtype=numpy.float64)
     colatitudes of the rings  (nrings any number)
 phi0 : numpy.ndarray((nrings,), dtype=numpy.float64)
     longitude of the first pixel in each ring
-ringstart : numpy.ndarray((nrings,), dtype=numpy.uint64)
+ringstart : numpy.ndarray((nrings,), dtype=numpy.uintp)
     index of the first pixel of each ring in output map
 deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64)
     Spin-1 deflection field, with real and imaginary comp in first and second entry
