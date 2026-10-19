@@ -1018,7 +1018,6 @@ template<typename T> void leg2map(  // FFT
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
-  MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");
@@ -1071,6 +1070,7 @@ template<typename T> void leg2map(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        if (nphi(ith)==0) continue;
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
@@ -1096,7 +1096,6 @@ template<typename T> void map2leg(  // FFT
   size_t ncomp=map.shape(0);
   MR_assert(ncomp==leg.shape(0), "number of components mismatch");
   size_t nrings=leg.shape(1);
-  MR_assert(nrings>=1, "need at least one ring");
   MR_assert((nrings==nphi.shape(0)) && (nrings==ringstart.shape(0))
          && (nrings==phi0.shape(0)), "inconsistent number of rings");
   MR_assert(leg.shape(2)>=1, "bad mmax");
@@ -1152,6 +1151,13 @@ template<typename T> void map2leg(  // FFT
       vmav<double,1> ringtmp({nphmax+2}, UNINITIALIZED);
       while (auto rng=sched.getNext()) for(auto ith=rng.lo; ith<rng.hi; ++ith)
         {
+        if (nphi(ith)==0)
+          {
+          for (size_t icomp=0; icomp<ncomp; ++icomp)
+            for (size_t m=0; m<=mmax; ++m)
+              leg(icomp, ith, m) = complex<T>(0);
+          continue;
+          }
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {

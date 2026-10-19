@@ -126,6 +126,7 @@ struct util // hack to avoid duplicate symbols
     {
     if (axis>=ac.ndim()) throw invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
+    MR_assert(ar.shape(axis)>0, "no zero-sized FFTs");
     for (size_t i=0; i<ac.ndim(); ++i)
       {
       if (i==axis)
@@ -1870,7 +1871,7 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<T> &in,
   for (size_t i=0; i<in.ndim(); ++i)
     if (i!=axis)
       MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
-  if (in.size()==0) return;
+  if (in.size()==0 || out.size()==0) return;
   general_convolve_axis<pocketfft_r<T>, T>(in, out, axis, kernel, nthreads,
     ExecConv1R());
   }
@@ -1885,7 +1886,7 @@ template<typename T> DUCC0_NOINLINE void convolve_axis(const cfmav<complex<T>> &
   for (size_t i=0; i<in.ndim(); ++i)
     if (i!=axis)
       MR_assert(in.shape(i)==out.shape(i), "shape mismatch");
-  if (in.size()==0) return;
+  if (in.size()==0 || out.size()==0) return;
   const auto &in2(reinterpret_cast<const cfmav<Cmplx<T>>&>(in));
   const auto &out2(reinterpret_cast<const vfmav<Cmplx<T>>&>(out));
   const auto &kernel2(reinterpret_cast<const cmav<Cmplx<T>,1>&>(kernel));

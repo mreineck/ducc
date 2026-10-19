@@ -1,4 +1,4 @@
-/* Compile-only checks for public and template APIs that must remain
+/* Compile-only checks that keep selected C++ interfaces and templates
    instantiable with the current DUCC interfaces. */
 #include "ducc0/infra/timers.h"
 #include "ducc0/sht/sphere_interpol.h"

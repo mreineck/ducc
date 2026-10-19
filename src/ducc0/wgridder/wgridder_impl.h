@@ -70,9 +70,12 @@ template<typename T> void quickzero(const vmav<T,2> &arr, size_t nthreads)
 #if 0
   arr.fill(T(0));
 #else
-  MR_assert((arr.stride(0)>0) && (arr.stride(1)>0), "bad memory ordering");
-  MR_assert(arr.stride(0)>=arr.stride(1), "bad memory ordering");
   size_t s0=arr.shape(0), s1=arr.shape(1);
+  if ((s0==0) || (s1==0)) return;
+  MR_assert(((s0==1) || (arr.stride(0)>0))
+         && ((s1==1) || (arr.stride(1)>0)), "bad memory ordering");
+  MR_assert((s0==1) || (s1==1) || (arr.stride(0)>=arr.stride(1)),
+    "bad memory ordering");
   execParallel(s0, nthreads, [&](size_t lo, size_t hi)
     {
     if (arr.stride(1)==1)
@@ -237,10 +240,10 @@ class Baselines
   {
   protected:
     vector<UVW> coord;
-    size_t nfreqs = 0;   // if 0, data set is "ragged", and we need
-                         // more complicated address calculations
-    vector<size_t> id;        // only allocated if nfreqs == 0
-    vector<size_t> ms_ofs;    // only allocated if nfreqs == 0
+    size_t nfreqs = 0;
+    bool ragged = false;
+    vector<size_t> id;        // only allocated if ragged
+    vector<size_t> ms_ofs;    // only allocated if ragged
     vector<size_t> freq_ofs;
     vector<double> f_over_c;
     double umax, vmax;
@@ -261,14 +264,28 @@ class Baselines
       constexpr double speedOfLight = 299792458.;
       MR_assert(coord_.shape(1)==3, "dimension mismatch");
       MR_assert(freqlist_id.shape(0)==nrows, "freqlist_id dimension mismatch");
+      if (nrows==0)
+        {
+        if ((freqlist_nfreqs.shape(0)==1) &&
+            (freqlist_nfreqs(0)<=~size_t(0)))
+          nfreqs = size_t(freqlist_nfreqs(0));
+        else
+          nfreqs = 1;
+        umax = vmax = 0;
+        return;
+        }
       uint64_t max_id = 0;
       for (size_t i=0; i<nrows; ++i)
         max_id = max(max_id, freqlist_id(i));
-      MR_assert(max_id+1<=freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
+      MR_assert(max_id<freqlist_nfreqs.shape(0), "freqlist_nfreqs array is too small");
       freq_ofs.resize(max_id+2);
       freq_ofs[0] = 0;
       for (size_t i=0; i<=max_id; ++i)
-        freq_ofs[i+1] = freq_ofs[i] + freqlist_nfreqs(i);
+        {
+        auto nfreq=freqlist_nfreqs(i);
+        MR_assert(nfreq<=~size_t(0)-freq_ofs[i], "frequency list size overflow");
+        freq_ofs[i+1] = freq_ofs[i] + size_t(nfreq);
+        }
       MR_assert(freqlist_freqs.shape(0)>=freq_ofs.back(), "freqlist_freqs array is too small");
       if (max_id==0)  // simple case, we only have one frequency list
         {
@@ -276,19 +293,26 @@ class Baselines
         }
       else
         {
+        ragged = true;
         id.resize(nrows);
         for (size_t i=0; i<nrows; ++i)
           id[i] = freqlist_id(i);
         ms_ofs.resize(nrows+1);
         ms_ofs[0] = 0;
         for (size_t i=0; i<nrows; ++i)
-          ms_ofs[i+1] = ms_ofs[i] + freqlist_nfreqs(id[i]);
+          {
+          auto nfreq=freqlist_nfreqs(id[i]);
+          MR_assert(nfreq<=~size_t(0)-ms_ofs[i],
+            "BDA visibility count overflow");
+          ms_ofs[i+1] = ms_ofs[i] + size_t(nfreq);
+          }
         }
 
       f_over_c.resize(freq_ofs.back());
       double fcmax = 0;
       for (size_t i=0; i<=max_id; ++i)
         {
+        if (freq_ofs[i]==freq_ofs[i+1]) continue;
         MR_assert(freqlist_freqs(freq_ofs[i])>0, "negative channel frequency encountered");
         for (size_t j=freq_ofs[i]; j<freq_ofs[i+1]; ++j)
           {
@@ -318,12 +342,12 @@ class Baselines
       }
 
     size_t ofs_ms(size_t irow) const
-      { return nfreqs==0 ? ms_ofs[irow] : irow*nfreqs; }
+      { return ragged ? ms_ofs[irow] : irow*nfreqs; }
     size_t ofs_ms(size_t irow, size_t ichan) const
       { return ofs_ms(irow) + ichan; }
   private:
     size_t ofs_freq(size_t irow) const
-      { return nfreqs==0 ? freq_ofs[id[irow]] : 0; }
+      { return ragged ? freq_ofs[id[irow]] : 0; }
     size_t ofs_freq(size_t irow, size_t ichan) const
       { return ofs_freq(irow) + ichan; }
 
@@ -339,14 +363,16 @@ class Baselines
     void prefetchRow(size_t irow) const
       {
       DUCC0_PREFETCH_R(&coord[irow]);
-      if (nfreqs==0) DUCC0_PREFETCH_R(&id[irow]);
+      if (ragged) DUCC0_PREFETCH_R(&id[irow]);
       } // FIXME: prefetch channels?
     size_t Nrows() const { return coord.size(); }
-    size_t Nchannels(size_t irow) const { return nfreqs==0 ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs; }
+    size_t Nchannels(size_t irow) const
+      { return coord.empty() ? nfreqs : (ragged ? freq_ofs[id[irow]+1]-freq_ofs[id[irow]] : nfreqs); }
     double Umax() const { return umax; }
     double Vmax() const { return vmax; }
-    size_t Nvis() const { return nfreqs==0 ? ms_ofs.back() : Nrows()*nfreqs; }
-    bool BDA() const { return nfreqs==0; }
+    size_t Nvis() const
+      { return coord.empty() ? 0 : (ragged ? ms_ofs.back() : Nrows()*nfreqs); }
+    bool BDA() const { return ragged; }
     double Rl() const { return r_l; }
     double Rm() const { return r_m; }
   };

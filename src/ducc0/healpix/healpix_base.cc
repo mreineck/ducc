@@ -35,6 +35,8 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/space_filling.h"
 
+#include <limits>
+
 namespace DUCC0_NAMESPACE {
 
 namespace detail_healpix {
@@ -761,6 +763,8 @@ template<typename I> void T_Healpix_Base<I>::SetNside (I nside,
   Ordering_Scheme scheme)
   {
   order_  = nside2order(nside);
+  MR_assert(nside<=I(isqrt(numeric_limits<I>::max()/I(12))),
+    "SetNside: Nside too large");
   MR_assert ((scheme!=NEST) || (order_>=0),
     "SetNside: nside must be power of 2 for nested maps");
   nside_  = nside;

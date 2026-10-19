@@ -31,6 +31,15 @@ pmp = pytest.mark.parametrize
 SPEEDOFLIGHT = 299792458.
 
 
+def test_wgridding_accepts_singleton_workspace_views():
+    out = ng.vis2dirty(
+        uvw=np.zeros((1, 3)), freq=np.array([1e9]),
+        vis=np.ones((1, 1), dtype=np.complex128),
+        npix_x=2, npix_y=2, pixsize_x=1e-5, pixsize_y=1e-5,
+        epsilon=3e-5, do_wgridding=True, nthreads=2, verbosity=0)
+    assert out.shape == (2, 2)
+
+
 def explicit_gridder(uvw, freq, ms, wgt, nxdirty, nydirty, xpixsize, ypixsize,
                      apply_w, mask, divide_by_n=True):
     x, y = np.meshgrid(*[-ss/2 + np.arange(ss) for ss in [nxdirty, nydirty]],
@@ -402,6 +411,80 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
                            pixsizey, wstacking, mask, divide_by_n=False)
     assert_allclose(ducc0.misc.l2error(dirty, ref), 0, atol=epsilon)
     assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
+
+
+def _bda_edge_case_args(freqlist_id, freqlist_nfreqs, freqlist_freqs):
+    return dict(
+        uvw=np.zeros((freqlist_id.size, 3)), freqlist_id=freqlist_id,
+        freqlist_nfreqs=freqlist_nfreqs, freqlist_freqs=freqlist_freqs,
+        pixsize_x=1.e-4, pixsize_y=1.e-4, epsilon=1.e-5)
+
+
+def test_bda_rejects_out_of_range_frequency_id():
+    bad_id = np.array([np.iinfo(np.uint64).max], dtype=np.uint64)
+    common = _bda_edge_case_args(
+        freqlist_id=bad_id,
+        freqlist_nfreqs=np.array([1], dtype=np.uint64),
+        freqlist_freqs=np.array([1.e9]))
+    with pytest.raises(RuntimeError, match="freqlist_nfreqs array is too small"):
+        ducc0.wgridder.experimental.vis2dirty_bda(
+            **common, vis=np.array([1.+0.j]), npix_x=32, npix_y=32)
+    with pytest.raises(RuntimeError, match="freqlist_nfreqs array is too small"):
+        ducc0.wgridder.experimental.dirty2vis_bda(
+            **common, dirty=np.zeros((32, 32)))
+
+
+def test_bda_rejects_frequency_count_overflow():
+    common = _bda_edge_case_args(
+        freqlist_id=np.array([1], dtype=np.uint64),
+        freqlist_nfreqs=np.array([np.iinfo(np.uint64).max, 1], dtype=np.uint64),
+        freqlist_freqs=np.array([1.e9]))
+    with pytest.raises(RuntimeError, match="frequency list size overflow"):
+        ducc0.wgridder.experimental.vis2dirty_bda(
+            **common, vis=np.array([1.+0.j]), npix_x=32, npix_y=32)
+    with pytest.raises(RuntimeError, match="frequency list size overflow"):
+        ducc0.wgridder.experimental.dirty2vis_bda(
+            **common, dirty=np.zeros((32, 32)))
+
+
+def test_bda_empty_rows_without_frequency_lists():
+    common = _bda_edge_case_args(
+        freqlist_id=np.empty(0, dtype=np.uint64),
+        freqlist_nfreqs=np.empty(0, dtype=np.uint64),
+        freqlist_freqs=np.empty(0))
+    dirty = ducc0.wgridder.experimental.vis2dirty_bda(
+        **common, vis=np.empty(0, dtype=np.complex128), npix_x=32, npix_y=32)
+    np.testing.assert_array_equal(dirty, np.zeros((32, 32)))
+
+    vis = ducc0.wgridder.experimental.dirty2vis_bda(
+        **common, dirty=dirty)
+    assert vis.shape == (0,)
+
+
+@pmp(("nrow", "nchan"), [(0, 0), (1, 0)],
+     ids=("empty_rows", "empty_channels"))
+def test_empty_standard_channels(nrow, nchan):
+    dirty = ducc0.wgridder.vis2dirty(
+        uvw=np.zeros((nrow, 3)), freq=np.empty(nchan),
+        vis=np.empty((nrow, nchan), dtype=np.complex128),
+        npix_x=32, npix_y=32, pixsize_x=1.e-4, pixsize_y=1.e-4,
+        epsilon=1.e-5)
+    np.testing.assert_array_equal(dirty, np.zeros((32, 32)))
+
+
+def test_bda_empty_frequency_list():
+    common = _bda_edge_case_args(
+        freqlist_id=np.zeros(1, dtype=np.uint64),
+        freqlist_nfreqs=np.zeros(1, dtype=np.uint64),
+        freqlist_freqs=np.empty(0))
+    dirty = ducc0.wgridder.experimental.vis2dirty_bda(
+        **common, vis=np.empty(0, dtype=np.complex128),
+        npix_x=32, npix_y=32)
+    np.testing.assert_array_equal(dirty, np.zeros((32, 32)))
+
+    vis = ducc0.wgridder.experimental.dirty2vis_bda(
+        **common, dirty=dirty)
+    assert vis.shape == (0,)
 
 
 @pmp('nxdirty', [2, 16, 64])

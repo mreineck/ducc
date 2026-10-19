@@ -50,6 +50,113 @@ def myalmdot(a1, a2, lmax):
     return ducc0.misc.vdot(compress_alm(a1, lmax), compress_alm((a2), lmax))
 
 
+def test_map_leg_empty_rings():
+    nphi = np.array([0, 3], dtype=np.uint64)
+    phi0 = np.zeros(2)
+    ringstart = np.array([1, 0], dtype=np.uint64)
+    map = np.array([[1., 2., 4.]])
+
+    leg = ducc0.sht.map2leg(map=map, nphi=nphi, phi0=phi0,
+                            ringstart=ringstart, mmax=1)
+    ref_leg = ducc0.sht.map2leg(map=map, nphi=np.array([3], dtype=np.uint64),
+                                phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64),
+                                mmax=1)
+    np.testing.assert_array_equal(leg[:, 0, :], 0)
+    np.testing.assert_array_equal(leg[:, 1, :], ref_leg[:, 0, :])
+
+    mapped = ducc0.sht.leg2map(leg=leg, nphi=nphi, phi0=phi0,
+                               ringstart=ringstart)
+    ref_map = ducc0.sht.leg2map(leg=leg[:, 1:, :], nphi=np.array([3], dtype=np.uint64),
+                                phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64))
+    np.testing.assert_array_equal(mapped, ref_map)
+
+    empty_leg = ducc0.sht.map2leg(map=np.empty((1, 0)), nphi=np.array([0], dtype=np.uint64),
+                                  phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64),
+                                  mmax=2)
+    np.testing.assert_array_equal(empty_leg, np.zeros((1, 1, 3), dtype=np.complex128))
+    empty_map = ducc0.sht.leg2map(leg=empty_leg, nphi=np.array([0], dtype=np.uint64),
+                                  phi0=np.zeros(1), ringstart=np.array([0], dtype=np.uint64))
+    assert empty_map.shape == (1, 0)
+
+
+def test_map_leg_zero_rings():
+    empty_n = np.empty(0, dtype=np.uint64)
+    empty_f = np.empty(0, dtype=np.float64)
+    leg = ducc0.sht.map2leg(map=np.empty((1, 0)), nphi=empty_n,
+                            phi0=empty_f, ringstart=empty_n, mmax=2)
+    assert leg.shape == (1, 0, 3)
+
+    map = ducc0.sht.leg2map(leg=np.empty((1, 0, 3), dtype=np.complex128),
+                            nphi=empty_n, phi0=empty_f, ringstart=empty_n)
+    assert map.shape == (1, 0)
+
+
+def test_map_leg_rejects_mismatched_ring_metadata():
+    nphi = np.array([1], dtype=np.uint64)
+    phi0 = np.zeros(1)
+    ringstart = np.array([], dtype=np.uint64)
+
+    with pytest.raises(RuntimeError, match="inconsistent number of rings"):
+        ducc0.sht.map2leg(map=np.zeros((1, 1)), nphi=nphi, phi0=phi0,
+                          ringstart=ringstart, mmax=0)
+    with pytest.raises(RuntimeError, match="inconsistent number of rings"):
+        ducc0.sht.leg2map(leg=np.ones((1, 1, 1), dtype=np.complex128),
+                          nphi=nphi, phi0=phi0, ringstart=ringstart,
+                          map=np.zeros((1, 1)))
+
+
+def test_empty_m_modes_in_alm_leg_transforms():
+    theta = np.array([0.2, 0.8])
+    mval = np.empty(0, dtype=np.int64)
+    mstart = np.empty(0, dtype=np.int64)
+
+    leg = ducc0.sht.alm2leg(alm=np.empty((1, 0), dtype=np.complex128),
+                            lmax=2, theta=theta, mval=mval, mstart=mstart)
+    assert leg.shape == (1, 2, 0)
+
+    alm = ducc0.sht.leg2alm(leg=leg, lmax=2, theta=theta,
+                            mval=mval, mstart=mstart)
+    assert alm.shape == (1, 0)
+
+    out = np.empty((1, 0), dtype=np.complex128)
+    assert ducc0.sht.leg2alm(leg=leg, lmax=2, theta=theta,
+                             mval=mval, mstart=mstart, alm=out) is out
+
+
+def test_alm_leg_transforms_accept_documented_unsigned_m_metadata():
+    theta = np.array([0.5])
+    alm = np.array([[0.0 + 0.0j, 2.0 + 0.0j]])
+    mval_u = np.array([1], dtype=np.uint64)
+    mstart_u = np.array([0], dtype=np.uint64)
+    mval_i = np.array([1], dtype=np.int64)
+    mstart_i = np.array([0], dtype=np.int64)
+
+    leg_u = ducc0.sht.alm2leg(alm=alm, lmax=1, theta=theta,
+                              mval=mval_u, mstart=mstart_u)
+    leg_i = ducc0.sht.alm2leg(alm=alm, lmax=1, theta=theta,
+                              mval=mval_i, mstart=mstart_i)
+    np.testing.assert_array_equal(leg_u, leg_i)
+
+    alm_u = ducc0.sht.leg2alm(leg=leg_u, lmax=1, theta=theta,
+                              mval=mval_u, mstart=mstart_u)
+    alm_i = ducc0.sht.leg2alm(leg=leg_i, lmax=1, theta=theta,
+                              mval=mval_i, mstart=mstart_i)
+    np.testing.assert_array_equal(alm_u[:, 1:], alm_i[:, 1:])
+
+    invalid_mvals = (np.array([-1], dtype=np.int64),
+                     np.array([np.iinfo(np.uint64).max], dtype=np.uint64))
+    invalid_mstart = np.array([np.iinfo(np.uint64).max], dtype=np.uint64)
+    for transform, data in ((ducc0.sht.alm2leg, {"alm": alm}),
+                            (ducc0.sht.leg2alm, {"leg": leg_u})):
+        for invalid_mval in invalid_mvals:
+            with pytest.raises(RuntimeError, match="bad m value"):
+                transform(**data, lmax=1, theta=theta,
+                          mval=invalid_mval, mstart=mstart_u)
+        with pytest.raises(RuntimeError, match="bad mstart value"):
+            transform(**data, lmax=1, theta=theta,
+                      mval=mval_u, mstart=invalid_mstart)
+
+
 @pmp('geometry', ("CC", "F1", "MW", "MWflip", "GL", "DH", "F2"))
 @pmp('spin', (0, 1, 2))
 @pmp('nthreads', (1, 4))
