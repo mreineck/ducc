@@ -51,9 +51,9 @@ def myalmdot(a1, a2, lmax):
 
 
 def test_map_leg_rejects_mismatched_ring_metadata():
-    nphi = np.array([1], dtype=np.uint64)
+    nphi = np.array([1], dtype=np.uintp)
     phi0 = np.zeros(1)
-    ringstart = np.array([], dtype=np.uint64)
+    ringstart = np.array([], dtype=np.uintp)
 
     with pytest.raises(RuntimeError, match="inconsistent number of rings"):
         ducc0.sht.map2leg(map=np.zeros((1, 1)), nphi=nphi, phi0=phi0,

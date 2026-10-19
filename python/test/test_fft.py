@@ -38,8 +38,18 @@ def test_c2c_unaligned_singleton_strides():
 
 
 def test_r2c_rejects_zero_length_transform_axis():
-    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
+    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
         ducc0.fft.r2c(np.empty((0,), dtype=np.float64))
+
+
+@pmp("func, inp", [
+    (ducc0.fft.c2c, np.array(2.)),
+    (ducc0.fft.r2c, np.array(2.)),
+    (ducc0.fft.c2r, np.array(2.+0.j)),
+])
+def test_fft_rejects_scalar_arrays_without_axes(func, inp):
+    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
+		      func(inp)
 
 
 shapes1D = ((10,), (127,))

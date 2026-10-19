@@ -71,6 +71,9 @@ using OptAxes = optional<vector<ptrdiff_t>>;
 
 static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   {
+  auto ndim = in.ndim();
+  MR_assert((ndim>0)&&(in.size()>0),
+    "arrays must be at least 1D and not have zero size");
   if (!axes)
     {
     shape_t res(size_t(in.ndim()));
@@ -79,7 +82,6 @@ static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
     return res;
     }
   auto tmp=axes.value();
-  auto ndim = in.ndim();
   if ((tmp.size()>size_t(ndim)) || (tmp.size()==0))
     throw runtime_error("bad axes argument");
   for (auto& sz: tmp)

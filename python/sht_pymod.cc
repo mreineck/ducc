@@ -172,8 +172,10 @@ static void getmstuff(size_t lmax, const OptCNpArr &mval_,
     }
   else
     {
-    auto tmval = to_cmav<int64_t,1>(mval_.value(), "mval");
-    auto tmstart = to_cmav<int64_t,1>(mstart_.value(), "mstart");
+// FIXME: this can probably be more compact
+// FIXME check for m uniqueness?
+    auto tmval = to_cmav<size_t,1>(mval_.value(), "mval");
+    auto tmstart = to_cmav<size_t,1>(mstart_.value(), "mstart");
     size_t nm = tmval.shape(0);
     MR_assert(nm==tmstart.shape(0), "size mismatch between mval and mstart");
     vmav<size_t,1> tmv({nm}, UNINITIALIZED);
@@ -183,9 +185,9 @@ static void getmstuff(size_t lmax, const OptCNpArr &mval_,
     for (size_t i=0; i<nm; ++i)
       {
       auto m = tmval(i);
-      MR_assert((m>=0) && (m<=int64_t(lmax)), "bad m value");
-      mval(i) = size_t(m);
-      mstart(i) = size_t(tmstart(i));
+      MR_assert(m<=lmax, "bad m value");
+      mval(i) = m;
+      mstart(i) = tmstart(i);
       }
     }
   }
@@ -426,10 +428,10 @@ spin: int >= 0
     the spin to use for the transform
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
-mval: numpy.ndarray((nm,), dtype = numpy.uint64)
+mval: numpy.ndarray((nm,), dtype=numpy.uintp)
     the m moments for which the transform should be carried out
     entries must be unique and <= lmax
-mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
+mstart: numpy.ndarray((nm,), dtype=numpy.uintp)
     the (hypothetical) index in the second dimension of `alm` on which the
     entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
@@ -485,10 +487,10 @@ leg: None or numpy.ndarray((2, ntheta, nm), same dtype as `alm`)
     if `None`, a new suitable array is allocated
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
-mval: numpy.ndarray((nm,), dtype = numpy.uint64)
+mval: numpy.ndarray((nm,), dtype=numpy.uintp)
     the m moments for which the transform should be carried out
     entries must be unique and <= lmax
-mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
+mstart: numpy.ndarray((nm,), dtype=numpy.uintp)
     the (hypothetical) index in the second dimension of `alm` on which the
     entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
@@ -557,10 +559,10 @@ spin: int >= 0
     the spin to use for the transform
 lmax: int >= 0
     the maximum l moment of the transform (inclusive)
-mval: numpy.ndarray((nm,), dtype = numpy.uint64)
+mval: numpy.ndarray((nm,), dtype=numpy.uintp)
     the m moments for which the transform should be carried out
     entries must be unique and <= lmax
-mstart: numpy.ndarray((nm,), dtype = numpy.uint64)
+mstart: numpy.ndarray((nm,), dtype=numpy.uintp)
     the (hypothetical) index in the second dimension of `alm` on which the
     entry with l=0, m=mval[mi] would be stored, for mi in mval
 lstride: int
@@ -636,11 +638,11 @@ leg: None or numpy.ndarray((ncomp, ntheta, mmax+1), dtype=numpy.complex of same 
     if `None`, a new suitable array is allocated
     The entries in leg[:,:,m] correspond to quantum number m, i.e. the m values
     will be stored in ascending order.
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -710,11 +712,11 @@ map: None or numpy.ndarray((ncomp, x), dtype=numpy.float of same accuracy as `le
     The second dimension must be large enough to accommodate all pixels, which
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
     if `None`, a new suitable array is allocated
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the second dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -812,15 +814,15 @@ map: None or numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float of same accur
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -892,15 +894,15 @@ map: None or numpy.ndarray(([ntrans,] 2, x), dtype=numpy.float of same accuracy 
     if `None`, a new suitable array is allocated
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1019,7 +1021,7 @@ lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1096,7 +1098,7 @@ lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1174,7 +1176,7 @@ spin: int >= 0
     the spin to use for the transform.
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1291,15 +1293,15 @@ map: numpy.ndarray(([ntrans,] nmaps, x), dtype=numpy.float32 or numpy.float64
     are stored according to the parameters `nphi`, `ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1390,7 +1392,7 @@ lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1480,7 +1482,7 @@ spin: int >= 0
     the spin to use for the transform.
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1615,15 +1617,15 @@ map: numpy.ndarray(([ntrans,] ncomp, x), dtype=numpy.float32 or numpy.float64
     are stored according to the parameters `nphi`, 'ringstart`, and `pixstride`.
 theta: numpy.ndarray((ntheta,), dtype=numpy.float64)
     the colatitudes of the map rings
-nphi: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+nphi: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     number of pixels in every ring
 phi0: numpy.ndarray((ntheta,), dtype=numpy.float64)
     azimuth (in radians) of the first pixel in every ring
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
-ringstart: numpy.ndarray((ntheta,), dtype=numpy.uint64)
+ringstart: numpy.ndarray((ntheta,), dtype=numpy.uintp)
     the index in the last dimension of `map` at which the first pixel of every
     ring is stored
 ringfactor: numpy.ndarray((ntheta,), dtype=numpy.float64)
@@ -1726,7 +1728,7 @@ lmax: int >= 0
     the maximum l (and m) moment of the transform (inclusive)
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1840,7 +1842,7 @@ spin: int >= 0
     If spin==0, ncomp must be 1, otherwise 2
 lmax: int >= 0
     the maximum l moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.
@@ -1951,7 +1953,7 @@ lmax: int >= 0
     the maximum l moment of the transform (inclusive).
 mmax: int >= 0 <= lmax
     the maximum m moment of the transform (inclusive).
-mstart: numpy.ndarray((mmax+1,), dtype = numpy.uint64)
+mstart: numpy.ndarray((mmax+1,), dtype=numpy.uintp)
     the (hypothetical) index in the last dimension of `alm` on which the
     entry with (l=0, m) would be stored. If not supplied, a contiguous storage
     scheme in the order m=0,1,2,... is assumed.

@@ -117,6 +117,8 @@ struct util // hack to avoid duplicate symbols
   DUCC0_NOINLINE static void sanity_check_onetype(const fmav_info &a1,
     const fmav_info &a2, bool inplace, const shape_t &axes)
     {
+    MR_assert((a1.ndim()>0) && (a1.size()>0),
+      "arrays must be at least 1D and not have zero size");
     sanity_check_axes(a1.ndim(), axes);
     MR_assert(a1.conformable(a2), "array sizes are not conformable");
     if (inplace) MR_assert(a1.stride()==a2.stride(), "stride mismatch");
@@ -124,6 +126,8 @@ struct util // hack to avoid duplicate symbols
   DUCC0_NOINLINE static void sanity_check_cr(const fmav_info &ac,
     const fmav_info &ar, bool inplace, const size_t axis)
     {
+    MR_assert((ac.ndim()>0) && (ac.size()>0),
+      "arrays must be at least 1D and not have zero size");
     if (axis>=ac.ndim()) throw invalid_argument("bad axis number");
     MR_assert(ac.ndim()==ar.ndim(), "dimension mismatch");
     MR_assert(ar.shape(axis)>0, "no zero-sized FFTs");
