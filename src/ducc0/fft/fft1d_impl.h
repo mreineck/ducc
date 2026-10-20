@@ -1097,8 +1097,8 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
        Tcd * DUCC0_RESTRICT buf, size_t nthreads) const
       {
       static const auto ti=tidx<Tcd *>();
-      Tcd *akf = &buf[0];
-      Tcd *akf2 = subplan->needs_copy() ? (&buf[ip2]) : akf;
+      Tcd *akf = buf;
+      Tcd *akf2 = subplan->needs_copy() ? (buf+ip2) : akf;
       Tcd *subbuf = akf2+ip2;
 
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
@@ -1271,9 +1271,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             execStatic(nvtrans, nthreads, 0, [&](auto &sched)
               {
               aligned_array<Tcv> tbuf(2*ip+32+bufsize());
-              auto cc2 = &tbuf[0];
-              auto ch2 = &tbuf[ip+16];
-              auto buf2 = &tbuf[2*ip+32];
+              auto cc2 = tbuf.data();
+              auto ch2 = tbuf.data()+ip+16;
+              auto buf2 = tbuf.data()+2*ip+32;
 
               while (auto rng=sched.getNext())
                 for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
@@ -1313,9 +1313,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             execStatic(nvtrans, nthreads, 0, [&](auto &sched)
               {
               aligned_array<Tcv> tbuf(2*ip+32+bufsize());
-              auto cc2 = &tbuf[0];
-              auto ch2 = &tbuf[ip+16];
-              auto buf2 = &tbuf[2*ip+32];
+              auto cc2 = tbuf.data();
+              auto ch2 = tbuf.data()+ip+16;
+              auto buf2 = tbuf.data()+2*ip+32;
 
               while (auto rng=sched.getNext())
                 for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
@@ -1360,9 +1360,9 @@ MR_fail("must not get here");
 #if 0
 //FIXME this code path is currently unused
           aligned_array<Tcv> tbuf(2*ip+bufsize());
-          auto cc2 = &tbuf[0];
-          auto ch2 = &tbuf[ip];
-          auto buf2 = &tbuf[2*ip];
+          auto cc2 = tbuf;
+          auto ch2 = tbuf+ip;
+          auto buf2 = tbuf+2*ip;
 
           auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
             { return ch[a+ido*(b+l1*c)]; };
@@ -1457,9 +1457,9 @@ MR_fail("must not get here");
             }
           if (l1==1)
             {
-            auto cc2 = &buf[0];
-            auto ch2 = &buf[bunchsize*ip];
-            auto buf2 = &buf[(bunchsize+1)*ip];
+            auto cc2 = buf;
+            auto ch2 = buf+bunchsize*ip;
+            auto buf2 = buf+(bunchsize+1)*ip;
             size_t nbunch = (ido + bunchsize-1)/bunchsize;
 
             auto CC = [cc,this](size_t a, size_t b) -> Tc&
@@ -1516,9 +1516,9 @@ MR_fail("must not get here");
 MR_fail("must not get here");
 #if 0
 //FIXME this code path is currently unused
-          auto cc2 = &buf[0];
-          auto ch2 = &buf[bunchsize*ip];
-          auto buf2 = &buf[(bunchsize+1)*ip];
+          auto cc2 = buf;
+          auto ch2 = buf+bunchsize*ip;
+          auto buf2 = buf+(bunchsize+1)*ip;
           size_t nbunch = (l1*ido + bunchsize-1)/bunchsize;
 
           auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tc&
@@ -2683,9 +2683,9 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
       {
       using Tcd = Cmplx<Tfd>;
       auto buf = reinterpret_cast<Tcd *>(buf_);
-      Tcd *cc2 = &buf[0];
-      Tcd *ch2 = &buf[ip];
-      Tcd *subbuf = &buf[2*ip];
+      Tcd *cc2 = buf;
+      Tcd *ch2 = buf+ip;
+      Tcd *subbuf = buf+2*ip;
       static const auto ticd = tidx<Tcd *>();
 
       if constexpr(fwd)
