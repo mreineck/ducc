@@ -701,7 +701,7 @@ template<typename T0> class T_dcst23
       int type, bool cosine, size_t nthreads=1) const
       {
       aligned_array<T> buf(bufsize());
-      exec(c, &buf[0], fct, ortho, type, cosine, nthreads);
+      exec(c, buf.data(), fct, ortho, type, cosine, nthreads);
       }
 
     size_t length() const { return fftplan.length(); }
@@ -820,7 +820,7 @@ template<typename T0> class T_dcst4
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
       {
       aligned_array<T> buf(bufsize());
-      exec(c, &buf[0], fct, true, 4, cosine, nthreads);
+      exec(c, buf.data(), fct, true, 4, cosine, nthreads);
       }
 
     size_t length() const { return N; }
