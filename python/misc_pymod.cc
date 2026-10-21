@@ -125,6 +125,14 @@ static FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
 #endif
   MR_fail("type matching failed");
   }
+static FloatOrComplex Py_vdot_scalar(const complex<double> &a,
+  const complex<double> &b)
+  {
+  complex<long double> acc = conj(complex<long double>(a))
+                           * complex<long double>(b);
+  return (acc.imag()==0) ? FloatOrComplex(double(acc.real()))
+                         : FloatOrComplex(complex<double>(acc));
+  }
 
 
 constexpr const char *Py_special_add_at_DS = R"""(
@@ -526,7 +534,9 @@ static double Py_l2error(const CNpArr &a, const CNpArr &b)
   }
 double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
   {
-  auto res = abs(a-b)/max(abs(a), abs(b));
+  auto maxval = max(abs(a), abs(b));
+  if (maxval==0.) return 0.;
+  auto res = abs(a-b)/maxval;
   return double(res);
   }
 
@@ -671,18 +681,18 @@ static NpArr Py_empty_noncritical(const vector<size_t> &shape,
   {
   auto dtype = normalizeDtype(dtype_);
   if (isDtype<float>(dtype))
-    return make_noncritical_Pyarr<float>(shape, nthreads);
+    return make_noncritical_Pyarr<float>(shape, false, nthreads);
   if (isDtype<complex<float>>(dtype))
-    return make_noncritical_Pyarr<complex<float>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<float>>(shape, false, nthreads);
   if (isDtype<double>(dtype))
-    return make_noncritical_Pyarr<double>(shape);
+    return make_noncritical_Pyarr<double>(shape, false, nthreads);
   if (isDtype<complex<double>>(dtype))
-    return make_noncritical_Pyarr<complex<double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<double>>(shape, false, nthreads);
 #ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
-    return make_noncritical_Pyarr<long double>(shape, nthreads);
+    return make_noncritical_Pyarr<long double>(shape, false, nthreads);
   if (isDtype<complex<long double>>(dtype))
-    return make_noncritical_Pyarr<complex<long double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<long double>>(shape, false, nthreads);
 #endif
   MR_fail("unsupported datatype");
   }
@@ -1185,7 +1195,7 @@ theta : numpy.ndarray((nrings,), dtype=numpy.float64)
     colatitudes of the rings  (nrings any number)
 phi0 : numpy.ndarray((nrings,), dtype=numpy.float64)
     longitude of the first pixel in each ring
-ringstart : numpy.ndarray((nrings,), dtype=numpy.uint64)
+ringstart : numpy.ndarray((nrings,), dtype=numpy.uintp)
     index of the first pixel of each ring in output map
 deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64)
     Spin-1 deflection field, with real and imaginary comp in first and second entry
@@ -1862,6 +1872,7 @@ void add_misc(py::module_ &msup)
   auto m2 = m.def_submodule("experimental");
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
+  m.def("vdot", Py_vdot_scalar, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error_scalar, Py_l2error_DS, "a"_a, "b"_a);
   m.def("special_add_at", Py_special_add_at, Py_special_add_at_DS,

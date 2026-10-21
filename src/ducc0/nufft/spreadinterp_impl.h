@@ -414,7 +414,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr size_t batchsize=3;
         array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
-        mysimd<Tacc> kubuf[batchsize*hlp.nvec];
+        array<mysimd<Tacc>,batchsize*hlp.nvec> kubuf;
 
         constexpr size_t lookahead=20;
 
@@ -438,7 +438,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             if constexpr(batchsize==3)
               tkrn.eval3(Tacc(supp-1-2*frac[0][0]),
                          Tacc(supp-1-2*frac[1][0]),
-                         Tacc(supp-1-2*frac[2][0]), &kubuf[0]);
+                         Tacc(supp-1-2*frac[2][0]), kubuf.data());
             else
               MR_fail("bad batchsize");
 
@@ -469,8 +469,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             auto v(points(coord_idx[ix]));
             parent::template getpix<Tcoord>(
               {coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
-            auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tacc(supp-1-2*frac[0][0]), &ku[0]);
+            auto * DUCC0_RESTRICT ku = kubuf.data();
+            tkrn.eval1(Tacc(supp-1-2*frac[0][0]), ku);
             hlp.prep_for_index(index[0]);
 
             Tacc vr(v.real()), vi(v.imag());
@@ -507,7 +507,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr size_t batchsize=3;
         array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
-        mysimd<Tcalc> kubuf[batchsize*hlp.nvec];
+        array<mysimd<Tcalc>,batchsize*hlp.nvec> kubuf;
 
         constexpr size_t lookahead=20;
         while (auto rng=sched.getNext())
@@ -532,13 +532,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             if constexpr(batchsize==3)
               tkrn.eval3(Tcalc(supp-1-2*frac[0][0]),
                          Tcalc(supp-1-2*frac[1][0]),
-                         Tcalc(supp-1-2*frac[2][0]), &kubuf[0]);
+                         Tcalc(supp-1-2*frac[2][0]), kubuf.data());
             else
               MR_fail("bad batchsize");
 
             for (size_t k=0; k<batchsize; ++k)
               {
-              auto * DUCC0_RESTRICT ku = &kubuf[k*hlp.nvec];
+              auto * DUCC0_RESTRICT ku = kubuf.data()+k*hlp.nvec;
               hlp.prep_for_index(index[k]);
               size_t row = coord_idx[ix+k];
 
@@ -563,8 +563,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             size_t row = coord_idx[ix];
             parent::template getpix<Tcoord>({coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
-            auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tcalc(supp-1-2*frac[0][0]), &ku[0]);
+            auto * DUCC0_RESTRICT ku = kubuf.data();
+            tkrn.eval1(Tcalc(supp-1-2*frac[0][0]), ku);
             hlp.prep_for_index(index[0]);
 
             mysimd<Tcalc> rr=0, ri=0;

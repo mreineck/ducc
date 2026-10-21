@@ -38,6 +38,12 @@ jobs:
       matrix:
         platform:
           - os: ubuntu-24.04
+            python: '3.8'
+          - os: ubuntu-24.04
+            python: '3.9'
+          - os: ubuntu-24.04
+            python: '3.10'
+          - os: ubuntu-24.04
             python: '3.11'
           - os: ubuntu-24.04
             python: '3.12'

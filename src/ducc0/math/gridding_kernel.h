@@ -345,7 +345,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
 
   public:
     TemplateKernel(const PolynomialKernel &krn)
-      : scoeff(reinterpret_cast<T *>(&coeff[0]))
+      : scoeff(reinterpret_cast<T *>(coeff.data()))
       {
       MR_assert(W==krn.support(), "support mismatch");
       MR_assert(D>=krn.degree(), "degree mismatch");

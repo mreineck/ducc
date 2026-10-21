@@ -506,11 +506,11 @@ Returns
 -------
 theta: numpy.ndarray(numpy.float64, shape=(nrings,))
     the colatitudes of all rings
-nphi: numpy.ndarray(numpy.uint64, shape=(nrings,))
+nphi: numpy.ndarray(numpy.uintp, shape=(nrings,))
     the number of pixels for every ring
 phi0: numpy.ndarray(numpy.float64, shape=(nrings,))
     the azimuth of the first pixel in every ring
-ringstart: numpy.ndarray(numpy.uint64, shape=(nrings,))
+ringstart: numpy.ndarray(numpy.uintp, shape=(nrings,))
     the index of the first pixel in every ring in a typical HEALPix map array.
 )""";
 

@@ -25,6 +25,33 @@ import platform
 
 pmp = pytest.mark.parametrize
 
+
+def test_c2c_unaligned_singleton_strides():
+    source = np.lib.stride_tricks.as_strided(
+        np.array([2.+3.j]), shape=(1,), strides=(1,))
+    out = np.lib.stride_tricks.as_strided(
+        np.zeros(1, dtype=np.complex128), shape=(1,), strides=(1,))
+
+    result = ducc0.fft.c2c(source, out=out)
+    assert result is out
+    np.testing.assert_array_equal(out, np.array([2.+3.j]))
+
+
+def test_r2c_rejects_zero_length_transform_axis():
+    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
+        ducc0.fft.r2c(np.empty((0,), dtype=np.float64))
+
+
+@pmp("func, inp", [
+    (ducc0.fft.c2c, np.array(2.)),
+    (ducc0.fft.r2c, np.array(2.)),
+    (ducc0.fft.c2r, np.array(2.+0.j)),
+])
+def test_fft_rejects_scalar_arrays_without_axes(func, inp):
+    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
+		      func(inp)
+
+
 shapes1D = ((10,), (127,))
 shapes2D = ((128, 128), (128, 129),
             (1, 129), (2, 127), (3, 127), (6, 127),
@@ -373,6 +400,19 @@ def test_conv2(L1,L2,dtype):
     x2 = refconv(a,L2,1,k)
     eps = tol[x2.real.dtype.type]
     _assert_close(x, x2, eps)
+
+def test_convolve_axis_zero_sized_output():
+    a = np.ones((10, 5), dtype=np.float64)
+    out = np.empty((10, 0), dtype=np.float64)
+    k = np.ones((5,), dtype=np.float64)
+    res = ducc0.fft.convolve_axis(a, out, 1, k)
+    assert res.shape == (10, 0)
+
+    ac = np.ones((10, 5), dtype=np.complex128)
+    outc = np.empty((10, 0), dtype=np.complex128)
+    kc = np.ones((5,), dtype=np.complex128)
+    resc = ducc0.fft.convolve_axis(ac, outc, 1, kc)
+    assert resc.shape == (10, 0)
 
 
 def test_multi_iter_bug():
