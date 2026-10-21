@@ -14,14 +14,20 @@
 
         ducc = py-pkgs.buildPythonPackage {
           pname = "ducc0";
-          version = "0.41.1";
+          version = "0.42.0";
           pyproject = true;
 
           # stdenv = pkgs.clangStdenv;
 
           inherit src;
           postPatch = ''
-            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6", ' ""
+            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6",' ""
+          '';
+
+          # __FILE__ ends up in error messages; strip the build directory
+          # (randomised per build on darwin) to keep the build reproducible.
+          preBuild = ''
+            export NIX_CFLAGS_COMPILE+=" -ffile-prefix-map=$PWD/="
           '';
 
           DUCC0_USE_NANOBIND = "";
@@ -34,6 +40,9 @@
             setuptools-scm
           ];
           dontUseCmakeConfigure = true;
+          nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.cc.isClang [
+            pkgs.llvmPackages.llvm
+          ];
           dependencies = with py-pkgs; [ numpy ];
 
           nativeCheckInputs = with py-pkgs; [
@@ -42,9 +51,12 @@
             pytest-xdist
             hypothesis
           ];
-          pytestFlagsArray = [ "python/test" ];
+          pytestFlags = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
 
+          preCheck = ''
+            bash test/run.sh
+          '';
           postInstall = ''
             mkdir -p $out/include/ducc0
             cp -r $src/src/ducc0/* $out/include/ducc0

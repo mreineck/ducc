@@ -22,7 +22,7 @@
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_nufft {
 
@@ -32,15 +32,13 @@ using Periodicity = variant<double, vector<double>>;
 
 static vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
   {
-  try
+  if (holds_alternative<double>(inp))
     {
     auto val = get<double>(inp);
     vector<double> res;
     for (size_t i=0; i<ndim; ++i) res.push_back(val);
     return res;
     }
-  catch(...)
-    {}
   auto res = get<vector<double>>(inp);
   MR_assert(res.size()==ndim, "bad size of periodicity argument");
   return res;

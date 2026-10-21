@@ -42,7 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/fft/fft.h"
 #include <complex>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_fft {
 
@@ -50,7 +50,7 @@ using namespace std;
 
 namespace {
 
-using shape_t = ducc0::fmav_info::shape_t;
+using shape_t = fmav_info::shape_t;
 
 #ifdef DUCC0_USE_NANOBIND
 using ldbl_t = double;
@@ -71,6 +71,9 @@ using OptAxes = optional<vector<ptrdiff_t>>;
 
 static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
   {
+  auto ndim = in.ndim();
+  MR_assert((ndim>0)&&(in.size()>0),
+    "arrays must be at least 1D and not have zero size");
   if (!axes)
     {
     shape_t res(size_t(in.ndim()));
@@ -79,7 +82,6 @@ static shape_t makeaxes(const CNpArr &in, const OptAxes &axes)
     return res;
     }
   auto tmp=axes.value();
-  auto ndim = in.ndim();
   if ((tmp.size()>size_t(ndim)) || (tmp.size()==0))
     throw runtime_error("bad axes argument");
   for (auto& sz: tmp)
@@ -128,7 +130,7 @@ template<typename T> static NpArr c2c_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::c2c(ain, aout, axes, forward, fct, nthreads);
+  DUCC0_NAMESPACE::c2c(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -147,9 +149,9 @@ template<typename T> static NpArr c2c_sym_internal(const CNpArr &in,
   auto shp_half = aout.shape();
   shp_half[axes.back()] = shp_half[axes.back()]/2+1;
   vfmav<complex<T>> aout_half(aout, shp_half, aout.stride());
-  ducc0::r2c(ain, aout_half, axes, forward, fct, nthreads);
+  DUCC0_NAMESPACE::r2c(ain, aout_half, axes, forward, fct, nthreads);
   // now fill in second half
-  using namespace ducc0::detail_fft;
+  using namespace DUCC0_NAMESPACE::detail_fft;
   hermiteHelper(0, 0, 0, 0, aout, aout, axes, [](const complex<T> &c, complex<T> &, complex<T> &c1)
     {
     c1 = conj(c);
@@ -181,7 +183,7 @@ template<typename T> static NpArr r2c_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2c(ain, aout, axes, forward, fct, nthreads);
+  DUCC0_NAMESPACE::r2c(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -203,7 +205,7 @@ template<typename T> static NpArr r2r_fftpack_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_fftpack(ain, aout, axes, real2hermitian, forward, fct, nthreads);
   }
   return out;
   }
@@ -226,7 +228,7 @@ template<typename T> static NpArr r2r_fftw_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_fftw(ain, aout, axes, forward, fct, nthreads);
   }
   return out;
   }
@@ -250,7 +252,7 @@ template<typename T> static NpArr dct_internal(const CNpArr &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, -1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = (inorm==1);
-  ducc0::dct(ain, aout, axes, type, fct, ortho, nthreads);
+  DUCC0_NAMESPACE::dct(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
   }
@@ -275,7 +277,7 @@ template<typename T> static NpArr dst_internal(const CNpArr &in,
   T fct = (type==1) ? norm_fct<T>(inorm, ain.shape(), axes, 2, 1)
                     : norm_fct<T>(inorm, ain.shape(), axes, 2);
   bool ortho = (inorm==1);
-  ducc0::dst(ain, aout, axes, type, fct, ortho, nthreads);
+  DUCC0_NAMESPACE::dst(ain, aout, axes, type, fct, ortho, nthreads);
   }
   return out;
   }
@@ -307,13 +309,13 @@ template<typename T> static NpArr c2r_internal(const NpArr &in,
     auto ain = to_vfmav<complex<T>>(in, "a");
     {
     py::gil_scoped_release release;
-    ducc0::c2r_mut(ain, aout, axes, forward, fct, nthreads);
+    DUCC0_NAMESPACE::c2r_mut(ain, aout, axes, forward, fct, nthreads);
     }
     }
   else
     {
     py::gil_scoped_release release;
-    ducc0::c2r(ain_c, aout, axes, forward, fct, nthreads);
+    DUCC0_NAMESPACE::c2r(ain_c, aout, axes, forward, fct, nthreads);
     }
   return out;
   }
@@ -335,7 +337,7 @@ template<typename T> static NpArr separable_hartley_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_separable_hartley(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -356,7 +358,7 @@ template<typename T> static NpArr genuine_hartley_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_genuine_hartley(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -377,7 +379,7 @@ template<typename T> static NpArr separable_fht_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_separable_fht(ain, aout, axes, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_separable_fht(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -398,7 +400,7 @@ template<typename T> static NpArr genuine_fht_internal(const CNpArr &in,
   {
   py::gil_scoped_release release;
   T fct = norm_fct<T>(inorm, ain.shape(), axes);
-  ducc0::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
+  DUCC0_NAMESPACE::r2r_genuine_fht(ain, aout, axes, fct, nthreads);
   }
   return out;
   }
@@ -430,7 +432,7 @@ PyObject * good_size(PyObject * /*self*/, PyObject * args)
     return nullptr;
     }
   const auto n = static_cast<size_t>(n_);
-  using namespace ducc0::detail_fft;
+  using namespace DUCC0_NAMESPACE::detail_fft;
   return PyLong_FromSize_t(
     real ? util1d::good_size_real(n) : util1d::good_size_cmplx(n));
   }
@@ -443,7 +445,7 @@ template<typename T> static NpArr convolve_axis_internal(const CNpArr &in_,
   auto kernel = to_cmav<T,1>(kernel_, "kernel");
   {
   py::gil_scoped_release release;
-  ducc0::convolve_axis(in, out, axis, kernel, nthreads);
+  DUCC0_NAMESPACE::convolve_axis(in, out, axis, kernel, nthreads);
   }
   return out_;
   }

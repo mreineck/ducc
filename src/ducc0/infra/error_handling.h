@@ -62,7 +62,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include "ducc0/infra/useful_macros.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_error_handling {
 
@@ -85,9 +85,9 @@ class CodeLocation
   };
 #else
 #if defined (__GNUC__)
-#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 #else
-#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(__FILE__, __LINE__)
+#define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(__FILE__, __LINE__)
 #endif
 
 class CodeLocation
@@ -120,7 +120,7 @@ template<typename ...Args>
 [[noreturn]] DUCC0_NOINLINE void fail__(Args&&... args)
   {
   ::std::ostringstream msg; \
-  ::ducc0::detail_error_handling::streamDump__(msg, std::forward<Args>(args)...); \
+  ::DUCC0_NAMESPACE::detail_error_handling::streamDump__(msg, std::forward<Args>(args)...); \
     throw ::std::runtime_error(msg.str()); \
   }
 
@@ -128,7 +128,7 @@ template<typename ...Args>
 /// passed arguments.
 #define MR_fail(...) \
   do { \
-    ::ducc0::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    ::DUCC0_NAMESPACE::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
     } while(0)
 
 /// If \a cond is false, throws a std::runtime_error containing the code

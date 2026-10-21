@@ -61,7 +61,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdint>
 #include <cstddef>
 
-namespace ducc0 {
+#include "ducc0/infra/useful_macros.h"
+
+namespace DUCC0_NAMESPACE {
 
 namespace detail_string_utils {
 

@@ -1,15 +1,23 @@
 0.42.0:
 - general:
+  - Support for multiarch compilation on x86_64 platforms, resulting
+    in wheels that select the appropriate variant of the package at
+    import time. For most users of binary ducc0 wheels on x64_64, this
+    should provide significant performance improvements.
   - Significantly enhanced CI functionality, contributed by
     Albert M. W. Yau
   - the Python module declares that the GIL need not be held while
     any of its functions are running; this can increase parallelism
     when running under free-threading Python interpreters.
+  - Significant speedups for internal array manipulation functions
+    (mav_apply), contributed by Philipp Arras
   - MultiExp now detects whether a given angle is a fraction of 2pi.
     If so, the generated twiddle factors will be computed in a more
     accurate fashion.
     This is specifically relevant for shifted rings in Healpix and
     internal resampling in theta direction during SHTs.
+  - Several fixes for issues reported by Andrea Zonca following an
+    AI-assisted review.
 
 - misc:
   - new (still experimental) implementation for computing Wigner 3j
@@ -18,6 +26,9 @@
 
 - wgridder:
   - new "bda" interface allowing more flexible channel frequencies.
+  - new recentering algorithm proposed by Peter Wortmann to reduce the
+    numer of w-planes in off-center transforms, with helpful fixes by
+    Albert M. W. Yau
   - removed the experimental "tuning" methods, which did not provide the
     expected performance gain.
 

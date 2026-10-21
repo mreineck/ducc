@@ -35,7 +35,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/space_filling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_healpix {
 
@@ -1228,10 +1228,12 @@ template<typename I> void T_Healpix_Base<I>::neighbors (I pix,
     }
   }
 
-template<typename I> void T_Healpix_Base<I>::get_interpol (const pointing &ptg,
+template<typename I> void T_Healpix_Base<I>::get_interpol (const pointing &ptg_,
   array<I,4> &pix, array<double,4> &wgt) const
   {
-  MR_assert((ptg.theta>=0)&&(ptg.theta<=pi),"invalid theta value");
+// FIXME: is there a cheaper way than normalizing?
+  pointing ptg(ptg_);
+  ptg.normalize();
   double z = cos (ptg.theta);
   I ir1 = ring_above(z);
   I ir2 = ir1+1;

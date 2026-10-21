@@ -75,7 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_threading {
 
@@ -591,6 +591,17 @@ void ducc_thread_pool::submit(std::function<void(size_t)> work,
   }
 #endif
 
+void thread_pool::parallel_for(size_t nthreads,
+                               std::function<void(size_t)> work) {
+  if (nthreads == 0) return;
+  if (nthreads == 1) {
+    work(0);
+    return;
+  }
+
+  submit(work, nthreads);
+}
+
 void Distribution::thread_map(std::function<void(Scheduler &)> f)
   {
   if (nthreads_ == 1)
@@ -598,7 +609,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
     MyScheduler sched(*this, 0);
     f(sched);
     }
-#ifndef DUCC0_NO_LOWLEVEL_THREADING
   else
     {
     get_active_pool()->submit([this,&f](size_t ithread)
@@ -607,7 +617,6 @@ void Distribution::thread_map(std::function<void(Scheduler &)> f)
       f(sched);
       }, nthreads_);
     }
-#endif
   }
 
 void execSingle(size_t nwork, std::function<void(Scheduler &)> func)

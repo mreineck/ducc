@@ -3,7 +3,7 @@
 
 #include "ducc0/bindings/pybind_utils.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 namespace detail_pymodule_fft { void add_fft(py::module_ &m); }
 namespace detail_pymodule_sht { void add_sht(py::module_ &m); }
 namespace detail_pymodule_totalconvolve { void add_totalconvolve(py::module_ &m); }

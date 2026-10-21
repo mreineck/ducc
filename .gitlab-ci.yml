@@ -13,7 +13,7 @@ test_gcc:
   script:
     - python3 -m build --sdist
     - 'tar xvzf dist/ducc0*.tar.gz'
-    - 'cd ducc0-* && pip install . && pytest -n auto -q python/test'
+    - 'cd ducc0-* && DUCC0_OPTIMIZATION=multiarch-strip DUCC0_USE_NANOBIND= pip install . && pytest -n auto -q python/test'
 
 test_clang:
   stage: testing
