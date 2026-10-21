@@ -67,7 +67,7 @@ namespace DUCC0_NAMESPACE {
 namespace detail_error_handling {
 
 #if __cpp_lib_source_location
-#define DUCC0_ERROR_HANDLING_LOC_ ::ducc0::detail_error_handling::CodeLocation(std::source_location::current())
+#define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(std::source_location::current())
 class CodeLocation
   {
   private:
