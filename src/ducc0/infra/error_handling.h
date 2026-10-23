@@ -1,6 +1,6 @@
 /** \file ducc0/infra/error_handling.h
  *
- * \copyright Copyright (C) 2019-2024 Max-Planck-Society
+ * \copyright Copyright (C) 2019-2026 Max-Planck-Society
  * \author Martin Reinecke
  */
 
@@ -54,19 +54,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sstream>
 #include <stdexcept>
-#if __has_include(<version>)
-#include <version>
-#if __cpp_lib_source_location
 #include <source_location>
-#endif
-#endif
+//#if __has_include(<version>)
+//#include <version>
+//#if __cpp_lib_stacktrace
+//#include <stacktrace>
+//#endif
+//#endif
 #include "ducc0/infra/useful_macros.h"
 
 namespace DUCC0_NAMESPACE {
 
 namespace detail_error_handling {
 
-#if __cpp_lib_source_location
 #define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(std::source_location::current())
 class CodeLocation
   {
@@ -83,32 +83,6 @@ class CodeLocation
                 << loc.column() << " (" << loc.function_name() << ")" << ":\n";
       }
   };
-#else
-#if defined (__GNUC__)
-#define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(__FILE__, __LINE__, __PRETTY_FUNCTION__)
-#else
-#define DUCC0_ERROR_HANDLING_LOC_ ::DUCC0_NAMESPACE::detail_error_handling::CodeLocation(__FILE__, __LINE__)
-#endif
-
-class CodeLocation
-  {
-  private:
-    const char *file, *func;
-    int line;
-
-  public:
-    CodeLocation(const char *file_, int line_, const char *func_=nullptr)
-      : file(file_), func(func_), line(line_) {}
-
-    inline ::std::ostream &print(::std::ostream &os) const
-      {
-      os << "\n" << file <<  ": " <<  line;
-      if (func) os << " (" << func << ")";
-      os << ":\n";
-      return os;
-      }
-  };
-#endif
 
 inline ::std::ostream &operator<<(::std::ostream &os, const CodeLocation &loc)
   { return loc.print(os); }
@@ -119,9 +93,12 @@ void streamDump__(::std::ostream &os, Args&&... args)
 template<typename ...Args>
 [[noreturn]] DUCC0_NOINLINE void fail__(Args&&... args)
   {
-  ::std::ostringstream msg; \
-  ::DUCC0_NAMESPACE::detail_error_handling::streamDump__(msg, std::forward<Args>(args)...); \
-    throw ::std::runtime_error(msg.str()); \
+  ::std::ostringstream msg;
+  ::DUCC0_NAMESPACE::detail_error_handling::streamDump__(msg, std::forward<Args>(args)...);
+//#if __cpp_lib_stacktrace
+//    msg << std::stacktrace::current() << '\n';
+//#endif
+    throw ::std::runtime_error(msg.str());
   }
 
 /// Throws a std::runtime_error containing the code location and the
