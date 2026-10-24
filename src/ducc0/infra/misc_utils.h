@@ -118,6 +118,7 @@ inline bool preallocate_memory(double gbytes)
   free(blob);
   return true;
   }
+
 inline bool set_heap_trim_limit(double gbytes)
   {
   auto nbytes = size_t(1e9*gbytes);
