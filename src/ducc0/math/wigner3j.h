@@ -45,7 +45,9 @@ using namespace std;
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res);
 
+#if 0  // currently unused
 void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res);
+#endif
 
 template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res);
 
