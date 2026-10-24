@@ -145,9 +145,6 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
-      - name: Check CPU info
-        run: python python/test/check_cpu_info.py
-
       - name: Run tests
         run: python -m pytest python/test -x
 
@@ -241,9 +238,6 @@ jobs:
       - name: Verify binding
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
-      - name: Check CPU info
-        run: python python/test/check_cpu_info.py
-
       - name: Run tests
         run: python -m pytest python/test -x
 
@@ -283,6 +277,5 @@ jobs:
               DUCC0_CFLAGS="-march=i686 -msse2 -mfpmath=sse" \
                 ${{ matrix.binding == 'nanobind' && 'DUCC0_USE_NANOBIND=1' || '' }} python -m pip install --no-build-isolation .
               python -c "import ducc0; assert ducc0.__wrapper__ == \"${{ matrix.binding }}\"; print(ducc0.__wrapper__)"
-              python python/test/check_cpu_info.py
               python -m pytest python/test -x
             '

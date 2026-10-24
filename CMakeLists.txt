@@ -80,7 +80,7 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
     endif()
     nanobind_add_module(${PKGNAME}
         FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
-        python/ducc_driver.cc python/multiarch.cc)
+        python/ducc_driver.cc)
     # The binding object libraries do not inherit the module's definitions.
     if (NB_FREE_THREADED)
         if (MULTIARCH)
@@ -106,7 +106,7 @@ else()
     find_package(pybind11 REQUIRED)
     set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
     pybind11_add_module(${PKGNAME} NO_EXTRAS
-        python/ducc_driver.cc python/multiarch.cc)
+        python/ducc_driver.cc)
 endif()
 
 if (NOT MSVC)
