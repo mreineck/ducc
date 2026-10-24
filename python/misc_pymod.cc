@@ -1342,71 +1342,6 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
-#if 0
-template<typename Tout> static NpArr Py2_coupling_matrix_spin0and2_pure(const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__)
-  {
-  auto spec = to_cmav<double,3>(spec_);
-  auto nspec = spec.shape(0);
-  MR_assert(spec.shape(1)==4, "bad ncomp_spec");
-  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,4>(mat__, {nspec, 4, lmax+1, lmax+1});
-  {
-  py::gil_scoped_release release;
-  coupling_matrix_spin0and2_pure<Tout>(spec, lmax, mat, nthreads);
-  }
-  return mat_;
-  }
-
-NpArr Py_coupling_matrix_spin0and2_pure
-  (const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__,
-  bool singleprec)
-  {
-  if (mat__)
-    singleprec = isPyarr<float>(mat__.value()); // override
-  return singleprec ?
-    Py2_coupling_matrix_spin0and2_pure<float>(spec_, lmax, nthreads, mat__) :
-    Py2_coupling_matrix_spin0and2_pure<double>(spec_, lmax, nthreads, mat__);
-  MR_fail("unsupported combination of spec_index and mat_index");
-  }
-
-constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
-This is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
-differences:
-
-- the l values in the output matrix go from 0 to lmax (inclusive) instead of
-  2 to lmax (exclusive)
-- the input power spectra are multiplied by (2*l+1)
-- the output is multiplied by (2*l1+2)/(4*pi) and the full matrix is populated
-- the computation can be carried out for more than one set of power spectra
-  at the same time.
-- the last component is not calculated, since it appears to be zero in all cases
-
-Parameters
-----------
-spec : numpy.ndarray((nspec, 4, lmax_spec+1), dtype=np.float64)
-    the input spectra
-    the indices of the second dimension correspond to wcl_00, wcl_02, wcl_20,
-    and wcl_22 of calc_mcm_spin0and2_pure(), respectively
-lmax : int
-    the maximum l moment included in the output matrices
-    In principle, this requires the input spectra to be provided with an
-    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
-    assumed to be zero.
-nthreads : int
-    the number of threads to use for the calculations.
-res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
-    Optional array to store the output into.
-singleprec : bool
-    determines the accuracy of the output if `res` is not provided
-
-Returns
--------
-numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
-    The coupling matrices. Identical to `res`, if it was provided
-)""";
-
-#endif
-
 template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect
   (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
    size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
@@ -1914,8 +1849,6 @@ void add_misc(py::module_ &msup)
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
 
-//  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
-//    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);

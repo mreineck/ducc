@@ -37,6 +37,7 @@ namespace detail_wigner3j {
 
 using namespace std;
 
+#if 0
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
   following the algorithm in the SLATEC algorithm DRC3JJ.
@@ -45,15 +46,10 @@ using namespace std;
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res);
 
-#if 0  // currently unused
-void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res);
-#endif
-
-template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res);
-
 void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, const vmav<double,1> &res);
 template<typename Tsimd> void flexible_wigner3j_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res);
+#endif
 
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
@@ -230,14 +226,12 @@ template<typename Tsimd> class Wigner3j_direct
 
 }
 
-using detail_wigner3j::wigner3j;
+//using detail_wigner3j::wigner3j;
 using detail_wigner3j::wigner3j_int;
 using detail_wigner3j::wigner3j_ncoef_int;
 
-using detail_wigner3j::wigner3j_00_vec_squared_compact;
-
-using detail_wigner3j::flexible_wigner3j;
-using detail_wigner3j::flexible_wigner3j_vec;
+//using detail_wigner3j::flexible_wigner3j;
+//using detail_wigner3j::flexible_wigner3j_vec;
 
 using detail_wigner3j::Wigner3j_direct_tables;
 using detail_wigner3j::Wigner3j_direct;
