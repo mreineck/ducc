@@ -49,6 +49,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_MISC_UTILS_H
 #define DUCC0_MISC_UTILS_H
 
+#include <numeric>
+#include <functional>
 #include <cstddef>
 #include <tuple>
 #ifdef __GLIBC__
@@ -95,9 +97,7 @@ template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
 template<typename shp> size_t noncritical_size(const shp &in, size_t elemsz)
   {
   shp tmp = noncritical_shape(in, elemsz);
-  size_t res = 1;
-  for (auto d:tmp) res *= d;
-  return res;
+  return reduce(tmp.begin, tmp.end(), size_t(1), multiplies<size_t>());
   }
 
 #ifdef __GLIBC__
