@@ -42,7 +42,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def check_cpu_info(info, args):
+def check_multiarch_support(info, args):
     require(isinstance(info, int), "psabi_level() must return an integer")
     multiarch = info>0
 
@@ -79,9 +79,9 @@ def main():
 
     try:
         import ducc0
-        check_cpu_info(ducc0.misc.psabi_level(), args)
+        check_multiarch_support(ducc0.misc.psabi_level(), args)
     except Exception as error:
-        print("check_cpu_info.py: {}".format(error), file=sys.stderr)
+        print("check_multiarch.py: {}".format(error), file=sys.stderr)
         return 1
     return 0
 

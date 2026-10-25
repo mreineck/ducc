@@ -140,7 +140,7 @@ sdist.include = [
     "python/test/test_wgridder.py",
     "python/test/test_nufft.py",
     "python/test/test_free_threading.py",
-    "python/test/check_cpu_info.py",
+    "python/test/check_multiarch.py",
     "python/demos/fft_bench.py",
     "python/demos/fft_stress.py",
     "python/demos/healpix_perftest.py",
