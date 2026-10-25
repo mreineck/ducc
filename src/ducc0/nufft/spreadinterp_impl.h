@@ -1609,7 +1609,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               }
 #else
 
-#ifndef DUCC0_ALPINE_LINUX_WORKAROUND
 // this is quite voodoo, but helps a lot, at least on my machine
 if constexpr(SUPP<=8)
   {
@@ -1641,7 +1640,6 @@ if constexpr(SUPP<=8)
               }
   }
 else
-#endif
   {
           const array<Tacc, 2*SUPP> xdata = [&]() {
             array<Tacc, 2*SUPP> xdata;
