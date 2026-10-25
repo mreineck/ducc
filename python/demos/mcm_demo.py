@@ -9,13 +9,6 @@ def mcm_ducc(spec, optype, l1, l2):
     out= np.empty((nmap,l1+1,l2+1),dtype=np.float64)
     ducc0.misc.experimental.coupling_matrix_rect(spec, optype=optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
     return out
-def mcm_ducc_new(spec, optype, l1, l2):
-    nmap = 0
-    for op in optype:
-        nmap += 2 if op==4 else 1
-    out= np.empty((nmap,l1+1,l2+1),dtype=np.float64)
-    ducc0.misc.experimental.coupling_matrix_rect_new(spec, optype=optype, nthreads=nthreads, res=out, l_exact=l_exact, dl_band=dl_band, l_toeplitz=l_toeplitz)
-    return out
 
 nthreads=8
 
@@ -46,7 +39,3 @@ for ops in ((0,), (2,), (1,), (3,), (4,), (0,1,2,3,4), (0,0,0,0,0,0,0,0,0,0), (0
     t0=time()
     duccsq = mcm_ducc(spec[:len(ops)], ops, l1, l2)
     print(f"ducc square time: {time()-t0}s")
-    t0=time()
-    duccnewsq = mcm_ducc_new(spec[:len(ops)], ops, l1, l2)
-    print(f"ducc square new time: {time()-t0}s")
-    print("L2 error:", ducc0.misc.l2error(duccsq,duccnewsq))

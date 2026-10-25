@@ -305,6 +305,7 @@ std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
 
 namespace {
 
+// FIXME: calculate tables via constexpr functions?
 constexpr const uint8_t m2p2D_1[4][4] = {
 { 4, 1,11, 2},{ 0,15, 5, 6},{10, 9, 3,12},{14, 7,13, 8}};
 

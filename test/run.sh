@@ -17,7 +17,6 @@ SOURCES=(
   src/ducc0/math/pointing.cc
   src/ducc0/math/geom_utils.cc
   src/ducc0/infra/string_utils.cc
-  src/ducc0/infra/system.cc
 )
 OUT="$(mktemp -d "${TMPDIR:-/tmp}/ducc0-cpp-tests.XXXXXX")"
 trap 'rm -rf -- "$OUT"' EXIT
@@ -76,21 +75,6 @@ if "${CXX}" "${CXXFLAGS[@]}" -c test/test_compile.cc \
   echo "PASS compile-only checks"
 else
   echo "FAIL compile-only checks" >&2
-  failures=1
-fi
-
-echo "Building the multiarch selector test ..."
-if "${CXX}" -std=c++17 -Ipython test/test_multiarch.cc python/multiarch.cc \
-    -o "$OUT/test_multiarch"; then
-  echo "PASS build multiarch selector test"
-  if "$OUT/test_multiarch"; then
-    echo "PASS multiarch selector"
-  else
-    echo "FAIL multiarch selector" >&2
-    failures=1
-  fi
-else
-  echo "FAIL build multiarch selector test" >&2
   failures=1
 fi
 

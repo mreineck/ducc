@@ -97,7 +97,7 @@ class Pyhpbase
       }
     string repr() const
       {
-      return "<Healpix Base: Nside=" + dataToString(base.Nside()) +
+      return "<Healpix Base: Nside=" + to_string(base.Nside()) +
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 

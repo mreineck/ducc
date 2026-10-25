@@ -375,6 +375,7 @@ bailout_bwd:
     res(k)*=cnorm*fct_bwd;
   }
 
+#if 0  // currently unused
 template<typename Tsimd> void wigner3j_00_internal_vec
   (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
@@ -623,6 +624,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   for (int j=0; j<ncoef; ++j)
     res(j) *= blend(Tsimd(j)<splitidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
   }
+#endif
 
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
@@ -760,116 +762,7 @@ void wigner3j_internal (double l2, double l3, double m2, double m3,
     res(k)*=cnorm*fct_bwd;
   }
 
-void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res)
-  {
-  auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes (l2, l3, 0, 0);
-
-  const double l2ml3sq = (l2-l3)*(l2-l3),
-               pre1 = (l2+l3+1.)*(l2+l3+1.);
-
-  int ncoef2 = (ncoef+1)/2;
-  MR_assert(res.shape(0)==size_t(ncoef2), "bad size of result array");
-
-  using Tv = native_simd<double>;
-  constexpr size_t vlen = Tv::size();
-
-  res(0) = 1.;
-  double sum = (2.*l1min+1.) * res(0);
-
-  int i=0;
-
-  if constexpr(vlen>=4)
-    {
-    Tv lofs;
-    Tv sumx = 0;
-    for (size_t m=0; m<vlen; ++m)
-      lofs[m] = double(2*m);
-
-    for (; i+int(vlen)<ncoef2; i+=int(vlen))
-      {
-      auto l1 = double(l1min+2*i+1)+lofs;
-      auto l1sq = l1*l1;
-
-      auto l1p1 = l1+1;
-      auto l1p1sq = l1p1*l1p1;
-
-      const auto tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
-                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
-
-      Tv resx;
-      resx[0] = res(i+1) = res(i)*tmp1[0];
-      for (size_t m=1; m<vlen; ++m)
-        resx[m] = res(i+m+1) = resx[m-1]*tmp1[m];
-      sumx += (2.*l1p1+1.)*resx;
-      }
-    for (size_t m=0; m<vlen; ++m)
-      sum += sumx[m];
-    }
-
-  for (; i+1<ncoef2; ++i)
-    {
-    double l1 = l1min+2*i+1,
-           l1sq = l1*l1;
-
-    double l1p1 = l1+1;
-    double l1p1sq = l1p1*l1p1;
-
-    const double tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
-                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
-    res(i+1) = res(i)*tmp1;
-
-    sum += (2.*l1p1+1.)*res(i+1);
-    }
-
-  double cnorm=1./sum;
-  for (int k=0; k<ncoef2; ++k)
-    res(k)*=cnorm;
-  }
-
-template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
-  {
-  constexpr size_t vlen=Tsimd::size();
-  Tsimd l1min, l1max;
-  int ncoef=0;
-  for (size_t k=0; k<vlen; ++k)
-    {
-    auto [ m1_, xl1min, xl1max, xncoef] = wigner3j_checks_and_sizes(l2[k], l3[k], 0, 0);
-    l1min[k] = xl1min;
-    l1max[k] = xl1max;
-    if (k==0)
-      ncoef = xncoef;
-    MR_assert(ncoef == xncoef, "ncoef mismatch");
-    }
-
-  const Tsimd l2ml3sq = (l2-l3)*(l2-l3),
-              pre1 = (l2+l3+1.)*(l2+l3+1.);
-
-  int ncoef2 = (ncoef+1)/2;
-  MR_assert(res.shape(0)==size_t(ncoef2), "bad size of result array");
-
-  res(0) = 1.;
-  Tsimd sum = (2.*l1min+1.) * res(0);
-
-  for (int i=0 ; i+1<ncoef2; ++i)
-    {
-    Tsimd l1 = l1min+2*i+1,
-          l1sq = l1*l1,
-          l1p1 = l1+1,
-          l1p1sq = l1p1*l1p1;
-
-    const Tsimd tmp1 = ((l1sq-l2ml3sq)*(pre1-l1sq))
-                       /((l1p1sq-l2ml3sq)*(pre1-l1p1sq));
-    res(i+1) = res(i)*tmp1;
-
-    sum += (2.*l1p1+1.)*res(i+1);
-    }
-
-  auto cnorm=Tsimd(1.)/sum;
-  for (int k=0; k<ncoef2; ++k)
-    res(k)*=cnorm;
-  }
-template void wigner3j_00_vec_squared_compact (native_simd<double> l2, native_simd<double> l3, const vmav<native_simd<double>,1> &res);
-
+#if 0
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes(l2, l3, m2, m3);
@@ -882,6 +775,7 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res)
   vmav<double,1> tmp(res.data(), {size_t(ncoef)});
   wigner3j_internal (l2, l3, m2, m3, m1, l1min, l1max, ncoef, tmp);
   }
+#endif
 void wigner3j_int (int l2, int l3, int m2, int m3, int &l1min_, const vmav<double,1> &res)
   {
   auto [m1, l1min, l1max, ncoef] = wigner3j_checks_and_sizes_int (l2, l3, m2, m3);
@@ -902,6 +796,7 @@ int wigner3j_ncoef_int (int l2, int l3, int m2, int m3)
   return ncoef;
   }
 
+#if 0  // currently unused
 void flexible_wigner3j (double l2, double l3, double m2, double m3,
   double l1min, const vmav<double,1> &res)
   {
@@ -950,5 +845,6 @@ template<typename Tsimd> void flexible_wigner3j_vec
   }
 template void flexible_wigner3j_vec
   (native_simd<double> l2, native_simd<double> l3, double m2, double m3, native_simd<double> l1min, const vmav<native_simd<double>,1> &res);
+#endif
 
 }}
