@@ -375,6 +375,7 @@ bailout_bwd:
     res(k)*=cnorm*fct_bwd;
   }
 
+#if 0  // currently unused
 template<typename Tsimd> void wigner3j_00_internal_vec
   (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
@@ -623,6 +624,7 @@ template<typename Tsimd> void wigner3j_internal_vec
   for (int j=0; j<ncoef; ++j)
     res(j) *= blend(Tsimd(j)<splitidx-2, cnorm*fct_fwd, cnorm*fct_bwd);
   }
+#endif
 
 // sign convention: sign(f(l_max)) = (-1)**(l2-l3+m2+m3)
 void wigner3j_internal (double l2, double l3, double m2, double m3,
@@ -794,7 +796,7 @@ int wigner3j_ncoef_int (int l2, int l3, int m2, int m3)
   return ncoef;
   }
 
-#if 0
+#if 0  // currently unused
 void flexible_wigner3j (double l2, double l3, double m2, double m3,
   double l1min, const vmav<double,1> &res)
   {

@@ -51,6 +51,8 @@ constexpr double inv_sqrt4pi = 0.2820947917738781434740397257803862929220;
 
 /// natural logarithm of 2
 constexpr double ln2 = 0.6931471805599453094172321214581766;
+
+#if 0  // currently unused
 /// 1/ln2
 constexpr double inv_ln2 = 1.4426950408889634073599246810018921;
 /// natural logarithm of 10
@@ -58,8 +60,12 @@ constexpr double ln10 = 2.3025850929940456840179914546843642;
 
 /// 1./3
 constexpr double onethird=1.0/3.0;
+#endif
+
 /// 2./3
 constexpr double twothird=2.0/3.0;
+
+#if 0  // currently unused
 /// 4./3
 constexpr double fourthird=4.0/3.0;
 
@@ -74,6 +80,7 @@ constexpr double rad2degr=180.0/pi;
 constexpr double sigma2fwhm=2.3548200450309493; // sqrt(8*log(2.))
 //! Ratio between sigma and FWHM of a Gaussian (\f$1/\sqrt{8\ln2}\f$).
 constexpr double fwhm2sigma=1/sigma2fwhm;
+#endif
 
 /*! \} */
 
