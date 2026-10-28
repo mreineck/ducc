@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2023 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2026 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -56,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <exception>
 #include <utility>
+#include <latch>
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>
@@ -79,31 +80,7 @@ namespace DUCC0_NAMESPACE {
 
 namespace detail_threading {
 
-class latch
-  {
-    std::atomic<size_t> num_left_;
-    Mutex mut_;
-    CondVar completed_;
-    using lock_t = UniqueLock;
-
-  public:
-    explicit latch(size_t n): num_left_(n) {}
-
-    void count_down()
-      {
-      lock_t lock(mut_);
-      if (--num_left_)
-        return;
-      completed_.notify_all();
-      }
-
-    void wait()
-      {
-      lock_t lock(mut_);
-      completed_.wait(lock, [this]{ return is_ready(); });
-      }
-    bool is_ready() { return num_left_ == 0; }
-  };
+using std::latch;
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 

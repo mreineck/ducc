@@ -5,7 +5,7 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 CXX="${CXX:-g++}"
-CXXFLAGS=(-std=c++17 -O1 -g -Isrc -DDUCC0_NAMESPACE=ducc0
+CXXFLAGS=(-std=c++23 -O1 -g -Isrc -DDUCC0_NAMESPACE=ducc0
           -fsanitize=address,undefined -fno-omit-frame-pointer)
 SOURCES=(
   src/ducc0/healpix/healpix_base.cc

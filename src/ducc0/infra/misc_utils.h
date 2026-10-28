@@ -98,11 +98,13 @@ template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
     }
   return res;
   }
+#if 0
 template<typename shp> size_t noncritical_size(const shp &in, size_t elemsz)
   {
   shp tmp = noncritical_shape(in, elemsz);
   return reduce(tmp.begin, tmp.end(), size_t(1), multiplies<size_t>());
   }
+#endif
 
 #ifdef __GLIBC__
 inline bool preallocate_memory(double gbytes)
@@ -141,7 +143,7 @@ inline bool set_heap_trim_limit(double /*gbytes*/)
 
 using detail_misc_utils::calcShare;
 using detail_misc_utils::noncritical_shape;
-using detail_misc_utils::noncritical_size;
+//using detail_misc_utils::noncritical_size;
 using detail_misc_utils::preallocate_memory;
 using detail_misc_utils::set_heap_trim_limit;
 

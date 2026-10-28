@@ -37,13 +37,6 @@
 #include <algorithm>
 #include "datatypes.h"
 
-/*! Returns \a atan2(y,x) if \a x!=0 or \a y!=0; else returns 0. */
-inline double safe_atan2 (double y, double x)
-  {
-  using namespace std;
-  return ((x==0.) && (y==0.)) ? 0.0 : atan2(y,x);
-  }
-
 /*! Helper function for linear interpolation (or extrapolation).
     The array must be ordered in ascending order; no two values may be equal. */
 template<typename T, typename Iter, typename Comp> inline void interpol_helper
@@ -85,11 +78,62 @@ template<typename T> class kahan_adder
     T result() const { return sum; }
   };
 
+template<typename Iter> bool checkNan (Iter begin, Iter end)
+  {
+  while (begin!=end)
+    {
+    if (*begin != *begin) return true;
+    ++begin;
+    }
+  return false;
+  }
+
+/*! Returns the integer which is nearest to \a arg. */
+template<typename I, typename F> inline I nearest (F arg)
+  { return ifloor<I>(arg+F(0.5)); }
+
+/*! Returns the remainder of the division \a v1/v2.
+    The result is non-negative.
+    \a v1 can be positive or negative; \a v2 must be positive. */
+template<typename F> inline F fmodulo (F v1, F v2)
+  {
+  if (v1>=0)
+    return (v1<v2) ? v1 : fmod(v1,v2);
+  auto tmp=fmod(v1,v2)+v2;
+  return (tmp==v2) ? F(0) : tmp;
+  }
+
+/*! Returns \a val*pow(-1,m) */
+template<typename T, typename I> inline T xpow (I m, T val)
+  { return (m&1) ? -val : val; }
+
+/*! Returns the largest integer \a n that fulfills \a 2^n<=arg. */
+template<typename I> inline unsigned int ilog2 (I arg)
+  {
+  if (arg<2) return 0;
+  using U = typename make_unsigned<I>::type;
+  return bit_width<U>(arg)-1;
+  }
+
+template<typename I> inline int trailingZeros_new(I arg)
+  {
+  using U = typename make_unsigned<I>::type;
+  return countr_zero<U>(arg);
+  }
+
+template<typename T1, typename T2>
+inline bool multiequal (const T1 &a, const T2 &b)
+  { return (a==b); }
+
+template<typename T1, typename T2, typename... Args>
+inline bool multiequal (const T1 &a, const T2 &b, Args... args)
+  { return (a==b) && multiequal (a, args...); }
+
 template<typename T> class tree_adder
   {
   private:
-    std::vector<T> state;
-    tsize n;
+    vector<T> state;
+    size_t n;
 
   public:
     tree_adder(): state(1,T(0)), n(0) {}
@@ -97,7 +141,7 @@ template<typename T> class tree_adder
     void add (const T &val)
       {
       state[0]+=val; ++n;
-      if (n>(tsize(1)<<(state.size()-1)))
+      if (n>(size_t(1)<<(state.size()-1)))
         state.push_back(T(0));
       int shift=0;
       while (((n>>shift)&1)==0)
@@ -110,20 +154,10 @@ template<typename T> class tree_adder
     T result() const
       {
       T sum(0);
-      for (tsize i=0; i<state.size(); ++i)
+      for (size_t i=0; i<state.size(); ++i)
         sum+=state[i];
       return sum;
       }
   };
-
-template<typename Iter> bool checkNan (Iter begin, Iter end)
-  {
-  while (begin!=end)
-    {
-    if (*begin != *begin) return true;
-    ++begin;
-    }
-  return false;
-  }
 
 #endif
