@@ -38,8 +38,15 @@ def test_c2c_unaligned_singleton_strides():
 
 
 def test_r2c_rejects_zero_length_transform_axis():
-    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
+    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
         ducc0.fft.r2c(np.empty((0,), dtype=np.float64))
+    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
+        fft.c2c(np.empty((4, 0, 8), dtype=np.complex128), axes=(1, 2))
+    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
+        fft.r2c(np.empty((4, 0, 8)), axes=(1, 2))
+    with pytest.raises(RuntimeError, match="no zero-sized FFTs"):
+        fft.c2r(np.empty((4, 0, 5), dtype=np.complex128),
+                axes=(1, 2), lastsize=8)
 
 
 @pmp("func, inp", [
@@ -50,6 +57,21 @@ def test_r2c_rejects_zero_length_transform_axis():
 def test_fft_rejects_scalar_arrays_without_axes(func, inp):
     with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
 		      func(inp)
+
+
+def test_fft_empty_batches():
+    real = np.empty((0, 4, 8), dtype=np.float64)
+    spectrum = fft.r2c(real, axes=(1, 2))
+    assert spectrum.shape == (0, 4, 5)
+    assert fft.c2r(spectrum, axes=(1, 2), lastsize=8,
+                   forward=False).shape == real.shape
+
+    for shape, axes in [((0, 8), (1,)), ((8, 0), (0,))]:
+        data = np.empty(shape, dtype=np.complex128)
+        assert fft.c2c(data, axes=axes).shape == shape
+
+    for transform in (fft.dct, fft.dst):
+        assert transform(real, type=2, axes=(1, 2)).shape == real.shape
 
 
 shapes1D = ((10,), (127,))
