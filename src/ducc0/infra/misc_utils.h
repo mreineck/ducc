@@ -82,13 +82,17 @@ template<typename T> auto calcShare(size_t nshares, size_t myshare, const T &end
 template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
   {
   constexpr size_t critstride = 4096; // must be a power of 2
+  size_t nelem = 1;
+  for (auto s:in) nelem *= s;
+  if (nelem==0) return in;  // shortcut for zero-sized array
+
   auto ndim = in.size();
   shp res(in);
   size_t stride = elemsz;
   for (size_t i=0, xi=ndim-1; i+1<ndim; ++i, --xi)
     {
     size_t tstride = stride*in[xi];
-    if ((tstride&(critstride-1))==0)
+    if (((tstride&(critstride-1))==0) && (in[xi]>1))
        res[xi] += 3;
     stride *= res[xi];
     }

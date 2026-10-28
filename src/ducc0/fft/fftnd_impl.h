@@ -394,7 +394,6 @@ template<typename T, typename T0> class TmpStorage
         return;
         }
       constexpr auto vlen = native_simd<T0>::size();
-      // FIXME: when switching to C++20, use bit_floor(othersize)
       size_t buffct = std::min(vlen, n_trafo);
       size_t datafct = std::min(vlen, n_trafo);
       if (n_trafo>=n_simultaneous*vlen) datafct = n_simultaneous*vlen;

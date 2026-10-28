@@ -185,6 +185,113 @@ static int test_healpix_interpol()
   return 0;
   }
 
+/* isqrt (src/ducc0/math/math_utils.h): for 64-bit arguments where the
+   result is near 2^32-1, (res+1)*(res+1) can overflow 64-bit arithmetic.
+   isqrt must return the floor integer square root up to UINT64_MAX. */
+static int test_isqrt()
+  {
+  bool ok = true;
+  uint64_t max32 = 0xFFFFFFFFULL;
+  uint64_t sq_max32 = max32 * max32;
+  if (isqrt(sq_max32) != max32)
+    {
+    cout << "isqrt(" << sq_max32 << ") = " << isqrt(sq_max32)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(~0ULL) != max32)
+    {
+    cout << "isqrt(UINT64_MAX) = " << isqrt(~0ULL)
+         << ", expected " << max32 << "\n";
+    ok = false;
+    }
+  if (isqrt(sq_max32 - 1) != max32 - 1)
+    {
+    cout << "isqrt(" << sq_max32 - 1 << ") = " << isqrt(sq_max32 - 1)
+         << ", expected " << max32 - 1 << "\n";
+    ok = false;
+    }
+  if (ok) cout << "PASS isqrt\n";
+  return ok ? 0 : 1;
+  }
+
+/* fmav_info::subdata() must preserve a full slice of an empty dimension.
+   Empty subviews are used when batched Python APIs select a transform whose
+   point dimension is zero. */
+static int test_subarray_empty_axis()
+  {
+  bool ok=true;
+  double dummy=0;
+  vmav<double,2> fixed(&dummy, {2,0}, {100,1});
+  auto fixed_sub=fixed.subarray<1>({slice(1), slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0))
+    ok=false;
+  fmav_info info({2,0}, {100,1});
+  vfmav<double> dynamic(&dummy, info);
+  auto dynamic_sub=dynamic.subarray({slice(1), slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0))
+    ok=false;
+
+  if (ok) cout << "PASS subarray_empty_axis\n";
+  else cout << "FAIL subarray_empty_axis\n";
+  return ok ? 0 : 1;
+  }
+
+static int test_null_backed_empty_subarrays()
+  {
+  vmav<double,1> fixed(static_cast<double *>(nullptr), {0}, {1});
+  auto fixed_sub=fixed.subarray<1>({slice()});
+  if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0))
+    return 1;
+
+  fmav_info info({0}, {1});
+  vfmav<double> dynamic(static_cast<double *>(nullptr), info);
+  auto dynamic_sub=dynamic.subarray({slice()});
+  if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0))
+    return 1;
+
+  cout << "PASS null_backed_empty_subarrays\n";
+  return 0;
+  }
+
+/* build_noncritical() must preserve zero-length axes in the returned view. */
+static int test_build_noncritical_empty()
+  {
+  bool ok=true;
+  auto check = [&ok](const auto &arr, size_t n0, size_t n1)
+    {
+    if ((arr.shape(0)!=n0) || (arr.shape(1)!=n1) || (arr.size()!=0))
+      ok=false;
+    };
+  try
+    {
+    auto fixed_1d=vmav<double,1>::build_noncritical({0});
+    if ((fixed_1d.shape(0)!=0) || (fixed_1d.size()!=0)) ok=false;
+    auto fixed=vmav<double,2>::build_noncritical({2,0});
+    check(fixed, 2, 0);
+    auto fixed_uninit=vmav<double,2>::build_noncritical({0,2}, UNINITIALIZED);
+    check(fixed_uninit, 0, 2);
+    auto fixed_pagein=vmav<double,2>::build_noncritical({2,0}, PAGE_IN(1));
+    check(fixed_pagein, 2, 0);
+    auto fixed_padded=vmav<double,2>::build_noncritical({0,512}, UNINITIALIZED);
+    check(fixed_padded, 0, 512);
+    auto dynamic=vfmav<double>::build_noncritical({2,0});
+    check(dynamic, 2, 0);
+    auto dynamic_uninit=vfmav<double>::build_noncritical({0,2}, UNINITIALIZED);
+    check(dynamic_uninit, 0, 2);
+    auto dynamic_pagein=vfmav<double>::build_noncritical({0,2}, PAGE_IN(1));
+    check(dynamic_pagein, 0, 2);
+    }
+  catch (const exception &e)
+    {
+    cout << "build_noncritical rejected an empty shape: " << e.what() << "\n";
+    ok=false;
+    }
+  if (ok) cout << "PASS build_noncritical_empty\n";
+  else cout << "FAIL build_noncritical_empty\n";
+  return ok ? 0 : 1;
+  }
+
 struct RegressionTest { const char *name; int (*run)(); };
 
 static constexpr RegressionTest regression_tests[] =
@@ -194,6 +301,10 @@ static constexpr RegressionTest regression_tests[] =
   {"wigner3j_oob", test_wigner3j_oob},
   {"template_kernel", test_template_kernel},
   {"healpix_interpol", test_healpix_interpol},
+  {"isqrt", test_isqrt},
+  {"subarray_empty_axis", test_subarray_empty_axis},
+  {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
+  {"build_noncritical_empty", test_build_noncritical_empty},
   };
 
 int main(int argc, char **argv)
