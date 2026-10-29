@@ -476,6 +476,11 @@ This module supports
 For two- and higher-dimensional transforms the code will use SSE2 and AVX
 vector instructions for faster execution if these are supported by the CPU and
 were enabled during compilation.
+
+Constraints on array dimensions:
+ - transforms on zero-dimensional arrays ("array scalars") are rejected.
+ - array axes over which a transform is carried out must at least have
+   length 1; other axes may have length 0.
 )""";
 
 const char *c2c_DS = R"""(Performs a complex FFT.
