@@ -102,7 +102,7 @@ template<typename shp> shp noncritical_shape(const shp &in, size_t elemsz)
 template<typename shp> size_t noncritical_size(const shp &in, size_t elemsz)
   {
   shp tmp = noncritical_shape(in, elemsz);
-  return reduce(tmp.begin, tmp.end(), size_t(1), multiplies<size_t>());
+  return reduce(tmp.begin(), tmp.end(), size_t(1), multiplies<size_t>());
   }
 #endif
 
