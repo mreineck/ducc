@@ -54,8 +54,8 @@ def test_r2c_rejects_zero_length_transform_axis():
     (fft.r2c, np.array(2.)),
     (fft.c2r, np.array(2.+0.j)),
 ])
-def test_fft_rejects_scalar_arrays_without_axes(func, inp):
-    with pytest.raises(RuntimeError, match="arrays must be at least 1D and not have zero size"):
+def test_fft_rejects_scalar_arrays(func, inp):
+    with pytest.raises(RuntimeError, match="arrays must be at least 1D"):
 		      func(inp)
 
 
