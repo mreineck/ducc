@@ -393,7 +393,7 @@ template<typename I> void T_Healpix_Base<I>::query_disc_inclusive
     }
   query_disc_internal (ptg, radius, fact, pixset);
   }
-
+#if 0
 template<typename I> template<typename I2>
   void T_Healpix_Base<I>::query_multidisc (const vector<vec3> &norm,
   const vector<double> &rad, int fact, rangeset<I2> &pixset) const
@@ -644,7 +644,7 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
       }
     }
   }
-
+#endif
 template<typename I> inline void T_Healpix_Base<I>::nest2xyf (I pix, int &ix,
   int &iy, int &face_num) const
   {
@@ -816,7 +816,7 @@ template<typename I> I T_Healpix_Base<I>::ring2nest (I pix) const
   ring2xyf (pix, ix, iy, face_num);
   return xyf2nest (ix, iy, face_num);
   }
-
+#if 0
 template<typename I> inline I T_Healpix_Base<I>::nest_peano_helper
   (I pix, int dir) const
   {
@@ -843,7 +843,7 @@ template<typename I> I T_Healpix_Base<I>::nest2peano (I pix) const
 
 template<typename I> I T_Healpix_Base<I>::peano2nest (I pix) const
   { return nest_peano_helper(pix,1); }
-
+#endif
 template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
   double sth, bool have_sth) const
   {
@@ -998,7 +998,7 @@ template<typename I> void T_Healpix_Base<I>::pix2loc (I pix, double &z,
                          (0.5*halfpi*tmp)/nr;
     }
   }
-
+#if 0
 template<typename I> template<typename I2>
   void T_Healpix_Base<I>::query_polygon_internal
   (const vector<pointing> &vertex, int fact, rangeset<I2> &pixset) const
@@ -1092,7 +1092,7 @@ template<typename I> void T_Healpix_Base<I>::query_strip (double theta1,
     pixset.append(ps2);
     }
   }
-
+#endif
 template<typename I> inline void T_Healpix_Base<I>::get_ring_info_small
   (I ring, I &startpix, I &ringpix, bool &shifted) const
   {

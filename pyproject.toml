@@ -111,7 +111,6 @@ sdist.include = [
     "src/ducc0/sht/totalconvolve.h",
     "src/ducc0/healpix/healpix_base.cc",
     "src/ducc0/healpix/healpix_base.h",
-    "src/ducc0/healpix/healpix_tables.cc",
     "src/ducc0/healpix/healpix_tables.h",
     "src/ducc0/wgridder/wgridder.h",
     "src/ducc0/wgridder/wgridder_impl.h",
