@@ -86,7 +86,7 @@ template<typename I> I T_Healpix_Base<I>::npix2nside (I npix)
 template<typename I> I T_Healpix_Base<I>::ring_above (double z) const
   {
   double az=abs(z);
-  if (az<=twothird) // equatorial region
+  if (az<=2./3.) // equatorial region
     return I(nside_*(2-1.5*z));
   I iring = I(nside_*sqrt(3*(1-az)));
   return (z>0) ? iring : 4*nside_-iring-1;
@@ -852,7 +852,7 @@ template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
 
   if (scheme_==RING)
     {
-    if (za<=twothird) // Equatorial region
+    if (za<=2./3.) // Equatorial region
       {
       I nl4 = 4*nside_;
       double temp1 = nside_*(0.5+tt);
@@ -890,7 +890,7 @@ template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
     }
   else // scheme_ == NEST
     {
-    if (za<=twothird) // Equatorial region
+    if (za<=2./3.) // Equatorial region
       {
       double temp1 = nside_*(0.5+tt);
       double temp2 = nside_*(z*0.75);
