@@ -64,8 +64,8 @@ template<typename T> struct Cmplx {
   constexpr Cmplx(T r_) : r(r_), i(T(0)) {}
   void Set(T r_, T i_) { r=r_; i=i_; }
   void Set(T r_) { r=r_; i=T(0); }
-  void Split(T &r_, T &i_) const { r_=r; i_=i; }
-  void SplitConj(T &r_, T &i_) const { r_=r; i_=-i; }
+//  void Split(T &r_, T &i_) const { r_=r; i_=i; }
+//  void SplitConj(T &r_, T &i_) const { r_=r; i_=-i; }
   Cmplx &operator+= (const Cmplx &other)
     { r+=other.r; i+=other.i; return *this; }
   template<typename T2>Cmplx &operator*= (T2 other)
