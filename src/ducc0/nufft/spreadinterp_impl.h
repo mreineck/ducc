@@ -28,52 +28,12 @@
 #include "ducc0/nufft/spreadinterp.h"
 #include "ducc0/nufft/nufft_common.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_nufft {
 
 using namespace std;
-
-template<typename T> complex<T> hsum_cmplx(mysimd<T> vr, mysimd<T> vi)
-  { return complex<T>(reduce(vr, plus<>()), reduce(vi, plus<>())); }
-
-#if (!defined(DUCC0_NO_SIMD))
-#if (!defined(__AVX512F__))
-#if (defined(__AVX__))
-static_assert(mysimd<float>::size()==8, "must not happen");
-#if 1
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
-  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
-  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
-  return complex<float>(t2[0], t2[1]);
-  }
-#else
-// this version may be slightly faster, but this needs more benchmarking
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
-  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
-  auto t3 = _mm256_add_ps(t1,t2);
-  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
-  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
-  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
-  return complex<float>(t5[0], t5[1]);
-  }
-#endif
-#elif defined(__SSE3__)
-static_assert(mysimd<float>::size()==4, "must not happen");
-template<> inline complex<float> hsum_cmplx<float>(mysimd<float> vr, mysimd<float> vi)
-  {
-  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
-  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
-  return complex<float>(t1[0], t1[2]);
-  }
-#endif
-#endif
-#endif
-
+using detail_gridding_kernel::hsum_cmplx;
 
 template<typename Tacc, size_t ndim> constexpr inline int log2tile_=-1;
 template<> constexpr inline int log2tile_<double, 1> = 10;
@@ -123,7 +83,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
 
     /*! Compute minimum index in the oversampled grid touched by the kernel
         around coordinate \a in. */
-    template<typename Tcoord> [[gnu::always_inline]] void getpix(array<double,ndim> in,
+    template<typename Tcoord> DUCC0_ALWAYS_INLINE void getpix(array<double,ndim> in,
       array<double,ndim> &out, array<int64_t,ndim> &out0) const
       {
       // do range reduction in long double when Tcoord is double,
@@ -139,7 +99,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
       }
 
     /*! Compute index of the tile into which \a in falls. */
-    template<typename Tcoord> [[gnu::always_inline]] array<Tidx,ndim> get_tile(const array<double,ndim> &in) const
+    template<typename Tcoord> DUCC0_ALWAYS_INLINE array<Tidx,ndim> get_tile(const array<double,ndim> &in) const
       {
       array<double,ndim> dum;
       array<int64_t,ndim> i0;
@@ -149,7 +109,7 @@ template<typename Tcalc, typename Tacc, typename Tidx, size_t ndim> class Spread
         res[i] = Tidx((i0[i]+nsafe)>>log2tile);
       return res;
       }
-    template<typename Tcoord> [[gnu::always_inline]] array<Tidx,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
+    template<typename Tcoord> DUCC0_ALWAYS_INLINE array<Tidx,ndim> get_tile(const array<double,ndim> &in, size_t lsq2) const
       {
       array<double,ndim> dum;
       array<int64_t,ndim> i0;
@@ -363,7 +323,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             px0r(bufr.data()), px0i(bufi.data()), mutexes(mutexes_) {}
         ~HelperNu2u() { dump(); }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -415,7 +375,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             bufr({size_t(suvec)}), bufi({size_t(suvec)}),
             px0r(bufr.data()), px0i(bufi.data()) {}
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep_for_index(array<int64_t,ndim> ind)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep_for_index(array<int64_t,ndim> ind)
           {
           if (ind==i0) return;
           i0 = ind;
@@ -454,7 +414,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr size_t batchsize=3;
         array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
-        mysimd<Tacc> kubuf[batchsize*hlp.nvec];
+        array<mysimd<Tacc>,batchsize*hlp.nvec> kubuf;
 
         constexpr size_t lookahead=20;
 
@@ -478,7 +438,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             if constexpr(batchsize==3)
               tkrn.eval3(Tacc(supp-1-2*frac[0][0]),
                          Tacc(supp-1-2*frac[1][0]),
-                         Tacc(supp-1-2*frac[2][0]), &kubuf[0]);
+                         Tacc(supp-1-2*frac[2][0]), kubuf.data());
             else
               MR_fail("bad batchsize");
 
@@ -509,8 +469,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             auto v(points(coord_idx[ix]));
             parent::template getpix<Tcoord>(
               {coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
-            auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tacc(supp-1-2*frac[0][0]), &ku[0]);
+            auto * DUCC0_RESTRICT ku = kubuf.data();
+            tkrn.eval1(Tacc(supp-1-2*frac[0][0]), ku);
             hlp.prep_for_index(index[0]);
 
             Tacc vr(v.real()), vi(v.imag());
@@ -547,7 +507,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
         constexpr size_t batchsize=3;
         array<array<int64_t,1>,batchsize> index;
         array<array<double,1>,batchsize> frac;
-        mysimd<Tcalc> kubuf[batchsize*hlp.nvec];
+        array<mysimd<Tcalc>,batchsize*hlp.nvec> kubuf;
 
         constexpr size_t lookahead=20;
         while (auto rng=sched.getNext())
@@ -572,13 +532,13 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
             if constexpr(batchsize==3)
               tkrn.eval3(Tcalc(supp-1-2*frac[0][0]),
                          Tcalc(supp-1-2*frac[1][0]),
-                         Tcalc(supp-1-2*frac[2][0]), &kubuf[0]);
+                         Tcalc(supp-1-2*frac[2][0]), kubuf.data());
             else
               MR_fail("bad batchsize");
 
             for (size_t k=0; k<batchsize; ++k)
               {
-              auto * DUCC0_RESTRICT ku = &kubuf[k*hlp.nvec];
+              auto * DUCC0_RESTRICT ku = kubuf.data()+k*hlp.nvec;
               hlp.prep_for_index(index[k]);
               size_t row = coord_idx[ix+k];
 
@@ -603,8 +563,8 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
               }
             size_t row = coord_idx[ix];
             parent::template getpix<Tcoord>({coords(sorted ? ix : coord_idx[ix],0)}, frac[0], index[0]);
-            auto * DUCC0_RESTRICT ku = &kubuf[0];
-            tkrn.eval1(Tcalc(supp-1-2*frac[0][0]), &ku[0]);
+            auto * DUCC0_RESTRICT ku = kubuf.data();
+            tkrn.eval1(Tcalc(supp-1-2*frac[0][0]), ku);
             hlp.prep_for_index(index[0]);
 
             mysimd<Tcalc> rr=0, ri=0;
@@ -758,7 +718,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return sv; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -855,7 +815,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return 2*svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -943,7 +903,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord, typename Tidx> class Sp
 
         constexpr int lineJump() const { return svvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -1354,7 +1314,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return sw; }
         constexpr int planeJump() const { return sv*sw; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
 
@@ -1460,7 +1420,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return 2*swvec; }
         constexpr int planeJump() const { return 2*sv*swvec; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
           auto i0old = i0;
@@ -1555,7 +1515,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
         constexpr int lineJump() const { return sw; }
         constexpr int planeJump() const { return sv*sw; }
 
-        [[gnu::always_inline]] [[gnu::hot]] void prep(array<double,ndim> in)
+        [[gnu::hot]] DUCC0_ALWAYS_INLINE void prep(array<double,ndim> in)
           {
           array<double,ndim> frac;
 
@@ -1649,7 +1609,6 @@ template<typename Tcalc, typename Tacc, typename Tcoord,typename Tidx> class Spr
               }
 #else
 
-#ifndef DUCC0_ALPINE_LINUX_WORKAROUND
 // this is quite voodoo, but helps a lot, at least on my machine
 if constexpr(SUPP<=8)
   {
@@ -1681,7 +1640,6 @@ if constexpr(SUPP<=8)
               }
   }
 else
-#endif
   {
           const array<Tacc, 2*SUPP> xdata = [&]() {
             array<Tacc, 2*SUPP> xdata;

@@ -43,7 +43,7 @@
 #include "ducc0/math/pointing.h"
 #include "ducc0/math/rangeset.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_healpix {
 
@@ -71,6 +71,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
     inline I ring_above (double z) const;
 //    void in_ring (I iz, double phi0, double dphi, rangeset<I> &pixset) const;
 
+#if 0
     template<typename I2> void query_multidisc (const vector<vec3> &norm,
       const vector<double> &rad, int fact, rangeset<I2> &pixset) const;
 
@@ -79,7 +80,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
 
     void query_strip_internal (double theta1, double theta2, bool inclusive,
       rangeset<I> &pixset) const;
-
+#endif
     I xyf2nest(int ix, int iy, int face_num) const;
     void nest2xyf(I pix, int &ix, int &iy, int &face_num) const;
     I xyf2ring(int ix, int iy, int face_num) const;
@@ -282,6 +283,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
       return res;
       }
 
+#if 0
     /*! \deprecated Please use the version based on \a rangeset */
     void query_disc (const pointing &dir, double radius,
       vector<I> &listpix) const
@@ -382,7 +384,7 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
       query_strip(theta1, theta2, inclusive, res);
       return res;
       }
-
+#endif
     /*! Returns useful information about a given ring of the map.
         \param ring the ring number (the number of the first ring is 1)
         \param startpix the number of the first pixel in the ring

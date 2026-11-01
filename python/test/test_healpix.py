@@ -106,3 +106,11 @@ def test_vecangvec(vlen, ftype, nthreads):
     inp = random_ptg(rng, vlen).astype(ftype)
     out = ph.vec2ang(ph.ang2vec(inp, nthreads=nthreads), nthreads=nthreads)
     assert_equal(np.all(np.abs(out-inp) < 1e-14), True)
+
+
+@pmp(("scheme", "expected"), [("RING", "RING"), ("NEST", "NEST"),
+    ("NESTED", "NEST")])
+def test_scheme(scheme, expected):
+    result = ph.Healpix_Base(1, scheme).scheme()
+    assert isinstance(result, str)
+    assert result == expected

@@ -22,7 +22,7 @@
 #include "ducc0/../../python/module_adders.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_nufft {
 
@@ -32,15 +32,13 @@ using Periodicity = variant<double, vector<double>>;
 
 static vector<double> get_periodicity(const Periodicity &inp, size_t ndim)
   {
-  try
+  if (holds_alternative<double>(inp))
     {
     auto val = get<double>(inp);
     vector<double> res;
     for (size_t i=0; i<ndim; ++i) res.push_back(val);
     return res;
     }
-  catch(...)
-    {}
   auto res = get<vector<double>>(inp);
   MR_assert(res.size()==ndim, "bad size of periodicity argument");
   return res;
@@ -678,6 +676,15 @@ numpy.ndarray(([ntrans], nx, [ny, [nz]]), same dtype as points)
     Identical to `out`.
 )""";
 
+constexpr const char *plan_class_DS = R"""(
+Class for repeated execution of type 1/2 NUFFTs
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
+)""";
+
 constexpr const char *plan_init_DS = R"""(
 Nufft plan constructor
 
@@ -811,6 +818,16 @@ numpy.ndarray(([ntrans], npoints_out,), same dtype as points_in)
     Identical to `points_out`, if it was provided.
 )""";
 
+constexpr const char *plan3_class_DS = R"""(
+Class for repeated execution of type 3 NUFFTs
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
+)""";
+
+
 constexpr const char *plan3_init_DS = R"""(
 Nufft3 plan constructor
 
@@ -872,6 +889,15 @@ numpy.ndarray(([ntrans], npoints_in,), same dtype as points_in)
     Identical to `points_out` if it was provided.
 )""";
 
+constexpr const char *incremental_nu2u_class_DS = R"""(
+Class for incremental execution of a type 1 NUFFT
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
+)""";
+
 constexpr const char *incremental_nu2u_init_DS = R"""(
 Incremental nu2u constructor
 
@@ -930,6 +956,15 @@ Returns
 -------
 numpy.ndarray(uniform_shape), dtype=numpy.complex64 or numpy.complex128)
     The result of the transform
+)""";
+
+constexpr const char *incremental_u2nu_class_DS = R"""(
+Class for incremental execution of a type 2 NUFFT
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *incremental_u2nu_init_DS = R"""(
@@ -1006,7 +1041,7 @@ void add_nufft(py::module_ &msup)
         "ndim"_a, "singleprec"_a, "sigma_min"_a=1.19, "sigma_max"_a=2.51);
 
   py::class_<Py_Nufftplan> (m, "plan", /*py::module_local(),*/
-                            "Class for repeated execution of type 1/2 NUFFTs")
+                            plan_class_DS)
     .def(py::init<bool, const CNpArr &, const vector<size_t> &,
                   double, size_t, double, double, const Periodicity &, bool>(),
       plan_init_DS, py::kw_only(), "nu2u"_a, "coord"_a, "grid_shape"_a,
@@ -1018,7 +1053,7 @@ void add_nufft(py::module_ &msup)
       "verbosity"_a=0, "grid"_a, "out"_a=None);
 
   py::class_<Py_incremental_nu2u> (m2, "incremental_nu2u", /*py::module_local(),*/
-                                   "Class for incremental execution of a type 1 NUFFT")
+                                   incremental_nu2u_class_DS)
     .def(py::init<size_t, const vector<size_t> &, bool,
                   double, size_t, double, double, const Periodicity &, bool, bool>(),
       incremental_nu2u_init_DS,
@@ -1031,7 +1066,7 @@ void add_nufft(py::module_ &msup)
       incremental_nu2u_evaluate_and_reset_DS, py::kw_only(), "uniform"_a=None);
 
   py::class_<Py_incremental_u2nu> (m2, "incremental_u2nu", /*py::module_local(),*/
-                                   "Class for incremental execution of a type 2 NUFFT")
+                                   incremental_u2nu_class_DS)
     .def(py::init<size_t, const CNpArr &, bool,
                   double, size_t, double, double, const Periodicity &, bool>(),
       incremental_u2nu_init_DS,
@@ -1043,7 +1078,7 @@ void add_nufft(py::module_ &msup)
       "coord"_a, "points"_a=None);
 
   py::class_<Py_Nufft3plan> (m2, "plan3", /*py::module_local(),*/
-                             "Class for repeated execution of type 3 NUFFTs")
+                             plan3_class_DS)
     .def(py::init<const CNpArr &, const CNpArr &,
                   double, size_t, double, double, size_t>(),
       plan3_init_DS, py::kw_only(), "coord_in"_a, "coord_out"_a,

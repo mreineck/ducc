@@ -35,7 +35,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/math/space_filling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_healpix {
 
@@ -86,7 +86,7 @@ template<typename I> I T_Healpix_Base<I>::npix2nside (I npix)
 template<typename I> I T_Healpix_Base<I>::ring_above (double z) const
   {
   double az=abs(z);
-  if (az<=twothird) // equatorial region
+  if (az<=2./3.) // equatorial region
     return I(nside_*(2-1.5*z));
   I iring = I(nside_*sqrt(3*(1-az)));
   return (z>0) ? iring : 4*nside_-iring-1;
@@ -393,7 +393,7 @@ template<typename I> void T_Healpix_Base<I>::query_disc_inclusive
     }
   query_disc_internal (ptg, radius, fact, pixset);
   }
-
+#if 0
 template<typename I> template<typename I2>
   void T_Healpix_Base<I>::query_multidisc (const vector<vec3> &norm,
   const vector<double> &rad, int fact, rangeset<I2> &pixset) const
@@ -644,7 +644,7 @@ template<typename I> void T_Healpix_Base<I>::query_multidisc_general
       }
     }
   }
-
+#endif
 template<typename I> inline void T_Healpix_Base<I>::nest2xyf (I pix, int &ix,
   int &iy, int &face_num) const
   {
@@ -816,7 +816,7 @@ template<typename I> I T_Healpix_Base<I>::ring2nest (I pix) const
   ring2xyf (pix, ix, iy, face_num);
   return xyf2nest (ix, iy, face_num);
   }
-
+#if 0
 template<typename I> inline I T_Healpix_Base<I>::nest_peano_helper
   (I pix, int dir) const
   {
@@ -843,7 +843,7 @@ template<typename I> I T_Healpix_Base<I>::nest2peano (I pix) const
 
 template<typename I> I T_Healpix_Base<I>::peano2nest (I pix) const
   { return nest_peano_helper(pix,1); }
-
+#endif
 template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
   double sth, bool have_sth) const
   {
@@ -852,7 +852,7 @@ template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
 
   if (scheme_==RING)
     {
-    if (za<=twothird) // Equatorial region
+    if (za<=2./3.) // Equatorial region
       {
       I nl4 = 4*nside_;
       double temp1 = nside_*(0.5+tt);
@@ -890,7 +890,7 @@ template<typename I> I T_Healpix_Base<I>::loc2pix (double z, double phi,
     }
   else // scheme_ == NEST
     {
-    if (za<=twothird) // Equatorial region
+    if (za<=2./3.) // Equatorial region
       {
       double temp1 = nside_*(0.5+tt);
       double temp2 = nside_*(z*0.75);
@@ -998,7 +998,7 @@ template<typename I> void T_Healpix_Base<I>::pix2loc (I pix, double &z,
                          (0.5*halfpi*tmp)/nr;
     }
   }
-
+#if 0
 template<typename I> template<typename I2>
   void T_Healpix_Base<I>::query_polygon_internal
   (const vector<pointing> &vertex, int fact, rangeset<I2> &pixset) const
@@ -1092,7 +1092,7 @@ template<typename I> void T_Healpix_Base<I>::query_strip (double theta1,
     pixset.append(ps2);
     }
   }
-
+#endif
 template<typename I> inline void T_Healpix_Base<I>::get_ring_info_small
   (I ring, I &startpix, I &ringpix, bool &shifted) const
   {
@@ -1228,10 +1228,12 @@ template<typename I> void T_Healpix_Base<I>::neighbors (I pix,
     }
   }
 
-template<typename I> void T_Healpix_Base<I>::get_interpol (const pointing &ptg,
+template<typename I> void T_Healpix_Base<I>::get_interpol (const pointing &ptg_,
   array<I,4> &pix, array<double,4> &wgt) const
   {
-  MR_assert((ptg.theta>=0)&&(ptg.theta<=pi),"invalid theta value");
+// FIXME: is there a cheaper way than normalizing?
+  pointing ptg(ptg_);
+  ptg.normalize();
   double z = cos (ptg.theta);
   I ir1 = ring_above(z);
   I ir2 = ir1+1;

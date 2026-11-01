@@ -4,7 +4,7 @@ from scipy.sparse.linalg import LinearOperator, lsmr
 
 def ringweights(nside, lmax, epsilon, maxiter):
     """Computes Healpix ring weights.
-    
+
     Parameters
     ----------
     nside: int
@@ -14,7 +14,7 @@ def ringweights(nside, lmax, epsilon, maxiter):
     epsilon: float
     maxiter: int
         maximum number of iterations for the conjugate gradient solver
-    
+
     Returns
     -------
     numpy.ndarray(4*nside-1,), dtype=numpy.float64)
@@ -90,13 +90,15 @@ def _pixselect(nside):
 
 def pixelweights(nside, lmax, mmax, epsilon, maxiter, nthreads=1, guess=None):
     """Computes Healpix pixel weights.
-    
+
     Parameters
     ----------
     nside: int
         nside parameter to use.
     lmax: int
         lmax to use. Must be even.
+        Convergence breaks down around lmax=3*nside,
+        i.e. weighted analysis will be OK up to around 1.5*nside
     mmax: int
         mmax to use
     epsilon: float
@@ -106,7 +108,7 @@ def pixelweights(nside, lmax, mmax, epsilon, maxiter, nthreads=1, guess=None):
         number of threads to use
     guess: numpy.ndarray(12*nside**2, dtype=numpy.float64)
         initial guess to use
-   
+
     Returns
     -------
     numpy.ndarray(12*nside**2,), dtype=numpy.float64)
@@ -163,7 +165,7 @@ def pixelweights(nside, lmax, mmax, epsilon, maxiter, nthreads=1, guess=None):
         ducc0.sht.alm2leg(alm=expand_alm(alm).reshape((1,-1)), lmax=lmax,
             mval=mval, mstart=mstart, spin=0, theta=theta, nthreads=nthreads,
             leg=leg[:,:,::mmod])
-        map = ducc0.sht.leg2map(leg=leg, nphi=nphi, phi0=phi0, 
+        map = ducc0.sht.leg2map(leg=leg, nphi=nphi, phi0=phi0,
             ringstart=ringstart, nthreads=nthreads)
         return compress_map(map.reshape((-1,)))
     def ST(map):
@@ -179,7 +181,7 @@ def pixelweights(nside, lmax, mmax, epsilon, maxiter, nthreads=1, guess=None):
     op = LinearOperator(matvec=ST, rmatvec=S, shape=(rhs.shape[0],
         ((3*nside+1)*(nside+1))//4))
     res = lsmr(A=op, b=rhs, atol=epsilon, btol=epsilon, maxiter=maxiter,
-               x0=compress_map(guess) if guess is not None else None)
+               x0=compress_map(guess) if guess is not None else None, show=False)
     if res[1] != 1:
         raise RuntimeError("iteration did not converge to a solution")
     return expand_map_full(res[0])+1.

@@ -23,14 +23,14 @@
  */
 
 /*
- *  Copyright (C) 2011-2020 Max-Planck-Society
+ *  Copyright (C) 2011-2026 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
 #include "ducc0/math/geom_utils.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_geom_utils {
 
@@ -38,7 +38,7 @@ using namespace std;
 
 namespace {
 
-void get_circle (const vector<vec3> &point, size_t q1, size_t q2, vec3 &center,
+static void get_circle (const vector<vec3> &point, size_t q1, size_t q2, vec3 &center,
   double &cosrad)
   {
   center = (point[q1]+point[q2]).Norm();
@@ -52,7 +52,7 @@ void get_circle (const vector<vec3> &point, size_t q1, size_t q2, vec3 &center,
         { center.Flip(); cosrad=-cosrad; }
       }
   }
-void get_circle (const vector<vec3> &point, size_t q, vec3 &center,
+static void get_circle (const vector<vec3> &point, size_t q, vec3 &center,
   double &cosrad)
   {
   center = (point[0]+point[q]).Norm();

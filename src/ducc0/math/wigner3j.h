@@ -31,12 +31,13 @@
 #include <vector>
 #include "ducc0/infra/mav.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_wigner3j {
 
 using namespace std;
 
+#if 0
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
   following the algorithm in the SLATEC algorithm DRC3JJ.
@@ -45,13 +46,10 @@ using namespace std;
 void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res);
 
-void wigner3j_00_squared_compact (double l2, double l3, const vmav<double,1> &res);
-
-template<typename Tsimd> void wigner3j_00_vec_squared_compact (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res);
-
 void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, const vmav<double,1> &res);
 template<typename Tsimd> void flexible_wigner3j_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res);
+#endif
 
 /**
   Compute the Wigner 3j symbols for parameters \a l2, \a l3, \a m2, \a m3
@@ -70,30 +68,34 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 template<typename Tsimd> class Wigner3j_direct_tables
   {
   private:
-    vector<double> g, fct;
+    // The value for g[i] is stored at gshift[i+1], which allows us
+    // to access "g[-1]"(=0), which we need in a few corner cases.
+    vector<double> gshift, fct;
     static constexpr size_t safety = 4*Tsimd::size(); // safety margin beyond lmax
 
   public:
     Wigner3j_direct_tables(size_t lmax)
-      : g(2*lmax+1+safety), fct(2*lmax+1+safety)
+      : gshift(2*lmax+1+safety+1), fct(2*lmax+1+safety)
       {
+      gshift[0] = 0;
       double gcur = 1.;
-      for (size_t i=0; i<g.size(); ++i, gcur*=(i-0.5)/i)
+      for (size_t i=0; i<fct.size(); ++i, gcur*=(i-0.5)/i)
         {
-        g[i] = sqrt(gcur);
+        gshift[i+1] = sqrt(gcur);
         fct[i] = sqrt(1./(gcur*(2*i+1)));
         }
       }
 
-    const vector<double> &G() const { return g; }
-    const vector<double> &Fct() const { return fct; }
+    // return a pointer shifted by 1 to fix the indices.
+    const double *G() const { return gshift.data()+1; }
+    const double *Fct() const { return fct.data(); }
   };
 
 template<typename Tsimd> class Wigner3j_direct
   {
   private:
-    const vector<double> &g;
-    const vector<double> &fct;
+    const double *g;
+    const double *fct;
     Tsimd iota;
 
     int el1, el2;
@@ -224,14 +226,12 @@ template<typename Tsimd> class Wigner3j_direct
 
 }
 
-using detail_wigner3j::wigner3j;
+//using detail_wigner3j::wigner3j;
 using detail_wigner3j::wigner3j_int;
 using detail_wigner3j::wigner3j_ncoef_int;
 
-using detail_wigner3j::wigner3j_00_vec_squared_compact;
-
-using detail_wigner3j::flexible_wigner3j;
-using detail_wigner3j::flexible_wigner3j_vec;
+//using detail_wigner3j::flexible_wigner3j;
+//using detail_wigner3j::flexible_wigner3j_vec;
 
 using detail_wigner3j::Wigner3j_direct_tables;
 using detail_wigner3j::Wigner3j_direct;

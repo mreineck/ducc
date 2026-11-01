@@ -15,12 +15,13 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: C++",
   "Programming Language :: Python",
+  "Programming Language :: Python :: Free Threading :: 2 - Beta",
 ]
 requires-python = ">=3.8"
 dependencies = ["numpy>=1.17.0"]
-version = "0.41.1"
+version = "0.42.0"
 
-[project_urls]
+[project.urls]
 "Bug Tracker" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/issues"
 "Bug Tracker (Github)" = "https://github.com/mreineck/ducc/issues"
 "Documentation" = "https://mtr.pages.mpcdf.de/ducc"
@@ -30,7 +31,14 @@ version = "0.41.1"
 "Changelog" = "https://gitlab.mpcdf.mpg.de/mtr/ducc/-/blob/ducc0/ChangeLog"
 
 [build-system]
-requires = ["scikit-build-core>0.5", "nanobind>=2.5.0", "pybind11>=2.13.6", "numpy>=1.17.0"]
+requires = [
+    # FIXME: scikit-build-core limited to <1.1 for the moment, because otherwise CI breaks for Python 3.14t and 3.15t
+    "scikit-build-core>=1.0,<1.1",
+    "nanobind>=2.5.0,<2.10.0; python_version == '3.8'",
+    "nanobind>=2.12.0,<3; python_version >= '3.9'",
+    "pybind11>=2.13.6",
+    "numpy>=1.17.0",
+]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
@@ -62,7 +70,6 @@ sdist.include = [
     "src/ducc0/bindings/pybind_utils.h",
     "src/ducc0/math/cmplx.h",
     "src/ducc0/math/constants.h",
-    "src/ducc0/math/geom_utils.cc",
     "src/ducc0/math/geom_utils.h",
     "src/ducc0/math/gl_integrator.h",
     "src/ducc0/math/gl_integrator.cc",
@@ -103,7 +110,6 @@ sdist.include = [
     "src/ducc0/sht/totalconvolve.h",
     "src/ducc0/healpix/healpix_base.cc",
     "src/ducc0/healpix/healpix_base.h",
-    "src/ducc0/healpix/healpix_tables.cc",
     "src/ducc0/healpix/healpix_tables.h",
     "src/ducc0/wgridder/wgridder.h",
     "src/ducc0/wgridder/wgridder_impl.h",
@@ -113,6 +119,7 @@ sdist.include = [
     "src/ducc0/wgridder/wgridder_inst3.cc",
     "src/ducc0/wgridder/wgridder.cc",
     "python/module_adders.h",
+    "python/ducc_driver.cc",
     "python/ducc.cc",
     "python/fft_pymod.cc",
     "python/nufft_pymod.cc",
@@ -130,6 +137,8 @@ sdist.include = [
     "python/test/test_totalconvolve.py",
     "python/test/test_wgridder.py",
     "python/test/test_nufft.py",
+    "python/test/test_free_threading.py",
+    "python/test/check_multiarch.py",
     "python/demos/fft_bench.py",
     "python/demos/fft_stress.py",
     "python/demos/healpix_perftest.py",
@@ -138,3 +147,6 @@ sdist.include = [
     "python/demos/sht_analysis_demo.py",
     "python/demos/nufft_benchmark.py"
 ]
+
+[tool.scikit-build.env]
+CXX = { env = "CXX" }

@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <complex>
 #include <functional>
 #include <vector>
 #include <memory>
@@ -32,13 +33,61 @@
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/simd.h"
+#if (!defined(DUCC0_NO_SIMD)) && (!defined(DUCC0_HOMEGROWN_SIMD)) && (defined(__AVX__) || defined(__SSE3__))
+#include <immintrin.h>
+#endif
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/gl_integrator.h"
 #include "ducc0/math/constants.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gridding_kernel {
+
+template<typename T> constexpr inline int hsum_simdlen
+  = std::min<int>(8, native_simd<T>::size());
+
+template<typename T> using hsum_simd = typename simd_select<T,hsum_simdlen<T>>::type;
+
+template<typename T> inline std::complex<T> hsum_cmplx
+  (hsum_simd<T> vr, hsum_simd<T> vi)
+  { return std::complex<T>(reduce(vr, std::plus<>()), reduce(vi, std::plus<>())); }
+
+#if (!defined(DUCC0_NO_SIMD)) && defined(__AVX__)
+static_assert(hsum_simd<float>::size()==8, "must not happen");
+#if 1
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  auto t1 = _mm256_hadd_ps(__m256(vr), __m256(vi));
+  auto t2 = _mm_hadd_ps(_mm256_extractf128_ps(t1, 0), _mm256_extractf128_ps(t1, 1));
+  t2 += _mm_shuffle_ps(t2, t2, _MM_SHUFFLE(1,0,3,2));
+  return std::complex<float>(t2[0], t2[1]);
+  }
+#else
+// this version may be slightly faster, but this needs more benchmarking
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  auto t1 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(0,2,0,2));
+  auto t2 = _mm256_shuffle_ps(vr, vi, _MM_SHUFFLE(1,3,1,3));
+  auto t3 = _mm256_add_ps(t1,t2);
+  t3 = _mm256_shuffle_ps(t3, t3, _MM_SHUFFLE(3,0,2,1));
+  auto t4 = _mm_add_ps(_mm256_extractf128_ps(t3, 1), _mm256_castps256_ps128(t3));
+  auto t5 = _mm_add_ps(t4, _mm_movehl_ps(t4, t4));
+  return std::complex<float>(t5[0], t5[1]);
+  }
+#endif
+#elif (!defined(DUCC0_NO_SIMD)) && defined(__SSE3__)
+template<> inline std::complex<float> hsum_cmplx<float>
+  (hsum_simd<float> vr, hsum_simd<float> vi)
+  {
+  static_assert(hsum_simd<float>::size()==4, "must not happen");
+  auto t1 = _mm_hadd_ps(__m128(vr), __m128(vi));
+  t1 += _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(2,3,0,1));
+  return std::complex<float>(t1[0], t1[2]);
+  }
+#endif
 
 using namespace std;
 
@@ -175,7 +224,7 @@ class KernelCorrection
   public:
     /* Compute correction factors for gridding kernel
        This implementation follows eqs. (3.8) to (3.10) of Barnett et al. 2018 */
-    template<typename T> [[gnu::always_inline]] T corfunc(T v) const
+    template<typename T> DUCC0_ALWAYS_INLINE T corfunc(T v) const
       {
       T tmp=0;
       for (size_t i=0; i<x.size(); ++i)
@@ -281,7 +330,10 @@ template<size_t W, typename Tsimd> class TemplateKernel
 
     void transferCoeffs(const vector<double> &input, size_t d_input)
       {
-      auto ofs = D-d_input;
+      MR_assert((d_input==D)||(d_input+1==D),
+        "degree of input polynomial must be D-1 or D");
+
+      auto ofs = D-d_input;  // can only be 0 or 1
       if (ofs>0)
         for (size_t i=0; i<nvec_eval; ++i)
           coeff[i] = 0;
@@ -296,7 +348,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
 
   public:
     TemplateKernel(const PolynomialKernel &krn)
-      : scoeff(reinterpret_cast<T *>(&coeff[0]))
+      : scoeff(reinterpret_cast<T *>(coeff.data()))
       {
       MR_assert(W==krn.support(), "support mismatch");
       MR_assert(D>=krn.degree(), "degree mismatch");
@@ -323,7 +375,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
       return res;
       }
 
-    [[gnu::always_inline]] void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval2s(T x, T y, T z, size_t nth, Tsimd * DUCC0_RESTRICT res) const
       {
       z = (z-nth)*2+(W-1);
       T x2=x*x, y2=y*y, z2=z*z;
@@ -383,7 +435,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           }
         }
       }
-    [[gnu::always_inline]] void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval1(T x, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x;
 
@@ -404,7 +456,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           res[j2/vlen][j2%vlen] = T(tmp[j]);
         }
       }
-    [[gnu::always_inline]] void eval2(T x, T y, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval2(T x, T y, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x, y2=y*y;
 
@@ -432,7 +484,7 @@ template<size_t W, typename Tsimd> class TemplateKernel
           }
         }
       }
-    [[gnu::always_inline]] void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
+    DUCC0_ALWAYS_INLINE void eval3(T x, T y, T z, Tsimd * DUCC0_RESTRICT res) const
       {
       T x2=x*x, y2=y*y, z2=z*z;
 

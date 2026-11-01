@@ -12,20 +12,34 @@
         py-pkgs = pkgs.python3Packages;
         src = ./.;
 
-        ducc = py-pkgs.buildPythonPackage {
+        ducc = py-pkgs.buildPythonPackage (finalAttrs: {
           pname = "ducc0";
-          version = "0.41.1";
+          version = "0.42.0";
           pyproject = true;
 
           # stdenv = pkgs.clangStdenv;
 
           inherit src;
           postPatch = ''
-            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6", ' ""
+            substituteInPlace pyproject.toml --replace-fail '"pybind11>=2.13.6",' ""
           '';
 
-          DUCC0_USE_NANOBIND = "";
-          DUCC0_OPTIMIZATION = "portable";
+          env = {
+            DUCC0_USE_NANOBIND = "";
+            # multiarch compilation is only supported on x86_64
+            DUCC0_OPTIMIZATION =
+              if pkgs.stdenv.hostPlatform.isx86_64 && pkgs.stdenv.hostPlatform.isLinux then
+                "multiarch-strip"
+              else
+                "portable";
+          };
+
+          # __FILE__ ends up in error messages; strip the build directory
+          # (randomised per build on darwin) to keep the build reproducible.
+          preBuild = ''
+            export NIX_CFLAGS_COMPILE+=" -ffile-prefix-map=$PWD/="
+          '';
+
           build-system = with py-pkgs; [
             pkgs.cmake
             nanobind
@@ -36,20 +50,30 @@
           dontUseCmakeConfigure = true;
           dependencies = with py-pkgs; [ numpy ];
 
+          nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.cc.isClang [
+            pkgs.llvmPackages.llvm
+          ];
+
           nativeCheckInputs = with py-pkgs; [
+            pytest-xdist
             pytestCheckHook
             scipy
-            pytest-xdist
-            hypothesis
           ];
-          pytestFlagsArray = [ "python/test" ];
+
+          pytestFlags = [ "python/test" ];
           pythonImportsCheck = [ "ducc0" ];
 
-          postInstall = ''
-            mkdir -p $out/include/ducc0
-            cp -r $src/src/ducc0/* $out/include/ducc0
+          # Not part of nixpkgs' ducc package
+          preCheck = ''
+            bash test/run.sh
           '';
-        };
+          # /Not part of nixpkgs' ducc package
+
+          postInstall = ''
+            mkdir -p $out/include
+            cp -r ${finalAttrs.src}/src/ducc0 $out/include
+          '';
+        });
 
       in {
         # Run `nix build .` to build the python ducc package and run the tests.

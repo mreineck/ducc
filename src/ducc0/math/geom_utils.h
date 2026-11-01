@@ -25,7 +25,7 @@
 /*! \file geom_utils.h
  *  Geometric utility functions.
  *
- *  Copyright (C) 2003-2020 Max-Planck-Society
+ *  Copyright (C) 2003-2026 Max-Planck-Society
  *  \author Martin Reinecke
  *  \author Reinhard Hell
  */
@@ -38,10 +38,11 @@
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/vec3.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_geom_utils {
 
+#if 0
 /*! Returns the orientation when looking from point \a loc on the unit
     sphere in the direction \a dir. \a loc must be normalized. The result
     ranges from -pi to pi, is 0 for North and pi/2 for West, i.e. the angle
@@ -58,6 +59,7 @@ inline double orientation (const vec3 &loc, const vec3 &dir)
   vec3 north = crossprod(loc,east);
   return safe_atan2(-dotprod(dir,east),dotprod(dir,north));
   }
+#endif
 
 /*! Returns the angle between \a v1 and \a v2 in radians. */
 inline double v_angle (const vec3 &v1, const vec3 &v2)
@@ -75,19 +77,20 @@ inline double cosdist_zphi (double z1, double phi1, double z2, double phi2)
   return z1*z2+cos(phi1-phi2)*std::sqrt((1.-z1*z1)*(1.-z2*z2));
   }
 
+#if 0
 /*! Finds the smallest enclosing cone for a point set on the sphere according to
     Barequet & Elber: Information Processing Letters 93(2005), p.83.
     All points are expected to be passed as unit vectors.
     The enclosing cone must have an opening angle <pi/2. */
 void find_enclosing_circle (const std::vector<vec3> &point, vec3 &center,
   double &cosrad);
-
+#endif
 }
 
-using detail_geom_utils::orientation;
+//using detail_geom_utils::orientation;
 using detail_geom_utils::v_angle;
 using detail_geom_utils::cosdist_zphi;
-using detail_geom_utils::find_enclosing_circle;
+//using detail_geom_utils::find_enclosing_circle;
 
 }
 

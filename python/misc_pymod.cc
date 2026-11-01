@@ -43,7 +43,7 @@
 #include <complex>
 
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_misc {
 
@@ -124,6 +124,14 @@ static FloatOrComplex Py_vdot(const CNpArr &a, const CNpArr &b)
     return Py2_vdot<complex<long double>>(a,b);
 #endif
   MR_fail("type matching failed");
+  }
+static FloatOrComplex Py_vdot_scalar(const complex<double> &a,
+  const complex<double> &b)
+  {
+  complex<long double> acc = conj(complex<long double>(a))
+                           * complex<long double>(b);
+  return (acc.imag()==0) ? FloatOrComplex(double(acc.real()))
+                         : FloatOrComplex(complex<double>(acc));
   }
 
 
@@ -388,11 +396,11 @@ nthreads: int
 
 Returns
 -------
-list of float and numpy.ndarray :
+tuple of float and numpy.ndarray :
     Output value and derivative. The derivative has the same shape and dtype as
     `a`.
 )""";
-template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::tuple Py2_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<complex<T>>(a_);
@@ -410,12 +418,9 @@ template<typename T> static py::list Py2_LogUnnormalizedGaussProbabilityWithDeri
     return redSum(norm(diff)*v3);
     }, nthreads, a, b, c, out).val;
   }
-  py::list lst;
-  lst.append(0.5*res);
-  lst.append(out_);
-  return lst;
+  return py::make_tuple( 0.5*res, out_);
   }
-template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeriv
+template<typename T> static py::tuple Py3_LogUnnormalizedGaussProbabilityWithDeriv
   (const CNpArr &a_, const CNpArr &b_, const CNpArr &c_, const OptNpArr &out__, size_t nthreads)
   {
   const auto a = to_cfmav<T>(a_);
@@ -432,13 +437,10 @@ template<typename T> static py::list Py3_LogUnnormalizedGaussProbabilityWithDeri
     return redSum(diff*diff*v3);
     }, nthreads, a, b, c, out).val;
   }
-  py::list lst;
-  lst.append(0.5*res);
-  lst.append(out_);
-  return lst;
+  return py::make_tuple( 0.5*res, out_);
   }
 
-static py::list Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
+static py::tuple Py_LogUnnormalizedGaussProbabilityWithDeriv(const CNpArr &a, const CNpArr &b,
   const CNpArr &c, const OptNpArr &out, size_t nthreads)
   {
   if (isPyarr<complex<float>>(a))
@@ -532,7 +534,9 @@ static double Py_l2error(const CNpArr &a, const CNpArr &b)
   }
 double Py_l2error_scalar(const complex<double> &a, const complex<double> &b)
   {
-  auto res = abs(a-b)/max(abs(a), abs(b));
+  auto maxval = max(abs(a), abs(b));
+  if (maxval==0.) return 0.;
+  auto res = abs(a-b)/maxval;
   return double(res);
   }
 
@@ -677,18 +681,18 @@ static NpArr Py_empty_noncritical(const vector<size_t> &shape,
   {
   auto dtype = normalizeDtype(dtype_);
   if (isDtype<float>(dtype))
-    return make_noncritical_Pyarr<float>(shape, nthreads);
+    return make_noncritical_Pyarr<float>(shape, false, nthreads);
   if (isDtype<complex<float>>(dtype))
-    return make_noncritical_Pyarr<complex<float>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<float>>(shape, false, nthreads);
   if (isDtype<double>(dtype))
-    return make_noncritical_Pyarr<double>(shape);
+    return make_noncritical_Pyarr<double>(shape, false, nthreads);
   if (isDtype<complex<double>>(dtype))
-    return make_noncritical_Pyarr<complex<double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<double>>(shape, false, nthreads);
 #ifndef DUCC0_USE_NANOBIND
   if (isDtype<long double>(dtype))
-    return make_noncritical_Pyarr<long double>(shape, nthreads);
+    return make_noncritical_Pyarr<long double>(shape, false, nthreads);
   if (isDtype<complex<long double>>(dtype))
-    return make_noncritical_Pyarr<complex<long double>>(shape, nthreads);
+    return make_noncritical_Pyarr<complex<long double>>(shape, false, nthreads);
 #endif
   MR_fail("unsupported datatype");
   }
@@ -834,6 +838,11 @@ this region.
 
 Original implementation by Stephane Plaszczynski;
 for details see https://arxiv.org/abs/astro-ph/0510081.
+
+Notes
+-----
+Methods of this class must not be called concurrently on one and the same
+object; doing so will result in undefined behaviour.
 )""";
 
 constexpr const char *Py_OofaNoise_init_DS = R"""(
@@ -897,7 +906,7 @@ static double get_max_kernel_error(const function<vector<double>(const vector<do
   }
   const auto &lam(*lamptr);
 
-  ducc0::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
+  DUCC0_NAMESPACE::detail_gridding_kernel::GLFullCorrection Corr (W, lam);
 
   corr=Corr.corfunc(nx, 1./(2*N));
 
@@ -992,12 +1001,9 @@ static py::tuple scan_kernel(const function<vector<double>(const vector<double> 
       }
     });
   }
-  py::list res;
   py::list parlist;
   for (const auto &p: par_best) parlist.append(p);
-  res.append(err_best);
-  res.append(parlist);
-  return py::tuple(res);
+  return py::make_tuple(err_best, py::tuple(parlist));
   }
 
 template<typename To> static void fill_zero(
@@ -1189,7 +1195,7 @@ theta : numpy.ndarray((nrings,), dtype=numpy.float64)
     colatitudes of the rings  (nrings any number)
 phi0 : numpy.ndarray((nrings,), dtype=numpy.float64)
     longitude of the first pixel in each ring
-ringstart : numpy.ndarray((nrings,), dtype=numpy.uint64)
+ringstart : numpy.ndarray((nrings,), dtype=numpy.uintp)
     index of the first pixel of each ring in output map
 deflect : numpy.ndarray((npix, 2), dtype=numpy.float32 or numpy.float64)
     Spin-1 deflection field, with real and imaginary comp in first and second entry
@@ -1336,71 +1342,6 @@ nthreads(optional): int
     Number of threads to use. Defaults to 1
 )""";
 
-#if 0
-template<typename Tout> static NpArr Py2_coupling_matrix_spin0and2_pure(const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__)
-  {
-  auto spec = to_cmav<double,3>(spec_);
-  auto nspec = spec.shape(0);
-  MR_assert(spec.shape(1)==4, "bad ncomp_spec");
-  MR_assert(spec.shape(2)>=1, "spec.shape[1] is too small.");
-  auto [mat_, mat] = get_OptNpArr_and_vmav<Tout,4>(mat__, {nspec, 4, lmax+1, lmax+1});
-  {
-  py::gil_scoped_release release;
-  coupling_matrix_spin0and2_pure<Tout>(spec, lmax, mat, nthreads);
-  }
-  return mat_;
-  }
-
-NpArr Py_coupling_matrix_spin0and2_pure
-  (const CNpArr &spec_, size_t lmax, size_t nthreads, const OptNpArr &mat__,
-  bool singleprec)
-  {
-  if (mat__)
-    singleprec = isPyarr<float>(mat__.value()); // override
-  return singleprec ?
-    Py2_coupling_matrix_spin0and2_pure<float>(spec_, lmax, nthreads, mat__) :
-    Py2_coupling_matrix_spin0and2_pure<double>(spec_, lmax, nthreads, mat__);
-  MR_fail("unsupported combination of spec_index and mat_index");
-  }
-
-constexpr const char *Py_coupling_matrix_spin0and2_pure_DS = R"""(
-This is very similar to pspy's calc_mcm_spin0and2_pure() method, with the following
-differences:
-
-- the l values in the output matrix go from 0 to lmax (inclusive) instead of
-  2 to lmax (exclusive)
-- the input power spectra are multiplied by (2*l+1)
-- the output is multiplied by (2*l1+2)/(4*pi) and the full matrix is populated
-- the computation can be carried out for more than one set of power spectra
-  at the same time.
-- the last component is not calculated, since it appears to be zero in all cases
-
-Parameters
-----------
-spec : numpy.ndarray((nspec, 4, lmax_spec+1), dtype=np.float64)
-    the input spectra
-    the indices of the second dimension correspond to wcl_00, wcl_02, wcl_20,
-    and wcl_22 of calc_mcm_spin0and2_pure(), respectively
-lmax : int
-    the maximum l moment included in the output matrices
-    In principle, this requires the input spectra to be provided with an
-    `lmax_spec = 2*lmax`. If `lmax_spec` is smaller, the missing values are
-    assumed to be zero.
-nthreads : int
-    the number of threads to use for the calculations.
-res : numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
-    Optional array to store the output into.
-singleprec : bool
-    determines the accuracy of the output if `res` is not provided
-
-Returns
--------
-numpy.ndarray((nspec, 4, lmax+1, lmax+1), dtype=np.float32 or np.float64)
-    The coupling matrices. Identical to `res`, if it was provided
-)""";
-
-#endif
-
 template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect
   (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
    size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
@@ -1498,63 +1439,6 @@ Returns
 numpy.ndarray((nmat, 11max+1, l2max+1), dtype=np.float32 or np.float64)
     The coupling matrices. Identical to `res`.
 )""";
-template<size_t opmask, typename Tout> static NpArr Py2_coupling_matrix_rect_new
-  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
-   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
-  {
-  auto spec = to_cmav<double,2>(spec_);
-  auto nspec = spec.shape(0);
-  MR_assert(spec.shape(1)>=1, "spec.shape[1] is too small.");
-  MR_assert(optype.size()==nspec, "bad optype size");
-  size_t nmat=0;
-  for (auto op: optype)
-    nmat += (op<4) ? 1 : 2;
-  auto mat = to_vmav<Tout,3>(mat_);
-  MR_assert(mat.shape(0)==nmat, "nmat mismatch");
-  {
-  py::gil_scoped_release release;
-  coupling_matrix_rect_new<opmask, Tout>(spec, mat, optype,
-    l_exact, l_toeplitz, dl_band, nthreads);
-  }
-  return mat_;
-  }
-NpArr Py_coupling_matrix_rect_new
-  (const CNpArr &spec_, const vector<int> &optype, const NpArr &mat_,
-   size_t nthreads, int l_exact, int l_toeplitz, int dl_band)
-  {
-  bool singleprec = isPyarr<float>(mat_);
-  auto spec = to_cmav<double,2>(spec_);
-  auto nspec = spec.shape(0);
-  MR_assert(optype.size()==nspec, "bad optype size");
-  size_t opmask=0;
-  for (auto op: optype)
-    {
-    MR_assert((op>=0) && (op<5), "bad optype entry");
-    opmask |= (op==4) ? 12 : (size_t(1)<<op);
-    }
-#define DUCC0_COUPLING_MACRO(mask) \
-  if (opmask==mask) \
-    return singleprec ? \
-      Py2_coupling_matrix_rect_new<mask,float>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band) : \
-      Py2_coupling_matrix_rect_new<mask,double>(spec_, optype, mat_, nthreads, l_exact, l_toeplitz, dl_band);
-  DUCC0_COUPLING_MACRO(1)
-  DUCC0_COUPLING_MACRO(2)
-  DUCC0_COUPLING_MACRO(3)
-  DUCC0_COUPLING_MACRO(4)
-  DUCC0_COUPLING_MACRO(5)
-  DUCC0_COUPLING_MACRO(6)
-  DUCC0_COUPLING_MACRO(7)
-  DUCC0_COUPLING_MACRO(8)
-  DUCC0_COUPLING_MACRO(9)
-  DUCC0_COUPLING_MACRO(10)
-  DUCC0_COUPLING_MACRO(11)
-  DUCC0_COUPLING_MACRO(12)
-  DUCC0_COUPLING_MACRO(13)
-  DUCC0_COUPLING_MACRO(14)
-  DUCC0_COUPLING_MACRO(15)
-#undef DUCC0_COUPLING_MACRO
-  MR_fail("should not get here");
-  }
 
 static py::tuple Py_wigner3j_int(int l2, int l3, int m2, int m3)
   {
@@ -1623,6 +1507,11 @@ threads.
 
 nthreads_new : int >=1
     the desired new number of threads for ducc0 parallel execution
+
+Notes
+-----
+This function must not be called concurrently;
+doing so will result in undefined behaviour.
 )""";
 
 using shape_t = fmav_info::shape_t;
@@ -1886,10 +1775,7 @@ static py::tuple native_vector_lengths()
     vlen_f32 = int(native_simd<float>::size());
   if constexpr (vectorizable<double>)
     vlen_f64 = int(native_simd<double>::size());
-  py::list res;
-  res.append (vlen_f32);
-  res.append (vlen_f64);
-  return py::tuple(res);
+  return py::make_tuple(vlen_f32, vlen_f64);
   }
 
 const char *native_vector_lengths_DS = R"""(
@@ -1921,6 +1807,7 @@ void add_misc(py::module_ &msup)
   auto m2 = m.def_submodule("experimental");
 
   m.def("vdot", Py_vdot, Py_vdot_DS, "a"_a, "b"_a);
+  m.def("vdot", Py_vdot_scalar, Py_vdot_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error, Py_l2error_DS, "a"_a, "b"_a);
   m.def("l2error",  Py_l2error_scalar, Py_l2error_DS, "a"_a, "b"_a);
   m.def("special_add_at", Py_special_add_at, Py_special_add_at_DS,
@@ -1962,12 +1849,7 @@ void add_misc(py::module_ &msup)
 
   m.def("wigner3j_int", Py_wigner3j_int, Py_wigner3j_int_DS, "l2"_a, "l3"_a, "m2"_a, "m3"_a);
 
-//  m2.def("coupling_matrix_spin0and2_pure", Py_coupling_matrix_spin0and2_pure, Py_coupling_matrix_spin0and2_pure_DS,
-//    "spec"_a, "lmax"_a, "nthreads"_a=1, "res"_a=None, "singleprec"_a=false);
   m2.def("coupling_matrix_rect", Py_coupling_matrix_rect, Py_coupling_matrix_rect_DS,
-    "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
-    "l_toeplitz"_a=-1, "dl_band"_a=-1);
-  m2.def("coupling_matrix_rect_new", Py_coupling_matrix_rect_new, Py_coupling_matrix_rect_DS,
     "spec"_a, "optype"_a, "res"_a, "nthreads"_a=1, "l_exact"_a=-1,
     "l_toeplitz"_a=-1, "dl_band"_a=-1);
 

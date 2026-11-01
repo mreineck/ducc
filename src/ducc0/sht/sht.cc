@@ -24,9 +24,6 @@
 #include <vector>
 #include <cmath>
 #include <cstring>
-#if ((!defined(DUCC0_NO_SIMD)) && defined(__AVX__) && (!defined(__AVX512F__)))
-#include <x86intrin.h>
-#endif
 #include "ducc0/infra/simd.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/sphere_interpol.h"
@@ -40,7 +37,7 @@
 #include "ducc0/infra/timers.h"
 #include "ducc0/sht/sht_inner_loop.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sht {
 
@@ -274,7 +271,7 @@ void get_gridweights(const string &type, const vmav<double,1> &wgt)
   size_t nrings=wgt.shape(0);
   if (type=="GL") // Gauss-Legendre
     {
-    ducc0::GL_Integrator integ(nrings);
+    GL_Integrator integ(nrings);
     auto xwgt = integ.weights();
     for (size_t m=0; m<nrings; ++m)
       wgt(m) = 2*pi*xwgt[m];
@@ -684,7 +681,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
         f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
       }
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    execDynamic(nm, nthreads, 1, [&](Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({nalm,lmax+2+spin}, UNINITIALIZED);
@@ -729,7 +726,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
     auto &rdata(rdata_normal);
     YlmBase base(lmax, mmax, spin);
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    execDynamic(nm, nthreads, 1, [&](Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
@@ -878,7 +875,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
         f2(l) = sqrt(1./((l-1.)*l*(l+1.)*(l+2.)));
       }
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    execDynamic(nm, nthreads, 1, [&](Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({2, lmax+2+spin}, UNINITIALIZED);
@@ -922,7 +919,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
     auto &rdata(rdata_normal);
     YlmBase base(lmax, mmax, spin);
 
-    ducc0::execDynamic(nm, nthreads, 1, [&](ducc0::Scheduler &sched)
+    execDynamic(nm, nthreads, 1, [&](Scheduler &sched)
       {
       Ylmgen gen(base);
       vmav<complex<double>,2> almtmp({lmax+2,nalm}, UNINITIALIZED);
@@ -1423,6 +1420,8 @@ void sanity_checks(
             (ringstart.shape(0)==nrings) &&
             (ringfactor.shape(0)==nrings),
     "inconsistency in the number of rings");
+  for (size_t i=0; i<nrings; ++i)
+    MR_assert(nphi(i)>0, "rings must have at least one pixel");
   if ((mode==DERIV1) || (mode==GRAD_ONLY))
     {
     MR_assert(spin>0, "DERIV and GRAD_ONLY modes require spin>0");
@@ -1491,7 +1490,7 @@ void get_ringtheta_2d(const string &type, const vmav<double, 1> &theta)
 
   if (type=="GL") // Gauss-Legendre
     {
-    ducc0::GL_Integrator integ(nrings);
+    GL_Integrator integ(nrings);
     auto th = integ.thetas();
     for (size_t m=0; m<nrings; ++m)
       theta(m) = th[nrings-1-m];

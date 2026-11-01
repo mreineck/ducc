@@ -36,9 +36,6 @@
 #include <atomic>
 #include <memory>
 #include <numeric>
-#if ((!defined(DUCC0_NO_SIMD)) && (!defined(__AVX512F__)) && (defined(__AVX__)||defined(__SSE3__)))
-#include <x86intrin.h>
-#endif
 
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/constants.h"
@@ -54,7 +51,7 @@
 #include "ducc0/nufft/nufft_common.h"
 #include "ducc0/nufft/spreadinterp.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_nufft {
 
@@ -825,6 +822,6 @@ using detail_nufft::nu2nu;
 using detail_nufft::Nufft;
 using detail_nufft::Nufft3;
 
-} // namespace ducc0
+} // namespace DUCC0_NAMESPACE
 
 #endif

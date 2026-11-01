@@ -59,6 +59,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Do not delete this #include or move it farther below!
 #include <cstdint>
 
+#include "ducc0/infra/useful_macros.h"
+
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
 // so we don't use the standard library SIMD support on MacOS.
 // In fact, we only trust libstdc++ at the moment to implement this fully.
@@ -70,7 +72,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <experimental/simd>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 
@@ -96,8 +98,11 @@ template<typename T, int N> constexpr bool simd_exists_h()
   {
   if constexpr (N>1)
     if constexpr (vectorizable<T>)
-      if constexpr (!std::is_same_v<stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>, stdx::fixed_size_simd<T, N>>)
-        return true;
+      {
+      using type = stdx::simd<T, stdx::simd_abi::deduce_t<T, N>>;
+      if constexpr (!std::is_same_v<type, stdx::fixed_size_simd<T, N>>)
+        return sizeof(type)==N*sizeof(T);
+      }
   return false;
   }
 template<typename T, int N> constexpr inline bool simd_exists = simd_exists_h<T,N>();
@@ -167,7 +172,7 @@ template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *p
 #define DUCC0_HOMEGROWN_SIMD
 
 #if defined(__SSE2__)  // we are on an x86 platform and we have vector types
-#include <x86intrin.h>
+#include <immintrin.h>
 #endif
 
 #if defined(__aarch64__)  // let's check for SVE and Neon
@@ -189,7 +194,7 @@ template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *p
 
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_simd {
 
@@ -303,7 +308,6 @@ template<typename T, size_t len> class vtp
         operator T() const { return v.v[i]; }
       };
 
-    void Set(size_t i, T val) { v[i] = val; }
     reference operator[](size_t i) { return reference(*this, i); }
     T operator[](size_t i) const { return v[i]; }
 

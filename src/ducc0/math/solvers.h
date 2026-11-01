@@ -37,7 +37,7 @@
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/aligned_array.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_solvers {
 

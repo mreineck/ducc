@@ -35,7 +35,9 @@
 #include <cmath>
 #include <iostream>
 
-namespace ducc0 {
+#include "ducc0/infra/useful_macros.h"
+
+namespace DUCC0_NAMESPACE {
 
 /*! \defgroup vec3group 3D vectors */
 /*! \{ */

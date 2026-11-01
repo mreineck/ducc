@@ -48,7 +48,7 @@
 #include "ducc0/infra/timers.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sphereinterpol {
 
@@ -480,7 +480,7 @@ template<typename T> class SphereInterpol
       alm2leg(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       timers.poppush("theta resampling and deconvolution");
       auto kernel = getKernel(2*ntheta_s-2, 2*ntheta_b-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_s, true, true, leg_b, true, true, kernel, spin, nthreads, false);
       timers.poppush("phi FFT and deconvolution");
       // fix phi
@@ -534,12 +534,6 @@ template<typename T> class SphereInterpol
           }
         }
       timers.pop();
-      }
-
-    void getPlane(const cmav<complex<T>,1> &alm, const vmav<T,3> &planes) const
-      {
-      cmav<complex<T>,2> valm(&alm(0), {1,alm.shape(0)}, {0,alm.stride(0)});
-      getPlane(valm, planes);
       }
 
     template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
@@ -630,17 +624,11 @@ template<typename T> class SphereInterpol
         mval(i) = i;
 
       auto kernel = getKernel(2*ntheta_b-2, 2*ntheta_s-2);
-      ducc0::detail_sht::resample_and_convolve_theta<T>
+      detail_sht::resample_and_convolve_theta<T>
         (leg_b, true, true, leg_s, true, true, kernel, spin, nthreads, true);
       timers.poppush("leg2alm");
       leg2alm(valm, leg_s, spin, lmax, mval, mstart, lstride, theta, nthreads, mode);
       timers.pop();
-      }
-
-    void updateAlm(const vmav<complex<T>,1> &alm, const vmav<T,3> &planes, SHT_mode mode) const
-      {
-      auto valm(alm.prepend_1());
-      updateAlm(valm, planes, mode);
       }
 
     vmav<T,3> build_planes() const

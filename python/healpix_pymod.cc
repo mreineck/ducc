@@ -39,7 +39,7 @@
 #include <vector>
 #include <string>
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_pymodule_healpix {
 
@@ -97,7 +97,7 @@ class Pyhpbase
       }
     string repr() const
       {
-      return "<Healpix Base: Nside=" + dataToString(base.Nside()) +
+      return "<Healpix Base: Nside=" + to_string(base.Nside()) +
         ", Scheme=" + ((base.Scheme()==RING) ? "RING" : "NEST") +".>";
       }
 
@@ -506,11 +506,11 @@ Returns
 -------
 theta: numpy.ndarray(numpy.float64, shape=(nrings,))
     the colatitudes of all rings
-nphi: numpy.ndarray(numpy.uint64, shape=(nrings,))
+nphi: numpy.ndarray(numpy.uintp, shape=(nrings,))
     the number of pixels for every ring
 phi0: numpy.ndarray(numpy.float64, shape=(nrings,))
     the azimuth of the first pixel in every ring
-ringstart: numpy.ndarray(numpy.uint64, shape=(nrings,))
+ringstart: numpy.ndarray(numpy.uintp, shape=(nrings,))
     the index of the first pixel in every ring in a typical HEALPix map array.
 )""";
 
@@ -549,7 +549,7 @@ void add_healpix(py::module_ &msup)
     .def("npix", [](Pyhpbase &self)
       { return self.base.Npix(); }, npix_DS)
     .def("scheme", [](Pyhpbase &self)
-      { return self.base.Scheme(); }, scheme_DS)
+      { return string((self.base.Scheme()==RING) ? "RING" : "NEST"); }, scheme_DS)
     .def("pix_area", [](Pyhpbase &self)
       { return 4*pi/self.base.Npix(); }, pix_area_DS)
     .def("max_pixrad", [](Pyhpbase &self)

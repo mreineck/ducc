@@ -34,7 +34,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/error_handling.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_gl_integrator {
 
@@ -114,7 +114,7 @@ class GL_Integrator
       {
       vector<double> res(n_);
       for (size_t i=0; i<th.size(); ++i)
-        { res[i]= pi - (res[n_-1-i] = th[th.size()-1-i]); }
+        { res[i] = pi - (res[n_-1-i] = th[th.size()-1-i]); }
       return res;
       }
   };

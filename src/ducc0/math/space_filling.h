@@ -40,10 +40,10 @@
 #endif
 
 #ifdef DUCC0_USE_PDEP_PEXT
-#include <x86intrin.h>
+#include <immintrin.h>
 #endif
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 // Naming conventions
 // - 2D/3D: function works on 2D/3D integer coordinates
@@ -181,6 +181,7 @@ inline std::array<uint64_t,3> morton2coord3D_64 (uint64_t v)
   }
 #endif
 
+#if 0
 uint32_t morton2peano2D_32(uint32_t v, unsigned bits);
 uint32_t peano2morton2D_32(uint32_t v, unsigned bits);
 
@@ -192,7 +193,7 @@ uint32_t peano2morton3D_32(uint32_t v, unsigned bits);
 
 uint64_t morton2peano3D_64(uint64_t v, unsigned bits);
 uint64_t peano2morton3D_64(uint64_t v, unsigned bits);
-
+#endif
 }
 
 #endif

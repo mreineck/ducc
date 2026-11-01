@@ -31,7 +31,7 @@
 #include "ducc0/fft/fft.h"
 #include "ducc0/nufft/nufft.h"
 
-namespace ducc0 {
+namespace DUCC0_NAMESPACE {
 
 namespace detail_sht {
 
