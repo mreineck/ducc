@@ -36,6 +36,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include <numbers>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/math/math_utils.h"
 #include "ducc0/math/vec3.h"
@@ -161,9 +162,9 @@ template<typename I> class T_Healpix_Base: public Healpix_Tables
         \a ang. */
     I ang2pix (const pointing &ang) const
       {
-      const double pi_=3.141592653589793238462643383279502884197;
+      constexpr double pi_=std::numbers::pi_v<double>;
       MR_assert((ang.theta>=0)&&(ang.theta<=pi_),"invalid theta value");
-      return ((ang.theta<0.01) || (ang.theta > 3.14159-0.01)) ?
+      return ((ang.theta<0.01) || (ang.theta > pi_-0.01)) ?
         loc2pix(cos(ang.theta),ang.phi,sin(ang.theta),true) :
         loc2pix(cos(ang.theta),ang.phi,0.,false);
       }
