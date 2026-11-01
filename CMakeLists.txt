@@ -34,7 +34,7 @@ set(CXX_SOURCES
     src/ducc0/nufft/spreadinterp_inst1.cc src/ducc0/nufft/spreadinterp_inst2.cc
     src/ducc0/healpix/healpix_base.cc
     src/ducc0/math/gl_integrator.cc src/ducc0/math/pointing.cc
-    src/ducc0/math/gridding_kernel.cc src/ducc0/math/geom_utils.cc
+    src/ducc0/math/gridding_kernel.cc
     src/ducc0/math/wigner3j.cc src/ducc0/math/space_filling.cc
     src/ducc0/wgridder/wgridder_inst1.cc
     src/ducc0/wgridder/wgridder_inst2.cc src/ducc0/wgridder/wgridder_inst3.cc

@@ -70,7 +70,6 @@ sdist.include = [
     "src/ducc0/bindings/pybind_utils.h",
     "src/ducc0/math/cmplx.h",
     "src/ducc0/math/constants.h",
-    "src/ducc0/math/geom_utils.cc",
     "src/ducc0/math/geom_utils.h",
     "src/ducc0/math/gl_integrator.h",
     "src/ducc0/math/gl_integrator.cc",

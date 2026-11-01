@@ -77,19 +77,20 @@ inline double cosdist_zphi (double z1, double phi1, double z2, double phi2)
   return z1*z2+cos(phi1-phi2)*std::sqrt((1.-z1*z1)*(1.-z2*z2));
   }
 
+#if 0
 /*! Finds the smallest enclosing cone for a point set on the sphere according to
     Barequet & Elber: Information Processing Letters 93(2005), p.83.
     All points are expected to be passed as unit vectors.
     The enclosing cone must have an opening angle <pi/2. */
 void find_enclosing_circle (const std::vector<vec3> &point, vec3 &center,
   double &cosrad);
-
+#endif
 }
 
 //using detail_geom_utils::orientation;
 using detail_geom_utils::v_angle;
 using detail_geom_utils::cosdist_zphi;
-using detail_geom_utils::find_enclosing_circle;
+//using detail_geom_utils::find_enclosing_circle;
 
 }
 
