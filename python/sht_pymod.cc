@@ -37,6 +37,7 @@
 
 #include <vector>
 #include <complex>
+#include <string>
 
 namespace DUCC0_NAMESPACE {
 
@@ -2008,8 +2009,8 @@ template<typename T> class Py_sharpjob
 
     string repr() const
       {
-      return "<sharpjob_d: lmax=" + dataToString(lmax_) +
-        ", mmax=" + dataToString(mmax_) + ", npix=" + dataToString(npix_) +".>";
+      return "<sharpjob_d: lmax=" + to_string(lmax_) +
+        ", mmax=" + to_string(mmax_) + ", npix=" + to_string(npix_) +".>";
       }
 
     void set_nthreads(size_t nthreads_)

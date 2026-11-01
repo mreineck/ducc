@@ -6,7 +6,7 @@ stages:
 
 before_script:
   - apt-get update
-  - pip install build pytest-xdist
+  - pip install build pytest-xdist scipy
 
 test_gcc:
   stage: testing

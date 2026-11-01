@@ -1,6 +1,6 @@
 /** \file ducc0/infra/threading.cc
  *
- *  \copyright Copyright (C) 2019-2024 Peter Bell, Max-Planck-Society
+ *  \copyright Copyright (C) 2019-2026 Peter Bell, Max-Planck-Society
  *  \authors Peter Bell, Martin Reinecke
  */
 
@@ -56,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <exception>
 #include <utility>
+#include <latch>
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>

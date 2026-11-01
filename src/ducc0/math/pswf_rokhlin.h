@@ -44,7 +44,7 @@ constexpr int PSWF_ERROR = 42;
    of order zero (Psi_0^c) inside [-1,1], for arbitrary frequency parameter c.
    Computation is done using a basis of Legendre polynomials.
    This implementation is based on work by Libin Lu for FINUFFT.
-   The orignal implementation was done by Vladimir Rokhlin and 
+   The orignal implementation was done by Vladimir Rokhlin and
    can be found in src/common/specialfunctions/ of the DMK repo
    https://github.com/flatironinstitute/dmk */
 class PSWF0 {
@@ -266,6 +266,7 @@ private:
 
 public:
   PSWF0(double c_) : c(c_) {
+    MR_assert(c>0, "c parameter must be positive");
     prolps0i(c, workdata);
     coef.resize(workdata.size());
     for (size_t i=1; i<coef.size(); ++i)

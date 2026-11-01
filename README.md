@@ -6,7 +6,7 @@ including Fast Fourier Transforms, Spherical Harmonic Transforms, non-equispaced
 Fourier transforms, as well as some concrete applications like 4pi convolution
 on the sphere and gridding/degridding of radio interferometry data.
 
-The code is written in C++17, but provides a simple and comprehensive Python
+The code is written in C++23, but provides a simple and comprehensive Python
 interface.
 
 ### Requirements
@@ -14,12 +14,13 @@ interface.
 - [Python >= 3.8](https://www.python.org/)
 - only when compiling from source: [pybind11](https://github.com/pybind/pybind11)
 - only when compiling from source: [nanobind](https://github.com/wjakob/nanobind)
-- only when compiling from source: a C++17-capable compiler, e.g.
-  - `g++` 7 or later
-  - `clang++`
-  - MSVC 2019 or later
-  - Intel `icpx` (oneAPI compiler series). (Note that the older `icpc` compilers
-    are not supported.)
+- only when compiling from source: a C++23-capable compiler, e.g.
+  - `g++` (verified with gcc 11.2.0, earlier versions might also work)
+  - `clang++` (verified with clang++ 18.1.3, earlier versions might also work)
+  - MSVC (verified with Visual Studio Enterprise 2022, earlier versions might also work)
+  - Intel `icpx` (oneAPI compiler series,
+    verified woth icpx 2026.2, earlier versions might also work).
+    Note that the older `icpc` compilers are not supported.
 
 ### Sources
 
@@ -79,17 +80,6 @@ Additionally, pre-compiled binaries are distributed for the following systems:
 <a href="https://repology.org/project/python:ducc0/versions">
 <img src="https://repology.org/badge/vertical-allrepos/python:ducc0.svg" alt="Packaging status">
 </a>
-
-### Building only the C++ part
-
-If you want to use ducc's algorithms in a C++ code, there is a template file
-CMakeLists-C++.txt in the repository to help you integrate the library into
-your project; this will probably be revised and improved soon.
-
-Please use the C++ interface only as an internal dependency of your projects
-and do not install the ducc0 C++ library system-wide, since its interface is
-not guaranteed to be stable and in fact expected to change significantly
-in the future.
 
 <!---
 Installing multiple major versions simultaneously

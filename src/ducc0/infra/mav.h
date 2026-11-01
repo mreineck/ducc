@@ -389,16 +389,25 @@ class fmav_info
       nstr.resize(ndim-n0);
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-// FIXME: this doesn't work when working on dimensions of size 0.
-// Do we want to fix this?
-        MR_assert(slices[i].beg<shp[i], "bad subset");
-        nofs+=slices[i].beg*str[i];
-        if (slices[i].beg!=slices[i].end)
+        if (shp[i]==0)
           {
-          auto ext = slices[i].size(shp[i]);
-          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          MR_assert((slices[i].beg==0) && (slices[i].end==MAXIDX),
+            "bad subset");
+          nshp[i2]=0;
+          nstr[i2]=0;
           ++i2;
+          }
+        else
+          {
+          MR_assert(slices[i].beg<shp[i], "bad subset");
+          nofs+=slices[i].beg*str[i];
+          if (slices[i].beg!=slices[i].end)
+            {
+            auto ext = slices[i].size(shp[i]);
+            MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+            nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+            ++i2;
+            }
           }
         }
       return make_tuple(fmav_info(nshp, nstr), nofs);
@@ -589,16 +598,25 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       ptrdiff_t nofs=0;
       for (size_t i=0, i2=0; i<ndim; ++i)
         {
-// FIXME: this doesn't work when working on dimensions of size 0.
-// Do we want to fix this?
-        MR_assert(slices[i].beg<shp[i], "bad subset");
-        nofs+=slices[i].beg*str[i];
-        if (slices[i].beg!=slices[i].end)
+        if (shp[i]==0)
           {
-          auto ext = slices[i].size(shp[i]);
-          MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-          nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+          MR_assert((slices[i].beg==0) && (slices[i].end==MAXIDX),
+            "bad subset");
+          nshp[i2]=0;
+          nstr[i2]=0;
           ++i2;
+          }
+        else
+          {
+          MR_assert(slices[i].beg<shp[i], "bad subset");
+          nofs+=slices[i].beg*str[i];
+          if (slices[i].beg!=slices[i].end)
+            {
+            auto ext = slices[i].size(shp[i]);
+            MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+            nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+            ++i2;
+            }
           }
         }
       return make_tuple(mav_info_proto<Tcontainer, nd2>(nshp, nstr), nofs);
@@ -789,6 +807,7 @@ template<typename T> class vfmav: public cfmav<T>
       auto ndim = shape.size();
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
@@ -804,6 +823,7 @@ template<typename T> class vfmav: public cfmav<T>
       if (ndim<=1) return vfmav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2, UNINITIALIZED);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
@@ -814,6 +834,7 @@ template<typename T> class vfmav: public cfmav<T>
       if (ndim<=1) return vfmav(shape, page_in);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vfmav tmp(shape2, page_in);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
@@ -1029,6 +1050,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
@@ -1038,6 +1060,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       if (ndim<=1) return vmav(shape, UNINITIALIZED);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, UNINITIALIZED);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
@@ -1047,6 +1070,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       if (ndim<=1) return vmav(shape, page_in);
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, page_in);
+      if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);

@@ -1420,6 +1420,8 @@ void sanity_checks(
             (ringstart.shape(0)==nrings) &&
             (ringfactor.shape(0)==nrings),
     "inconsistency in the number of rings");
+  for (size_t i=0; i<nrings; ++i)
+    MR_assert(nphi(i)>0, "rings must have at least one pixel");
   if ((mode==DERIV1) || (mode==GRAD_ONLY))
     {
     MR_assert(spin>0, "DERIV and GRAD_ONLY modes require spin>0");

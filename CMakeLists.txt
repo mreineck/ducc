@@ -6,6 +6,8 @@ project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(DEFINED ENV{DUCC0_OPTIMIZATION})
     set (OPTFLAGS "$ENV{DUCC0_OPTIMIZATION}")
@@ -30,9 +32,9 @@ list(APPEND DEFS ${Python_DEFINITIONS})
 set(CXX_SOURCES
     src/ducc0/fft/fft_inst1.cc src/ducc0/fft/fft_inst2.cc
     src/ducc0/nufft/spreadinterp_inst1.cc src/ducc0/nufft/spreadinterp_inst2.cc
-    src/ducc0/healpix/healpix_base.cc src/ducc0/healpix/healpix_tables.cc
+    src/ducc0/healpix/healpix_base.cc
     src/ducc0/math/gl_integrator.cc src/ducc0/math/pointing.cc
-    src/ducc0/math/gridding_kernel.cc src/ducc0/math/geom_utils.cc
+    src/ducc0/math/gridding_kernel.cc
     src/ducc0/math/wigner3j.cc src/ducc0/math/space_filling.cc
     src/ducc0/wgridder/wgridder_inst1.cc
     src/ducc0/wgridder/wgridder_inst2.cc src/ducc0/wgridder/wgridder_inst3.cc
@@ -80,7 +82,7 @@ if (DEFINED ENV{DUCC0_USE_NANOBIND})
     endif()
     nanobind_add_module(${PKGNAME}
         FREE_THREADED NOSTRIP NB_SUPPRESS_WARNINGS NOMINSIZE
-        python/ducc_driver.cc python/multiarch.cc)
+        python/ducc_driver.cc)
     # The binding object libraries do not inherit the module's definitions.
     if (NB_FREE_THREADED)
         if (MULTIARCH)
@@ -106,7 +108,7 @@ else()
     find_package(pybind11 REQUIRED)
     set(INC_DIRS ${INC_DIRS} ${pybind11_INCLUDE_DIRS})
     pybind11_add_module(${PKGNAME} NO_EXTRAS
-        python/ducc_driver.cc python/multiarch.cc)
+        python/ducc_driver.cc)
 endif()
 
 if (NOT MSVC)
