@@ -33,18 +33,23 @@ static double get_beta(size_t W, double sigma)
   {
   return pi * W * (1. - 1./(2.*sigma)) - 0.05;
   }
+// rdyn estimate from FINUFFT paper (eq. 3.21)
+// Doesn't match perfectly, because it's for the ES kernel.
 static double get_rdyn(size_t W, double c, double sigma)
   {
-  PSWF0 pswf(c);
+  auto tmp = 1./(2*sigma-1);
+  return exp(c*(1.-sqrt(1.-tmp*tmp)));
+
+//  PSWF0 pswf(c);
   // Here we make use of the fact pswf(0)==1
-  return 1./pswf(pi*W/(2*sigma*c));
+//  return 1./pswf(pi*W/(2*sigma*c));
   }
 static double tol_kernel(size_t W, double sigma, size_t ndim)
   {
   // factor currently used in ducc (too conservative)
-  double tolfac = ndim;
-//  double tolfac = 0.18 * pow(1.4,(ndim - 1));
-  constexpr double nsoff=1.2;
+//  double tolfac = ndim;
+  double tolfac = 0.18 * pow(1.4,(ndim - 1));
+  constexpr double nsoff=1.5;
   return tolfac/exp((W-nsoff)*pi* sqrt(1. - 1./sigma));
   }
 static double tol_rdyn(size_t W, double sigma, size_t ndim, bool singleprec)
@@ -55,7 +60,8 @@ static double tol_rdyn(size_t W, double sigma, size_t ndim, bool singleprec)
 //  double rdyn = get_corfunc2(W, c, 0.)/get_corfunc2(W, c, 1./(2*sigma));
   double rdyn = get_rdyn(W, c, sigma);
   double epsmach = singleprec ? numeric_limits<float>::epsilon() : numeric_limits<double>::epsilon();
-  return epsmach*pow(rdyn, ndim);
+  return epsmach*rdyn*ndim;
+//  return epsmach*pow(rdyn, ndim);
   }
 static bool tol_is_reached(size_t W, double sigma, size_t ndim,
   bool singleprec, double epsilon)
@@ -67,7 +73,7 @@ static bool tol_is_reached(size_t W, double sigma, size_t ndim,
   return (t1+t2) <= epsilon;
   }
 
-double PSWF_get_best_sigma(double sigma_lo, double sigma_hi, size_t W, 
+double PSWF_get_best_sigma(double sigma_lo, double sigma_hi, size_t W,
   size_t ndim, bool singleprec, double epsilon)
   {
   if (tol_is_reached(W, sigma_lo, ndim, singleprec, epsilon))
