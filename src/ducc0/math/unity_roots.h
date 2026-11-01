@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <vector>
 #include <tuple>
+#include <numbers>
 
 namespace DUCC0_NAMESPACE {
 
@@ -65,7 +66,7 @@ using namespace std;
 template<typename T, typename Tc> class RootCalc
   {
   private:
-    static constexpr const auto pi = 3.141592653589793238462643383279502884197L;
+    static constexpr const auto pi = std::numbers::pi_v<long double>;
     using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
     size_t n;
     Thigh ang;
@@ -110,7 +111,7 @@ template<typename T, typename Tc> class RootCalc
     // alternative version, similar speed, but maybe a bit more accurate
     Tc calc(size_t x) const
       {
-      static constexpr Thigh pi = Thigh(3.141592653589793238462643383279502884197L);
+      static constexpr Thigh pi = std::numbers::pi_v<Thigh>;
       Thigh n4 = Thigh(n<<2);
 
       x<<=3;
@@ -280,7 +281,7 @@ template<typename T, typename Tc> class MultiExp
       // Check if ang0 is a clean fraction of 2*pi.
       // If yes, use RootCalc internally, because this will be
       // more accurate.
-      static constexpr T pi = T(3.141592653589793238462643383279502884197L);
+      static constexpr T pi = std::numbers::pi_v<T>;
       T frac = ang0/(2*pi);
       frac -= floor(frac);  // bring frac into [0;1] range
       // limit denominator to avoid spending too much time
