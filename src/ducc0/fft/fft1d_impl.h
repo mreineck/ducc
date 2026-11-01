@@ -264,7 +264,7 @@ template <typename Tfs> class cfftp3: public cfftpass<Tfs>
       size_t /*nthreads*/) const
       {
       constexpr Tfs tw1r=-0.5,
-                    tw1i= (fwd ? -1: 1) * Tfs(0.5)*std::numbers::sqrt3_v<Tfs>;
+                    tw1i= (fwd ? -1: 1) * Tfs(0.8660254037844386467637231707529362L); //Tfs(0.5)*std::numbers::sqrt3_v<Tfs>;
 
       auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
         { return ch[a+ido*(b+l1*c)]; };
@@ -644,7 +644,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
 
     template <bool fwd, typename T> void ROTX45(T &a) const
       {
-      constexpr Tfs hsqt2 = Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
+      constexpr Tfs hsqt2 = Tfs(0.707106781186547524400844362104849L); //Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
       if constexpr (fwd)
         { auto tmp_=a.r; a.r=hsqt2*(a.r+a.i); a.i=hsqt2*(a.i-tmp_); }
       else
@@ -652,7 +652,7 @@ template <typename Tfs> class cfftp8: public cfftpass<Tfs>
       }
     template <bool fwd, typename T> void ROTX135(T &a) const
       {
-      constexpr Tfs hsqt2 = Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
+      constexpr Tfs hsqt2 = Tfs(0.707106781186547524400844362104849L); //Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
       if constexpr (fwd)
         { auto tmp_=a.r; a.r=hsqt2*(a.i-a.r); a.i=hsqt2*(-tmp_-a.i); }
       else
@@ -1986,7 +1986,7 @@ template <typename Tfs> class rfftp3: public rfftpass<Tfs>
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/, size_t /*nthreads*/) const
       {
       constexpr Tfs taur=Tfs(-0.5),
-                    taui=Tfs(0.5)*std::numbers::sqrt3_v<Tfs>;
+                    taui=Tfs(0.8660254037844386467637231707529362L); //Tfs(0.5)*std::numbers::sqrt3_v<Tfs>;
       if constexpr(fwd)
         {
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
@@ -2095,7 +2095,7 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
       {
       if constexpr(fwd)
         {
-        constexpr Tfs hsqt2 = Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
+        constexpr Tfs hsqt2 = Tfs(0.707106781186547524400844362104849L); //Tfs(0.5)*std::numbers::sqrt2_v<Tfs>;
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
           { return cc[a+ido*(b+l1*c)]; };
         auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&
@@ -2137,7 +2137,7 @@ template <typename Tfs> class rfftp4: public rfftpass<Tfs>
         }
       else
         {
-        constexpr Tfs sqrt2 = std::numbers::sqrt2_v<Tfs>;
+        constexpr Tfs sqrt2 = Tfs(1.414213562373095048801688724209698L); //std::numbers::sqrt2_v<Tfs>;
         auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
           { return cc[a+ido*(b+ip*c)]; };
         auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&

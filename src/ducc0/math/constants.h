@@ -36,14 +36,14 @@ namespace DUCC0_NAMESPACE {
 /*! \defgroup mathconstgroup Mathematical constants */
 /*! \{ */
 
-constexpr double pi=std::numbers::pi_v<double>;
+constexpr double pi=double(3.141592653589793238462643383279502884197L); //std::numbers::pi_v<double>;
 constexpr double twopi=2*pi;
-constexpr double inv_twopi=0.5*std::numbers::inv_pi_v<double>;
+constexpr double inv_twopi=1.0/twopi; //0.5*std::numbers::inv_pi_v<double>;
 constexpr double fourpi=4*pi;
 constexpr double halfpi=0.5*pi;
-constexpr double inv_halfpi=2./pi;
-constexpr double inv_sqrt4pi = 0.5*std::numbers::inv_sqrtpi_v<double>;
-constexpr double ln2 = std::numbers::ln2_v<double>;
+constexpr double inv_halfpi=2./pi; //*std::numbers::inv_pi_v<double>;;
+constexpr double inv_sqrt4pi = 0.2820947917738781434740397257803862929220; //0.5*std::numbers::inv_sqrtpi_v<double>;
+constexpr double ln2 = 0.6931471805599453094172321214581766; //std::numbers::ln2_v<double>;
 
 #if 0
 //! Ratio between FWHM and sigma of a Gaussian (\f$\sqrt{8\ln2}\f$).

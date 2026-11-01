@@ -543,7 +543,7 @@ template<typename T0> class T_dct1
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
       {
-      constexpr T0 sqrt2=std::numbers::sqrt2_v<T0>;
+      constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L); //std::numbers::sqrt2_v<T0>;
       size_t N=fftplan.length(), n=N/2+1;
       if (ortho)
         { c[0]*=sqrt2; c[n-1]*=sqrt2; }
@@ -633,7 +633,7 @@ template<typename T0> class T_dcst23
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int type, bool cosine, size_t nthreads=1) const
       {
-      constexpr T0 sqrt2=std::numbers::sqrt2_v<T0>;
+      constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L); //std::numbers::sqrt2_v<T0>;
       size_t N=length();
       size_t NS2 = (N+1)/2;
       if (type==2)
@@ -768,7 +768,7 @@ template<typename T0> class T_dcst4
         {
         auto SGN = [](size_t i)
            {
-           constexpr T0 sqrt2=std::numbers::sqrt2_v<T0>;
+           constexpr T0 sqrt2=T0(1.414213562373095048801688724209698L); //std::numbers::sqrt2_v<T0>;
            return (i&2) ? -sqrt2 : sqrt2;
            };
         c[n2] = res[0]*SGN(n2+1);
