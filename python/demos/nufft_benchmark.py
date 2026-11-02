@@ -44,7 +44,6 @@ class Bench12:
         # precision
         print("computing reference results with high precision ...")
         eps = 1.0001*ducc0.nufft.bestEpsilon(ndim=ndim, singleprec=False)
-        eps = 3e-15*ndim
         self._res_fiducial_1 = ducc0.nufft.nu2u(
             points=self._points.astype(np.complex128),
             coord=self._coord.astype(np.float64),
@@ -426,7 +425,7 @@ def runbench3(npoints_in, npoints_out, minmax_in, minmax_out, nthreads, fname, s
 
 singleprec = False
 # FINUFFT benchmarks, analogous to figures 6.1-6.3 in the 2018 paper
-if True:
+if False:
     runbench12((   1000000,),  10000000, 1, "finufft_1d_serial.png"  , singleprec)
     runbench12(( 1000,1000,),  10000000, 1, "finufft_2d_serial.png"  , singleprec)
     runbench12((100,100,100),  10000000, 1, "finufft_3d_serial.png"  , singleprec)

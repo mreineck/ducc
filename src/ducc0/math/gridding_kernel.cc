@@ -104,8 +104,8 @@ double bestEpsilon(size_t ndim, bool singleprec,
   double ofactor_min, double ofactor_max)
   {
   MR_assert((ndim>=1) && (ndim<=3), "bad dimensionality");
-//FIXME!
-return 0;
+// FIXME: crude guess.
+  return (singleprec ? 2.4e-7 : 3e-15) * ndim;
   }
 
 }}
