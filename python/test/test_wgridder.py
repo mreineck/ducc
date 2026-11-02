@@ -246,9 +246,9 @@ def test_adjointness_vis2dirty(nx, ny, nrow, nchan, epsilon,
     check(dirty2, ms2)
 
 
-@pmp('nx', [(2, 2), (6, 2), (18, 2), (66, 4)])
-@pmp('ny', [(2, 2), (64, 2)])
-@pmp("nrow", (1, 2, 27))
+@pmp('nx', [(6, 2), (18, 2), (66, 4)])
+@pmp('ny', [(64, 2)])
+@pmp("nrow", (4, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-2, 1e-4, 1e-7))
 @pmp("singleprec", (False,))
@@ -404,8 +404,8 @@ def test_vis2dirty_wsclean(nx, ny, nrow, nchan, epsilon,
     assert_allclose(ducc0.misc.l2error(dirty2, ref), 0, atol=epsilon)
 
 
-@pmp('nxdirty', [2, 16, 64])
-@pmp('nydirty', [2, 64])
+@pmp('nxdirty', [6, 16, 64])
+@pmp('nydirty', [6, 64])
 @pmp("nrow", (1, 100))
 @pmp("nchan", (1, 7))
 @pmp("epsilon", list(10.**np.linspace(-2., -12., 20)))

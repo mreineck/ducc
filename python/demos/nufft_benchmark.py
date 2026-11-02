@@ -44,6 +44,7 @@ class Bench12:
         # precision
         print("computing reference results with high precision ...")
         eps = 1.0001*ducc0.nufft.bestEpsilon(ndim=ndim, singleprec=False)
+        eps = 3e-15*ndim
         self._res_fiducial_1 = ducc0.nufft.nu2u(
             points=self._points.astype(np.complex128),
             coord=self._coord.astype(np.float64),

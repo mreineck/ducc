@@ -35,7 +35,7 @@ static double get_beta(size_t W, double sigma)
   }
 // rdyn estimate from FINUFFT paper (eq. 3.21)
 // Doesn't match perfectly, because it's for the ES kernel.
-static double get_rdyn(size_t W, double c, double sigma)
+static double get_rdyn(size_t /*W*/, double c, double sigma)
   {
   auto tmp = 1./(2*sigma-1);
   return exp(c*(1.-sqrt(1.-tmp*tmp)));
@@ -47,10 +47,12 @@ static double get_rdyn(size_t W, double c, double sigma)
 static double tol_kernel(size_t W, double sigma, size_t ndim)
   {
   // factor currently used in ducc (too conservative)
-//  double tolfac = ndim;
-  double tolfac = 0.18 * pow(1.4,(ndim - 1));
-  constexpr double nsoff=1.5;
-  return tolfac/exp((W-nsoff)*pi* sqrt(1. - 1./sigma));
+  double tolfac = ndim;
+//  double tolfac = 0.18 * pow(1.4,(ndim - 1));
+  constexpr double nsoff=0;//1.5;
+
+double fudgefactor=3.5/sqrt(ndim);
+  return tolfac/exp((W-nsoff)*pi* sqrt(1. - 1./sigma))*fudgefactor;
   }
 static double tol_rdyn(size_t W, double sigma, size_t ndim, bool singleprec)
   {
@@ -60,8 +62,8 @@ static double tol_rdyn(size_t W, double sigma, size_t ndim, bool singleprec)
 //  double rdyn = get_corfunc2(W, c, 0.)/get_corfunc2(W, c, 1./(2*sigma));
   double rdyn = get_rdyn(W, c, sigma);
   double epsmach = singleprec ? numeric_limits<float>::epsilon() : numeric_limits<double>::epsilon();
-  return epsmach*rdyn*ndim;
-//  return epsmach*pow(rdyn, ndim);
+//  return epsmach*rdyn*ndim;
+  return epsmach*pow(rdyn, ndim);
   }
 static bool tol_is_reached(size_t W, double sigma, size_t ndim,
   bool singleprec, double epsilon)
