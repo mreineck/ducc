@@ -25,7 +25,7 @@
 /*! \file pointing.h
  *  Class representing a direction in 3D space
  *
- *  Copyright (C) 2003-2021 Max-Planck-Society
+ *  Copyright (C) 2003-2026 Max-Planck-Society
  *  \author Martin Reinecke
  */
 
@@ -35,6 +35,8 @@
 #include <cmath>
 #include <iostream>
 #include "ducc0/math/vec3.h"
+#include "ducc0/math/constants.h"
+#include "ducc0/math/math_utils.h"
 
 namespace DUCC0_NAMESPACE {
 
@@ -64,18 +66,43 @@ class pointing
     explicit operator vec3() const
       { return to_vec3(); }
     /// Returns a normalized vector pointing in the same direction.
-    vec3 to_vec3() const;
+    vec3 to_vec3() const
+      {
+      double st=std::sin(theta);
+      return vec3 (st*std::cos(phi), st*std::sin(phi), std::cos(theta));
+      }
     /// Converts \a inp to \a ptg. \a inp need not be normalized.
-    void from_vec3 (const vec3 &inp);
+    void from_vec3 (const vec3 &inp)
+      {
+      theta = std::atan2(sqrt(inp.x*inp.x+inp.y*inp.y),inp.z);
+      phi = safe_atan2 (inp.y,inp.x);
+      if (phi<0.) phi += twopi;
+      }
     /// Changes the angles so that \a 0<=theta<=pi.
-    void normalize_theta();
+    void normalize_theta()
+      {
+      theta=fmodulo(theta,twopi);
+      if (theta>pi)
+        {
+        phi+=pi;
+        theta=twopi-theta;
+        }
+      }
     /// Changes the angles so that \a 0<=theta<=pi and \a 0<=phi<2*pi.
-    void normalize();
+    void normalize()
+      {
+      normalize_theta();
+      phi=fmodulo(phi,twopi);
+      }
   };
 
 /// Writes \a p to \a os.
 /// \relates pointing
-std::ostream &operator<< (std::ostream &os, const pointing &p);
+inline std::ostream &operator<< (std::ostream &os, const pointing &p)
+  {
+  os << p.theta << ", " << p.phi << std::endl;
+  return os;
+  }
 
 /*! \} */
 

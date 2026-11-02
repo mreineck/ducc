@@ -55,6 +55,7 @@ auto wigner3j_checks_and_sizes(double l2, double l3, double m2, double m3)
   {
   MR_assert (l2>=abs(m2),"l2<abs(m2)");
   MR_assert (l3>=abs(m3),"l3<abs(m3)");
+// FIXME: if only half-integers are allowed, check for those!
   MR_assert (intcheck(l2+abs(m2)),"l2+abs(m2) is not integer");
   MR_assert (intcheck(l3+abs(m3)),"l3+abs(m3) is not integer");
   const double m1 = -m2 -m3;
