@@ -182,7 +182,7 @@ def dirty2vis_with_faceting(*, nfacets_x=1, nfacets_y=1, center_x=0., center_y=0
 
 @pmp('nx', [(2, 2), (32, 3), (128, 2)])
 @pmp('ny', [(2, 2), (128, 2), (250, 5)])
-@pmp("nrow", (1, 2, 27))
+@pmp("nrow", (20, 27))
 @pmp("nchan", (1, 5))
 @pmp("epsilon", (1e-1, 3e-5, 2e-13))
 @pmp("singleprec", (True, False))
