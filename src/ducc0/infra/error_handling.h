@@ -76,6 +76,8 @@ class CodeLocation
   public:
     CodeLocation(const std::source_location &loc_)
       : loc(loc_) {}
+    CodeLocation(std::source_location &&loc_)
+      : loc(loc_) {}
 
     inline ::std::ostream &print(::std::ostream &os) const
       {
