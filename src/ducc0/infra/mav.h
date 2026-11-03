@@ -1300,19 +1300,15 @@ template<typename Func, typename Ttuple>
 template<typename Func, typename... Targs>
   void mav_apply(Func &&func, int nthreads, Targs... args)
   {
-  vector<fmav_info> infos;
-  (infos.push_back(args), ...);
-  vector<size_t> tsizes;
-  (tsizes.push_back(sizeof(args.data()[0])), ...);
-  auto [shp, str, block0, block1] = multiprep(infos, tsizes);
+  auto [shp, str, block0, block1] = multiprep({args...},
+    {sizeof(args.data()[0])...});
   bool last_contiguous = true;
   if (shp.size()>0)
     for (const auto &s:str)
       last_contiguous &= (s.back()==1);
 
-  auto ptrs = tuple_transform(forward_as_tuple(args...),
-    [](auto &&arg){return arg.data();});
-  applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
+  applyHelper(shp, str, block0, block1, make_tuple(args.data()...),
+    std::forward<Func>(func), nthreads, last_contiguous);
   }
 
 template<typename ReduceType, typename Ttuple, typename Func>
@@ -1423,20 +1419,16 @@ template<typename ReduceType, typename Func, typename Ttuple>
 template<typename ReduceType, typename Func, typename... Targs>
   ReduceType mav_apply_reduce(Func &&func, int nthreads, Targs... args)
   {
-  vector<fmav_info> infos;
-  (infos.push_back(args), ...);
-  vector<size_t> tsizes;
-  (tsizes.push_back(sizeof(args.data()[0])), ...);
-  auto [shp, str, block0, block1] = multiprep(infos, tsizes);
+  auto [shp, str, block0, block1] = multiprep({args...},
+    {sizeof(args.data()[0])...});
   bool last_contiguous = true;
   if (shp.size()>0)
     for (const auto &s:str)
       last_contiguous &= (s.back()==1);
 
-  auto ptrs = tuple_transform(forward_as_tuple(args...),
-    [](auto &&arg){return arg.data();});
-  return applyReduceHelper<ReduceType>(shp, str, block0, block1, ptrs,
-    std::forward<Func>(func), nthreads, last_contiguous);
+  return applyReduceHelper<ReduceType>(shp, str, block0, block1,
+    make_tuple(args.data()...), std::forward<Func>(func), nthreads,
+    last_contiguous);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
@@ -1500,14 +1492,10 @@ template<typename Func, typename Ttuple>
 template<typename Func, typename... Targs>
   void mav_apply_with_index(Func &&func, int nthreads, Targs... args)
   {
-  vector<fmav_info> infos;
-  (infos.push_back(args), ...);
-  auto [shp, str] = multiprep_noopt(infos);
+  auto [shp, str] = multiprep_noopt({args...});
   vector<size_t> index(shp.size(), 0);
-
-  auto ptrs = tuple_transform(forward_as_tuple(args...),
-    [](auto &&arg){return arg.data();});
-  applyHelper_with_index(shp, str, ptrs, std::forward<Func>(func), nthreads, index);
+  applyHelper_with_index(shp, str, make_tuple(args.data()...),
+    std::forward<Func>(func), nthreads, index);
   }
 
 
