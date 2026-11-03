@@ -1209,108 +1209,6 @@ template<typename Ttuple, typename Func>
     }
   }
 
-template<typename Ttuple, typename Func>
-  DUCC0_NOINLINE void applyHelper_block(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, size_t bsi, size_t bsj,
-    const Ttuple &ptrs, Func &&func)
-  {
-  auto leni=shp[idim], lenj=shp[idim+1];
-  size_t nbi = (leni+bsi-1)/bsi;
-  size_t nbj = (lenj+bsj-1)/bsj;
-  const auto stri = get_strides<Ttuple>(str, idim),
-             strj = get_strides<Ttuple>(str, idim+1);
-  for (size_t bi=0; bi<nbi; ++bi)
-    for (size_t bj=0; bj<nbj; ++bj)
-      {
-      auto locptrs(ptrs);
-      advance_by_n(locptrs, str, idim, bi*bsi);
-      advance_by_n(locptrs, str, idim+1, bj*bsj);
-      for (size_t i=bi*bsi; i<min(leni, (bi+1)*bsi); ++i, advance(locptrs, stri))
-        {
-        auto locptrs2(locptrs);
-        for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, strj))
-          apply(func, to_ref(locptrs2));
-        }
-      }
-  }
-
-template<typename Ttuple, typename Func>
-  inline void applyHelper_leaf(size_t idim, size_t len,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    bool last_contiguous)
-  {
-  auto locptrs(ptrs);
-  if (last_contiguous)
-    for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
-      apply(func, to_ref(locptrs));
-  else
-    {
-    const auto locstr = get_strides<Ttuple>(str, idim);
-    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-      apply(func, to_ref(locptrs));
-    }
-  }
-template<typename Ttuple, typename Func>
-  DUCC0_NOINLINE void applyHelper(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
-    const Ttuple &ptrs, Func &&func, bool last_contiguous)
-  {
-  auto len = shp[idim];
-  if ((idim+2==shp.size()) && (block0!=0))  // we should do blocking
-    applyHelper_block(idim, shp, str, block0, block1, ptrs, func);
-  else if (idim+2==shp.size())  // avoid a function call for every short row
-    {
-    auto locptrs(ptrs);
-    const auto locstr = get_strides<Ttuple>(str, idim);
-    for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-      applyHelper_leaf(idim+1, shp[idim+1], str, locptrs, func, last_contiguous);
-    }
-  else if (idim+1<shp.size())
-    for (size_t i=0; i<len; ++i)
-      applyHelper(idim+1, shp, str, block0, block1, update_pointers(ptrs, str, idim, i),
-        func, last_contiguous);
-  else
-    applyHelper_leaf(idim, len, str, ptrs, func, last_contiguous);
-  }
-template<typename Func, typename Ttuple>
-  inline void applyHelper(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, size_t block0, size_t block1,
-    const Ttuple &ptrs, Func &&func, size_t nthreads, bool last_contiguous)
-  {
-  if (shp.size()==0)
-    apply(std::forward<Func>(func), to_ref(ptrs));
-  else if (nthreads==1)
-    applyHelper(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous);
-  else
-    {
-    size_t naxes = parallel_naxes(shp, adjust_nthreads(nthreads), block0);
-    execParallel(leading_size(shp, naxes), nthreads, [&](size_t lo, size_t hi)
-      {
-      for_each_work_chunk(shp, str, ptrs, naxes, lo, hi,
-        [&](size_t idim, const vector<size_t> &locshp, const Ttuple &locptrs,
-          const vector<size_t> &/*pos*/)
-        {
-        applyHelper(idim, locshp, str, block0, block1, locptrs, func,
-          last_contiguous);
-        });
-      });
-    }
-  }
-
-template<typename Func, typename... Targs>
-  void mav_apply(Func &&func, int nthreads, Targs... args)
-  {
-  auto [shp, str, block0, block1] = multiprep({args...},
-    {sizeof(args.data()[0])...});
-  bool last_contiguous = true;
-  if (shp.size()>0)
-    for (const auto &s:str)
-      last_contiguous &= (s.back()==1);
-
-  applyHelper(shp, str, block0, block1, make_tuple(args.data()...),
-    std::forward<Func>(func), nthreads, last_contiguous);
-  }
-
 template<typename ReduceType, typename Ttuple, typename Func>
   DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim,
     const vector<size_t> &shp, const vector<vector<ptrdiff_t>> &str,
@@ -1429,6 +1327,14 @@ template<typename ReduceType, typename Func, typename... Targs>
   return applyReduceHelper<ReduceType>(shp, str, block0, block1,
     make_tuple(args.data()...), std::forward<Func>(func), nthreads,
     last_contiguous);
+  }
+
+struct NoReduction { void reduceWith(NoReduction) {} };
+template<typename Func, typename... Targs>
+  void mav_apply(Func &&func, int nthreads, Targs... args)
+  {
+  mav_apply_reduce<NoReduction>([&func](auto &... refs)
+    { func(refs...); return NoReduction(); }, nthreads, std::move(args)...);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
