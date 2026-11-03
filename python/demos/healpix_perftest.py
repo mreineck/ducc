@@ -11,7 +11,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright(C) 2019-2020 Max-Planck-Society
+# Copyright(C) 2019-2026 Max-Planck-Society
 
 
 import time
@@ -40,11 +40,11 @@ def dummy(vlen):
     _ = np.zeros(vlen, dtype=np.int64)
 
 
-def genperf(func, fname, inp, vlen, ntry, nside, isnest):
+def genperf(func, fname, inp, vlen, ntry, nside, isnest, out=None):
     cnt = 0
     t = time.time()
     while cnt < ntry:
-        func(inp)
+        func(inp, out=out)
         cnt += 1
     t = time.time()-t
     p = (vlen*ntry)/t
@@ -53,44 +53,51 @@ def genperf(func, fname, inp, vlen, ntry, nside, isnest):
 
 def perf_pix2ang(vlen, ntry, nside, isnest):
     inp = random_pix(nside, vlen)
+    out = np.ones((vlen,2))
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.pix2ang, "pix2ang", inp, vlen, ntry, nside, isnest)
+    genperf(base.pix2ang, "pix2ang", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_ang2pix(vlen, ntry, nside, isnest):
     inp = random_ptg(vlen)
+    out = np.ones((vlen,),dtype=np.int64)
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.ang2pix, "ang2pix", inp, vlen, ntry, nside, isnest)
+    genperf(base.ang2pix, "ang2pix", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_pix2vec(vlen, ntry, nside, isnest):
     inp = random_pix(nside, vlen)
+    out = np.ones((vlen,3))
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.pix2vec, "pix2vec", inp, vlen, ntry, nside, isnest)
+    genperf(base.pix2vec, "pix2vec", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_vec2pix(vlen, ntry, nside, isnest):
     inp = ph.ang2vec(random_ptg(vlen))
+    out = np.ones((vlen,),dtype=np.int64)
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.vec2pix, "vec2pix", inp, vlen, ntry, nside, isnest)
+    genperf(base.vec2pix, "vec2pix", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_ring2nest(vlen, ntry, nside, isnest):
     inp = random_pix(nside, vlen)
+    out = np.ones((vlen,),dtype=np.int64)
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.ring2nest, "ring2nest", inp, vlen, ntry, nside, isnest)
+    genperf(base.ring2nest, "ring2nest", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_nest2ring(vlen, ntry, nside, isnest):
     inp = random_pix(nside, vlen)
+    out = np.ones((vlen,),dtype=np.int64)
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.nest2ring, "nest2ring", inp, vlen, ntry, nside, isnest)
+    genperf(base.nest2ring, "nest2ring", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def perf_neighbors(vlen, ntry, nside, isnest):
     inp = random_pix(nside, vlen)
+    out = np.ones((vlen,8),dtype=np.int64)
     base = ph.Healpix_Base(nside, "NEST" if isnest else "RING")
-    genperf(base.neighbors, "neighbors", inp, vlen, ntry, nside, isnest)
+    genperf(base.neighbors, "neighbors", inp, vlen, ntry, nside, isnest, out=out)
 
 
 def suite(vlen, ntry, nside, isnest):
