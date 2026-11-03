@@ -634,6 +634,7 @@ double ofactor;
       auto krn2 = PSWF_selectKernel(supp, ofactor);
       const auto &corr(krn2->Corr());
       fact_out.assign(vmav<complex<Tpoints>,1>({coord_out.shape(0)}));
+//FIXME: use PSWF directly for correction, and/or accelerate approximation eval
       FunctionApproximator<double> corfunc2(-0.01,1./ofactor+0.01,supp,supp+3,[&](double x) { return corr.template corfunc<double>(x); });
       execStatic(coord_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)
         {
@@ -793,6 +794,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   }
 
   timers.poppush("output post-phasing and deconvolution");
+//FIXME: use PSWF directly for correction, and/or accelerate approximation eval
   FunctionApproximator<double> corfunc2(-0.01,1./ofactor+0.01,supp,supp+3,[&](double x) { return corr.template corfunc<double>(x); });
   execStatic(points_out.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out,dims=dims](auto &sched)
     {
