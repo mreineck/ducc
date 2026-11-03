@@ -1106,78 +1106,41 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
 template<typename Ttuple> constexpr inline size_t tuplelike_size()
   { return tuple_size_v<remove_reference_t<Ttuple>>; }
 
-template <typename Func, typename Ttuple, size_t... I>
-inline void call_with_tuple_impl(Func &&func, const Ttuple& tuple,
-  index_sequence<I...>)
-  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
-template<typename Func, typename Ttuple> inline void call_with_tuple
-  (Func &&func, Ttuple &&tuple)
-  {
-  call_with_tuple_impl(std::forward<Func>(func), tuple,
-                       make_index_sequence<tuplelike_size<Ttuple>()>());
-  }
-template <typename Func, typename Ttuple, size_t... I>
-inline void call_with_tuple2_impl(Func &&func, const Ttuple& tuple,
-  index_sequence<I...>)
-  { func(get<I>(tuple)...); }
-template<typename Func, typename Ttuple> inline void call_with_tuple2
-  (Func &&func, Ttuple &&tuple)
-  {
-  call_with_tuple2_impl(std::forward<Func>(func), tuple,
-                        make_index_sequence<tuplelike_size<Ttuple>()>());
-  }
-
-template<typename...Ts, typename Func, size_t... Is>
-inline auto tuple_transform_impl(tuple<Ts...> const& inputs, Func &&func,
-  index_sequence<Is...>)
-  { return tuple<invoke_result_t<Func,Ts>...>{func(get<Is>(inputs))...}; }
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
-  return tuple_transform_impl(inputs, std::forward<Func>(func),
-                              make_index_sequence<sizeof...(Ts)>{});
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { return tuple<invoke_result_t<Func,Ts>...>{func(get<Is>(inputs))...}; };
+  return impl(make_index_sequence<sizeof...(Ts)>{});
   }
-template<typename...Ts, typename Func, size_t... Is>
-inline void tuple_for_each_impl(tuple<Ts...> &tpl, Func &&func,
-  index_sequence<Is...>)
-  { (func(get<Is>(tpl)), ...); }
 template<typename... Ts, typename Func>
 inline void tuple_for_each(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { (func(get<Is>(tpl)), ...); };
+  impl(make_index_sequence<sizeof...(Ts)>{});
   }
-template<typename...Ts, typename Func, size_t... Is>
-inline void tuple_for_each_impl(const tuple<Ts...> &tpl, Func &&func,
-  index_sequence<Is...>)
-  { (func(get<Is>(tpl)), ...); }
 template<typename... Ts, typename Func>
 inline void tuple_for_each(const tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
-  }
-
-template<typename...Ts, typename Func, size_t... Is>
-inline auto tuple_transform_idx_impl(const tuple<Ts...> &inputs,
-   Func &&func, index_sequence<Is...>)
-  {
-  return tuple<invoke_result_t<Func, Ts, int>...>
-    {func(get<Is>(inputs), Is)...};
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { (func(get<Is>(tpl)), ...); };
+  impl(make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename... Ts, typename Func>
 inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Func &&func)
   {
-  return tuple_transform_idx_impl(inputs, std::forward<Func>(func),
-                                  make_index_sequence<sizeof...(Ts)>{});
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { return tuple<invoke_result_t<Func, Ts, int>...>{func(get<Is>(inputs), Is)...}; };
+  return impl(make_index_sequence<sizeof...(Ts)>{});
   }
-template<typename...Ts, typename Func, size_t... Is>
-inline void tuple_for_each_idx_impl(tuple<Ts...> &tpl, Func &&func,
-  index_sequence<Is...>)
-  { (func(get<Is>(tpl), Is), ...); }
 template<typename... Ts, typename Func>
 inline void tuple_for_each_idx(tuple<Ts...> &tpl, Func &&func)
   {
-  tuple_for_each_idx_impl(tpl, std::forward<Func>(func), make_index_sequence<sizeof...(Ts)>{});
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { (func(get<Is>(tpl), Is), ...); };
+  impl(make_index_sequence<sizeof...(Ts)>{});
   }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
@@ -1194,9 +1157,7 @@ template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &ptrs,
 
 template<typename Ttuple> inline Ttuple update_pointers_contiguous (const Ttuple &ptrs,
   size_t i)
-  {
-  return tuple_transform(ptrs, [i](auto &&ptr) { return ptr+i; });
-  }
+  { return tuple_transform(ptrs, [i](auto &&ptr) { return ptr+i; }); }
 template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
   { tuple_for_each(ptrs, [](auto &&ptr) { ++ptr; }); }
 template<typename Ttuple, size_t N> inline void advance (Ttuple &ptrs,
@@ -1291,7 +1252,7 @@ template<typename Ttuple, typename Func>
         {
         auto locptrs2(locptrs);
         for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, strj))
-          call_with_tuple(func, to_ref(locptrs2));
+          apply(func, to_ref(locptrs2));
         }
       }
   }
@@ -1304,12 +1265,12 @@ template<typename Ttuple, typename Func>
   auto locptrs(ptrs);
   if (last_contiguous)
     for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
-      call_with_tuple(func, to_ref(locptrs));
+      apply(func, to_ref(locptrs));
   else
     {
     const auto locstr = get_strides<Ttuple>(str, idim);
     for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-      call_with_tuple(func, to_ref(locptrs));
+      apply(func, to_ref(locptrs));
     }
   }
 template<typename Ttuple, typename Func>
@@ -1340,7 +1301,7 @@ template<typename Func, typename Ttuple>
     const Ttuple &ptrs, Func &&func, size_t nthreads, bool last_contiguous)
   {
   if (shp.size()==0)
-    call_with_tuple(std::forward<Func>(func), to_ref(ptrs));
+    apply(std::forward<Func>(func), to_ref(ptrs));
   else if (nthreads==1)
     applyHelper(0, shp, str, block0, block1, ptrs, std::forward<Func>(func), last_contiguous);
   else
@@ -1377,15 +1338,12 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
-template <typename ReduceType, typename Func, typename Ttuple, size_t... I>
-inline ReduceType call_reduce_with_tuple_impl(Func &&func, const Ttuple& tuple,
-  index_sequence<I...>)
-  { return func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))...); }
 template<typename ReduceType, typename Func, typename Ttuple> inline ReduceType call_reduce_with_tuple
   (Func &&func, Ttuple &&tuple)
   {
-  return call_reduce_with_tuple_impl<ReduceType>(std::forward<Func>(func), tuple,
-                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { return func(std::forward<typename tuple_element<Is, Ttuple>::type>(get<Is>(tuple))...); };
+  return impl(make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template<typename ReduceType, typename Ttuple, typename Func>
   DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim,
@@ -1515,15 +1473,12 @@ template<typename ReduceType, typename Func, typename... Targs>
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   multiprep_noopt(const vector<fmav_info> &info);
 
-template <typename Func, typename Arg, typename Ttuple, size_t... I>
-inline void call_with_tuple_arg_impl(Func &&func, Arg &&arg, const Ttuple& tuple,
-  index_sequence<I...>)
-  { func(std::forward<typename tuple_element<I, Ttuple>::type>(get<I>(tuple))..., arg); }
 template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
   (Func &&func, Arg &&arg, Ttuple &&tuple)
   {
-  call_with_tuple_arg_impl(std::forward<Func>(func), arg, tuple,
-                       make_index_sequence<tuplelike_size<Ttuple>()>());
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { func(std::forward<typename tuple_element<Is, Ttuple>::type>(get<Is>(tuple))..., arg); };
+  impl(make_index_sequence<tuplelike_size<Ttuple>()>());
   }
 template<typename Ttuple, typename Func>
   DUCC0_NOINLINE void applyHelper_with_index(size_t idim, const vector<size_t> &shp,
@@ -1629,16 +1584,13 @@ template<typename T, size_t ndim>
   mavref<T, ndim> make_mavref(const mav_info<ndim> &info_, T *d_)
   { return mavref<T, ndim>(info_, d_); }
 
-template<typename...Ts, typename ...Qs, typename Func, size_t... Is>
-inline auto tuple_transform2_impl(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
-  Func &&func, index_sequence<Is...>)
-  { return tuple<invoke_result_t<Func, Ts, Qs>...>{func(get<Is>(i1),get<Is>(i2))...}; }
 template<typename... Ts, typename ...Qs, typename Func>
 inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
   Func &&func)
   {
-  return tuple_transform2_impl(i1, i2, std::forward<Func>(func),
-                               make_index_sequence<sizeof...(Ts)>{});
+  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
+    { return tuple<invoke_result_t<Func, Ts, Qs>...>{func(get<Is>(i1),get<Is>(i2))...}; };
+  return impl(make_index_sequence<sizeof...(Ts)>{});
   }
 template<typename Tptrs, typename Tinfos>
   auto make_mavrefs(const Tptrs &ptrs, const Tinfos &infos)
@@ -1680,7 +1632,7 @@ template<typename Tptrs, typename Tinfos, typename Func>
       flexible_mav_applyHelper(idim+1, shp, str, locptrs, infos, func);
   else
     for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-      call_with_tuple2(func, make_mavrefs(locptrs, infos));
+      apply(func, make_mavrefs(locptrs, infos));
   }
 template<typename Tptrs, typename Tinfos, typename Func>
   DUCC0_NOINLINE void flexible_mav_applyHelper(const vector<size_t> &shp,
@@ -1688,7 +1640,7 @@ template<typename Tptrs, typename Tinfos, typename Func>
     const Tinfos &infos, Func &&func, size_t nthreads)
   {
   if (shp.size()==0)
-    call_with_tuple2(func, make_mavrefs(ptrs, infos));
+    apply(func, make_mavrefs(ptrs, infos));
   else if (nthreads==1)
     flexible_mav_applyHelper(0, shp, str, ptrs, infos, std::forward<Func>(func));
   else
