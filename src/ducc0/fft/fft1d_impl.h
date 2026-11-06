@@ -61,6 +61,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <memory>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <algorithm>
 #include <functional>
@@ -178,6 +179,10 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
       void * /*buf*/, bool /*fwd*/, size_t /*nthreads*/) const
       { return in; }
   };
+
+// ---------------------------------------------------------------------------
+// Compile-time generated radix codelets and the SoA single-transform driver
+// ---------------------------------------------------------------------------
 
 /* static_for<N>(f) calls f(integral_constant<size_t,I>()) for I=0..N-1. The
    lambdas must be inlined unconditionally: in large functions GCC left them
@@ -312,6 +317,72 @@ template<size_t R, bool fwd, typename Tfs, typename V>
     }
   }
 
+/* Lane shuffles on SIMD types: lane P of the result is lane F(P) of the
+   concatenation of a and b. The index patterns are constexpr functions, not
+   lambdas, because clang does not accept constants of an enclosing lambda
+   inside a lambda used as template argument. */
+template<auto F, typename Tfv> DUCC0_ALWAYS_INLINE Tfv shuf(const Tfv &a, const Tfv &b)
+  {
+#if defined(__GNUC__) || defined(__clang__)
+  typedef typename Tfv::value_type G __attribute__((vector_size(sizeof(Tfv))));
+  return [&]<size_t... P>(index_sequence<P...>)
+    { return bit_cast<Tfv>(__builtin_shufflevector(bit_cast<G>(a), bit_cast<G>(b), F(P)...)); }
+    (make_index_sequence<Tfv::size()>());
+#else
+  constexpr size_t n = Tfv::size();
+  Tfv res;
+  for (size_t p=0; p<n; ++p) res[p] = (F(p)<n) ? a[F(p)] : b[F(p)-n];
+  return res;
+#endif
+  }
+constexpr size_t sh_even(size_t i) { return 2*i; }
+constexpr size_t sh_odd(size_t i) { return 2*i+1; }
+template<size_t n> constexpr size_t sh_zip_lo(size_t i) { return (i&1) ? n+i/2 : i/2; }
+template<size_t n> constexpr size_t sh_zip_hi(size_t i) { return (i&1) ? n+n/2+i/2 : n/2+i/2; }
+template<size_t b, size_t n> constexpr size_t sh_tr_lo(size_t p) { return (p&b) ? p-b+n : p; }
+template<size_t b, size_t n> constexpr size_t sh_tr_hi(size_t p) { return (p&b) ? p+n : p+b; }
+// vlen consecutive complex numbers in memory <-> one SIMD complex number
+template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE Cmplx<Tfv> vload(const Cmplx<Tfs> *p)
+  {
+  constexpr size_t vlen = Tfv::size();
+  auto q = reinterpret_cast<const Tfs *>(p);
+  Tfv a(q, element_aligned_tag()), b(q+vlen, element_aligned_tag());
+  return {shuf<sh_even>(a,b), shuf<sh_odd>(a,b)};
+  }
+template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vstore(const Cmplx<Tfv> &x, Cmplx<Tfs> *p)
+  {
+  constexpr size_t vlen = Tfv::size();
+  auto q = reinterpret_cast<Tfs *>(p);
+  shuf<sh_zip_lo<vlen>>(x.r, x.i).copy_to(q, element_aligned_tag());
+  shuf<sh_zip_hi<vlen>>(x.r, x.i).copy_to(q+vlen, element_aligned_tag());
+  }
+// transpose a vlen x vlen block of numbers held in vlen SIMD values (real or complex)
+template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Tfv,vlen> &v)
+  {
+  static_for<countr_zero(vlen)>([&](auto sc) DUCC0_LAMBDA_INLINE
+    {
+    constexpr size_t b = size_t(1)<<decltype(sc)::value;
+    static_for<vlen>([&](auto ic) DUCC0_LAMBDA_INLINE
+      {
+      constexpr size_t i = decltype(ic)::value;
+      if constexpr ((i&b)==0)
+        {
+        auto a=v[i], c=v[i+b];
+        v[i]   = shuf<sh_tr_lo<b,vlen>>(a,c);
+        v[i+b] = shuf<sh_tr_hi<b,vlen>>(a,c);
+        }
+      });
+    });
+  }
+template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Cmplx<Tfv>,vlen> &v)
+  {
+  array<Tfv,vlen> re, im;
+  static_for<vlen>([&](auto k) DUCC0_LAMBDA_INLINE{ re[k]=v[k].r; im[k]=v[k].i; });
+  transpose(re); transpose(im);
+  static_for<vlen>([&](auto k) DUCC0_LAMBDA_INLINE{ v[k]={re[k],im[k]}; });
+  }
+
+
 /* Radix-R pass, with the DFT of length R generated at compile time. Indexing
    as in FFTPACK: input cc[i+ido*(j+R*k)], output ch[i+ido*(k+l1*j)], where
    output j>0 is multiplied by the twiddle w^(l1*i*j). */
@@ -367,6 +438,76 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass<Tfs>
     virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
+  };
+
+/* Single 1-D transform of length N=vlen*M, SIMD over the whole transform:
+   x[l+vlen*i] is put into lane l of SIMD element i, the M-point transforms of
+   all lanes run with the ordinary passes, then for blocks of vlen outputs
+   the lanes are twiddled, transposed and combined by a vlen-point DFT. */
+template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
+  {
+  private:
+    using typename cfftpass<Tfs>::Tcs;
+    using Tfv = typename simd_select<Tfs,vlen>::type;
+    using Tcv = Cmplx<Tfv>;
+    size_t N, M;
+    Tcpass<Tfs> mpass;
+    aligned_array<Tcv> tw;  // lane l of tw[k] holds w_N^(l*k)
+    size_t bufsz;
+
+    template<bool fwd> Tcs *exec_(Tcs *cc, Tcs * /*ch*/, Tcs *sbuf, size_t nthreads) const
+      {
+      auto xbuf = reinterpret_cast<uintptr_t>(sbuf);
+      xbuf = (xbuf+alignof(Tcv)-1) & ~uintptr_t(alignof(Tcv)-1);
+      Tcv *cc2 = reinterpret_cast<Tcv *>(xbuf), *ch2 = cc2+M, *buf2 = ch2+M;
+      for (size_t i=0; i<M; ++i)
+        cc2[i] = vload<Tfv>(cc+vlen*i);
+      static const auto ticv = tidx<Tcv *>();
+      auto res = static_cast<Tcv *>(mpass->exec(ticv, cc2, ch2, buf2, fwd, nthreads));
+      auto block = [&](size_t b)
+        {
+        array<Tcv,vlen> x;
+        static_for<vlen>([&](auto t) DUCC0_LAMBDA_INLINE{ x[t] = res[b+t].template special_mul<fwd>(tw[b+t]); });
+        transpose(x);
+        dft<vlen,fwd,Tfs>(x);
+        static_for<vlen>([&](auto k2) DUCC0_LAMBDA_INLINE{ vstore(x[k2], cc+b+M*k2); });
+        };
+      size_t b=0;
+      for (; b+vlen<=M; b+=vlen) block(b);
+      if (b<M) block(M-vlen);  // recompute an overlapping last block
+      return cc;
+      }
+
+  public:
+    cfftp_soa(size_t n, const Troots<Tfs> &roots)
+      : N(n), M(n/vlen), mpass(cfftpass<Tfs>::make_pass(1,1,M,roots)), tw(M)
+      {
+      MR_assert((N==M*vlen) && (M>=vlen), "bad length for cfftp_soa");
+      size_t rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      for (size_t k=0; k<M; ++k)
+        for (size_t l=0; l<vlen; ++l)
+          {
+          auto w = (*roots)[rfct*((l*k)%N)];
+          tw[k].r[l] = w.r; tw[k].i[l] = w.i;
+          }
+      bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen;  // in units of Tcs
+      }
+    virtual size_t bufsize() const { return bufsz; }
+    virtual bool needs_copy() const { return false; }
+    virtual size_t footprint() const
+      { return tw.size()*sizeof(Tcv)+mpass->footprint(); }
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads=1) const
+      {
+      static const auto tics = tidx<Tcs *>();
+      MR_assert(ti==tics, "bad input type");
+      auto in1 = static_cast<Tcs *>(in);
+      auto copy1 = static_cast<Tcs *>(copy);
+      auto buf1 = static_cast<Tcs *>(buf);
+      return fwd ? exec_<true>(in1, copy1, buf1, nthreads)
+                 : exec_<false>(in1, copy1, buf1, nthreads);
+      }
   };
 
 template <typename Tfs> class cfftpg: public cfftpass<Tfs>
@@ -1086,89 +1227,6 @@ MR_fail("must not get here");
 
 #undef POCKETFFT_EXEC_DISPATCH
 
-template <size_t vlen, typename Tfs> class cfftp_vecpass: public cfftpass<Tfs>
-  {
-  private:
-    static_assert(simd_exists<Tfs, vlen>, "bad vlen");
-    using typename cfftpass<Tfs>::Tcs;
-    using Tfv=typename simd_select<Tfs, vlen>::type;
-    using Tcv=Cmplx<Tfv>;
-
-    size_t ip;
-    Tcpass<Tfs> spass;
-    Tcpass<Tfs> vpass;
-    size_t bufsz;
-
-    template<bool fwd> Tcs *exec_ (Tcs *cc,
-      Tcs * /*ch*/, Tcs *sbuf, size_t nthreads) const
-      {
-      char *xbuf = reinterpret_cast<char *>(sbuf);
-      size_t misalign = reinterpret_cast<size_t>(xbuf)&(sizeof(Tfv)-1);
-      if (misalign != 0)
-        xbuf += sizeof(Tfv)-misalign;
-      Tcv *buf = reinterpret_cast<Tcv *>(xbuf);
-      auto * cc2 = buf;
-      auto * ch2 = buf+ip/vlen+7;
-      auto * buf2 = buf+2*ip/vlen+7+7;
-      static const auto tics = tidx<Tcs *>();
-// run scalar pass
-      auto res = static_cast<Tcs *>(spass->exec(tics, cc,
-        reinterpret_cast<Tcs *>(ch2), reinterpret_cast<Tcs *>(buf2),
-        fwd, nthreads));
-// arrange input in SIMD-friendly way, must be done out-of-place
-      for (size_t i=0; i<ip/vlen; ++i)
-        {
-        Tcv tmp;
-        for (size_t j=0; j<vlen; ++j)
-          {
-          size_t idx = j*(ip/vlen) + i;
-          tmp.r[j] = res[idx].r;
-          tmp.i[j] = res[idx].i;
-          }
-        cc2[i] = tmp;
-        }
-// run vector pass
-      static const auto ticv = tidx<Tcv *>();
-      auto res2 = static_cast<Tcv *>(vpass->exec(ticv,
-        cc2, ch2, buf2, fwd, nthreads));
-// de-SIMDify, can be done pseudo-inplace
-      for (size_t i=0; i<ip/vlen; ++i)
-        {
-        Tcv tmp = res2[i];
-        for (size_t j=0; j<vlen; ++j)
-          cc[i*vlen+j] = Tcs(tmp.r[j], tmp.i[j]);
-        }
-      return cc;
-      }
-
-  public:
-    cfftp_vecpass(size_t ip_, const Troots<Tfs> &roots)
-      : ip(ip_), spass(cfftpass<Tfs>::make_pass(1, ip/vlen, vlen, roots)),
-        vpass(cfftpass<Tfs>::make_pass(1, 1, ip/vlen, roots)), bufsz(0)
-      {
-      MR_assert((ip/vlen)*vlen==ip, "cannot vectorize this size");
-      bufsz = 2*(ip/vlen)+7+7;
-      bufsz += max(vpass->bufsize(),(spass->bufsize()+vlen-1)/vlen); // buffers for subpasses
-      bufsz *= vlen; // since we specify in terms of Tcs
-      bufsz += vlen; // wiggle room for alignment shifts
-      }
-    virtual size_t bufsize() const { return bufsz; }
-    virtual bool needs_copy() const { return false; }
-    virtual size_t footprint() const
-      { return spass->footprint()+vpass->footprint(); }
-    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
-      bool fwd, size_t nthreads=1) const
-      {
-      static const auto tics = tidx<Tcs *>();
-      MR_assert(ti==tics, "bad input type");
-      auto in1 = static_cast<Tcs *>(in);
-      auto copy1 = static_cast<Tcs *>(copy);
-      auto buf1 = static_cast<Tcs *>(buf);
-      return fwd ? exec_<true>(in1, copy1, buf1, nthreads)
-                 : exec_<false>(in1, copy1, buf1, nthreads);
-      }
-  };
-
 } // unnamed namespace
 
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
@@ -1176,14 +1234,17 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   // do we have an 1D vectorizable FFT?
-  if (vectorize && (ip>300)&& (ip<=100000) && (l1==1) && (ido==1))
+  if (vectorize && (l1==1) && (ido==1))
     {
-//    constexpr auto vlen = native_simd<Tfs>::size();
-//    if constexpr(vlen>=4)
-    constexpr auto vlen = 4;
-    if constexpr(simd_exists<Tfs,vlen>)
-      if ((ip&(vlen-1))==0)
-        return make_shared<cfftp_vecpass<vlen,Tfs>>(ip, roots);
+    Tcpass<Tfs> res;
+    static_for<3>([&](auto s) DUCC0_LAMBDA_INLINE
+      {
+      constexpr size_t vl = fft1d_simdlen<Tfs> >> decltype(s)::value;
+      if constexpr ((vl>=2) && simd_exists<Tfs,vl>)
+        if ((!res) && (ip%vl==0) && (ip>=max<size_t>(vl*vl,16)))  // below 16 the plain codelet is faster
+          res = make_shared<cfftp_soa<vl,Tfs>>(ip, roots);
+      });
+    if (res) return res;
     }
 
   if (ip==1) return make_shared<cfftp1<Tfs>>();

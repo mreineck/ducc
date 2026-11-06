@@ -1435,7 +1435,9 @@ template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
   // special treatment for long 1D transforms (Bailey's algorithm)
   // TODO:
   //  - if not in-place and out has no critical stride, the "tmp" array can be avoided
-  if ((in.ndim()==1) && (in.shape(0)>=65536*2))
+  // (the SIMD single-transform plan is faster for lengths divisible by 16,
+  //  but it runs on one thread, so the 2-D route keeps multithreading)
+  if ((in.ndim()==1) && (in.shape(0)>=65536*2) && (((in.shape(0)&15)!=0) || (nthreads>1)))
     {
     size_t ip = in.shape(0);
     auto factors = util1d::prime_factors(ip);
