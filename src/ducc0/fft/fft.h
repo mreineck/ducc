@@ -187,6 +187,13 @@ template <typename Tfs> class cfftpass
     virtual bool needs_copy() const = 0;
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const = 0;
+    // passes that can also work on data split into real and imaginary
+    // planes (Tfs values, imaginary parts at in+N resp. out+N); the input or
+    // the output may instead be interleaved complex numbers (iin, iout)
+    virtual bool planar() const { return false; }
+    virtual void exec_planar(const Tfs * /*in*/, Tfs * /*out*/, bool /*fwd*/,
+      bool /*iin*/, bool /*iout*/) const
+      { MR_fail("pass cannot work on planar data"); }
 
     static vector<size_t> factorize(size_t N)
       {
