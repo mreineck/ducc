@@ -1445,19 +1445,12 @@ template<typename T, size_t ndim>
   mavref<T, ndim> make_mavref(const mav_info<ndim> &info_, T *d_)
   { return mavref<T, ndim>(info_, d_); }
 
-template<typename... Ts, typename ...Qs, typename Func>
-inline auto tuple_transform2(const tuple<Ts...> &i1, const tuple<Qs...> &i2,
-  Func &&func)
-  {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { return tuple<invoke_result_t<Func, Ts, Qs>...>{func(get<Is>(i1),get<Is>(i2))...}; };
-  return impl(make_index_sequence<sizeof...(Ts)>{});
-  }
 template<typename Tptrs, typename Tinfos>
   auto make_mavrefs(const Tptrs &ptrs, const Tinfos &infos)
   {
-  return tuple_transform2(ptrs, infos, [](auto &&ptr, auto &&info)
-    { return make_mavref(info, ptr); });
+  return [&]<size_t... Is>(index_sequence<Is...>)
+    { return make_tuple(make_mavref(get<Is>(infos), get<Is>(ptrs))...); }
+    (make_index_sequence<tuple_size_v<Tptrs>>{});
   }
 
 template<size_t ndim> auto make_infos(const fmav_info &info)
@@ -1517,46 +1510,18 @@ template<typename Tptrs, typename Tinfos, typename Func>
     }
   }
 
-template<size_t ndim> struct Xdim { static constexpr size_t dim=ndim; };
-
-template<typename Ttuple, typename Tdim, typename Func>
-  void xflexible_mav_apply(const Ttuple &tuple, const Tdim &dim, Func &&func, size_t nthreads)
+template<size_t... nds, typename Func, typename... Targs>
+  void flexible_mav_apply(Func &&func, size_t nthreads, const Targs &... args)
   {
-  auto fullinfos = tuple_transform2(tuple, dim, [](const auto &arg, const auto &dim)
-                                    { return make_infos<remove_reference_t<decltype(dim)>::dim>(fmav_info(arg)); });
-  vector<fmav_info> iter_infos;
-  tuple_for_each(fullinfos,[&iter_infos](const auto &entry){iter_infos.push_back(get<0>(entry));});
-  auto [shp, str] = multiprep(iter_infos);
-
-  auto infos2 = tuple_transform(fullinfos, [](const auto &arg)
-                                { return get<1>(arg); });
-  auto ptrs = tuple_transform(tuple, [](auto &&arg){return arg.data();});
-  flexible_mav_applyHelper(shp, str, ptrs, infos2, std::forward<Func>(func), nthreads);
-  }
-
-template<size_t nd0, typename T0, typename Func>
-  void flexible_mav_apply(Func &&func, size_t nthreads, T0 &&m0)
-  {
-  xflexible_mav_apply(forward_as_tuple(m0),
-                      forward_as_tuple(Xdim<nd0>()),
-                      std::forward<Func>(func), nthreads);
-  }
-
-template<size_t nd0, size_t nd1, typename T0, typename T1, typename Func>
-  void flexible_mav_apply(Func &&func, size_t nthreads, T0 &&m0, T1 &&m1)
-  {
-  xflexible_mav_apply(forward_as_tuple(m0, m1),
-                      forward_as_tuple(Xdim<nd0>(), Xdim<nd1>()),
-                      std::forward<Func>(func), nthreads);
-  }
-
-template<size_t nd0, size_t nd1, size_t nd2,
-         typename T0, typename T1, typename T2, typename Func>
-  void flexible_mav_apply(Func &&func, size_t nthreads, T0 &&m0, T1 &&m1, T2 &&m2)
-  {
-  xflexible_mav_apply(forward_as_tuple(m0, m1, m2),
-                      forward_as_tuple(Xdim<nd0>(), Xdim<nd1>(), Xdim<nd2>()),
-                      std::forward<Func>(func), nthreads);
+  static_assert(sizeof...(nds)==sizeof...(Targs),
+    "need exactly one dimensionality per array argument");
+  auto fullinfos = make_tuple(make_infos<nds>(fmav_info(args))...);
+  auto [shp, str] = apply([](const auto &... fi)
+    { return multiprep({get<0>(fi)...}); }, fullinfos);
+  auto infos = tuple_transform(fullinfos, [](const auto &fi)
+    { return get<1>(fi); });
+  flexible_mav_applyHelper(shp, str, make_tuple(args.data()...), infos,
+    std::forward<Func>(func), nthreads);
   }
 
 }
