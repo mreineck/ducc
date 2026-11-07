@@ -680,8 +680,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       }
     cfmav transpose(const shape_t &axes) const
       {
-      return cfmav(static_cast<const tinfo *>(this)->transpose(axes),
-                   *static_cast<const tbuf *>(this));
+      return cfmav(tinfo::transpose(axes), *this);
       }
   };
 
@@ -736,7 +735,6 @@ template<typename T> class vfmav: public cfmav<T>
       { return data()[i]; }
 
     // no-op. Needed for template tricks.
-    using cfmav<T>::to_fmav;
     vfmav to_fmav() const { return *this; }
 
     void assign(const vfmav &other)
@@ -790,8 +788,7 @@ template<typename T> class vfmav: public cfmav<T>
       }
     vfmav transpose(const shape_t &axes) const
       {
-      return vfmav(static_cast<const tinfo *>(this)->transpose(axes),
-                  *static_cast<const tbuf *>(this));
+      return vfmav(tinfo::transpose(axes), *this);
       }
   };
 
@@ -891,18 +888,17 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       }
     cmav transpose(const shape_t &axes) const
       {
-      return cmav(static_cast<const tinfo *>(this)->transpose(axes),
-                 *static_cast<const tbuf *>(this));
+      return cmav(tinfo::transpose(axes), *this);
       }
     cmav<T, ndim+1> prepend_1() const
       {
-      return cmav<T, ndim+1>(static_cast<const tinfo *>(this)->prepend_1(), *static_cast<const tbuf *>(this));
+      return cmav<T, ndim+1>(tinfo::prepend_1(), *this);
       }
     template<size_t ndim2> cmav<T, ndim2> reinterpret
       (const typename cmav<T, ndim2>::shape_t &newshp,
        const typename cmav<T, ndim2>::stride_t &newstr) const
       {
-      return cmav<T, ndim2>(*static_cast<const tbuf *>(this), newshp, newstr);
+      return cmav<T, ndim2>(*this, newshp, newstr);
       }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
@@ -958,7 +954,6 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
       }
     // Needed for template tricks.
-    using cmav<T, ndim>::to_fmav;
     vfmav<T> to_fmav() const { return operator vfmav<T>(); }
 
     template<typename... Ns> T &operator()(Ns... ns) const
@@ -999,18 +994,17 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       }
     vmav transpose(const shape_t &axes) const
       {
-      return vmav(static_cast<const tinfo *>(this)->transpose(axes),
-                 *static_cast<const tbuf *>(this));
+      return vmav(tinfo::transpose(axes), *this);
       }
     vmav<T, ndim+1> prepend_1() const
       {
-      return vmav<T, ndim+1>(static_cast<const tinfo *>(this)->prepend_1(), *static_cast<const tbuf *>(this));
+      return vmav<T, ndim+1>(tinfo::prepend_1(), *this);
       }
     template<size_t ndim2> vmav<T, ndim2> reinterpret
       (const typename vmav<T, ndim2>::shape_t &newshp,
        const typename vmav<T, ndim2>::stride_t &newstr) const
       {
-      return vmav<T, ndim2>(*static_cast<const tbuf *>(this), newshp, newstr);
+      return vmav<T, ndim2>(*this, newshp, newstr);
       }
   };
 
@@ -1046,7 +1040,7 @@ inline void tuple_for_each_idx(Ttuple &tpl, Func &&func)
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
   {
-  return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; });
+  return tuple_transform(tuple, [](auto &&ptr) -> auto & { return *ptr; });
   }
 
 
