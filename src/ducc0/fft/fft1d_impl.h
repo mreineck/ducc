@@ -459,7 +459,11 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       {
       auto xbuf = reinterpret_cast<uintptr_t>(sbuf);
       xbuf = (xbuf+alignof(Tcv)-1) & ~uintptr_t(alignof(Tcv)-1);
-      Tcv *cc2 = reinterpret_cast<Tcv *>(xbuf), *ch2 = cc2+M, *buf2 = ch2+M;
+      Tcv *cc2 = reinterpret_cast<Tcv *>(xbuf);
+      cc2 += skew(cc, cc2);
+      Tcv *ch2 = cc2+M;
+      ch2 += skew(cc2, ch2);
+      Tcv *buf2 = ch2+M;
       for (size_t i=0; i<M; ++i)
         cc2[i] = vload<Tfv>(cc+vlen*i);
       static const auto ticv = tidx<Tcv *>();
@@ -491,7 +495,7 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
           auto w = (*roots)[rfct*((l*k)%N)];
           tw[k].r[l] = w.r; tw[k].i[l] = w.i;
           }
-      bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen;  // in units of Tcs
+      bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen + 2*4096/sizeof(Tcs);  // in units of Tcs
       }
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return false; }

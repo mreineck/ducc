@@ -58,6 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #include <typeindex>
 #include <memory>
+#include <cstdint>
 #include <vector>
 #include <complex>
 #include <algorithm>
@@ -271,26 +272,35 @@ template <typename Tfs> class rfftpass
 template<typename T> using Tcpass = shared_ptr<cfftpass<T>>;
 template<typename T> using Trpass = shared_ptr<rfftpass<T>>;
 
+/* Buffers that the passes ping-pong between must not lie at a multiple of
+   4 KB from each other: the loads of one butterfly then alias the stores of
+   the previous one in the low address bits (measured on Zen 4: the twiddled
+   radix-8 pass takes 3x longer). skew() picks the offset into a scratch
+   buffer that puts it half a page away; bufsize() reserves the page. */
+template<typename T> size_t skew(const void *data, const T *buf)
+  {
+  auto d = (reinterpret_cast<uintptr_t>(buf) - reinterpret_cast<uintptr_t>(data)) & 4095;
+  return ((2048+4096-d) & 4095) / sizeof(T);
+  }
 template<typename Tfs> class pocketfft_c
   {
   private:
     size_t N;
-    size_t critbuf;
     Tcpass<Tfs> plan;
 
   public:
     explicit pocketfft_c(size_t n, bool vectorize=false)
-      : N(n), critbuf(((N&1023)==0) ? 16 : 0),
-        plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
+      : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
-    size_t bufsize() const { return N*plan->needs_copy()+2*critbuf+plan->bufsize(); }
+    size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize()+4096/sizeof(Cmplx<Tfs>); }
     size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
       static const auto tic = tidx<Cmplx<Tfd> *>();
+      auto ch = buf+skew(in, buf);
       auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tic,
-        in, buf+critbuf+plan->bufsize(), buf+critbuf, fwd, nthreads));
+        in, ch, ch+N*plan->needs_copy(), fwd, nthreads));
       if (fct!=Tfs(1))
         for (size_t i=0; i<N; ++i) res[i]*=fct;
       return res;
@@ -299,8 +309,9 @@ template<typename Tfs> class pocketfft_c
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
       static const auto tic = tidx<Cmplx<Tfd> *>();
+      auto ch = buf+skew(in, buf);
       auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tic,
-        in, buf, buf+N*plan->needs_copy(), fwd, nthreads));
+        in, ch, ch+N*plan->needs_copy(), fwd, nthreads));
       if (res==in)
         {
         if (fct!=Tfs(1))
@@ -316,7 +327,7 @@ template<typename Tfs> class pocketfft_c
       }
     template<typename Tfd> DUCC0_NOINLINE void exec(Cmplx<Tfd> *in, Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      aligned_array<Cmplx<Tfd>> buf(N*plan->needs_copy()+plan->bufsize());
+      aligned_array<Cmplx<Tfd>> buf(bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
