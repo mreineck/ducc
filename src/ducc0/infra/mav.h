@@ -1456,12 +1456,10 @@ template<typename ReduceType, typename Func, typename... Targs>
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   multiprep_noopt(const vector<fmav_info> &info);
 
-template<typename Func, typename Arg, typename Ttuple> inline void call_with_tuple_arg
-  (Func &&func, Arg &&arg, Ttuple &&tuple)
+template<typename Func, typename Ttuple> inline void call_with_index
+  (Func &&func, const vector<size_t> &index, Ttuple &&tuple)
   {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { func(std::forward<typename tuple_element<Is, Ttuple>::type>(get<Is>(tuple))..., arg); };
-  impl(make_index_sequence<tuplelike_size<Ttuple>()>());
+  apply([&](auto &... r){ func(r..., index); }, tuple);
   }
 template<typename Ttuple, typename Func>
   DUCC0_NOINLINE void applyHelper_with_index(size_t idim, const vector<size_t> &shp,
@@ -1483,7 +1481,7 @@ template<typename Ttuple, typename Func>
     const auto locstr = get_strides<Ttuple>(str, idim);
     auto idxbak = index[idim];
     for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, locstr))
-      call_with_tuple_arg(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
+      call_with_index(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
     index[idim] = idxbak;
     }
   }
@@ -1493,7 +1491,7 @@ template<typename Func, typename Ttuple>
     size_t nthreads, vector<size_t> &index)
   {
   if (shp.size()==0)
-    call_with_tuple_arg(std::forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
+    call_with_index(std::forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
   else if (nthreads==1)
     applyHelper_with_index(0, shp, str, ptrs, std::forward<Func>(func), index);
   else
