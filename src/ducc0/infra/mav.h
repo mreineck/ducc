@@ -281,15 +281,15 @@ class fmav_info
     ptrdiff_t idx(const shape_t &ns) const
       {
       MR_assert(ndim()==ns.size(), "incorrect number of indices");
-      size_t res = 0;
-      for (size_t i=0; i<ndim(); ++i) res += str[i]*ns[i];
+      ptrdiff_t res = 0;
+      for (size_t i=0; i<ndim(); ++i) res += str[i]*ptrdiff_t(ns[i]);
       return res;
       }
     template<typename RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
       {
       MR_assert(ndim()==size_t(end-beg), "incorrect number of indices");
-      size_t res = 0;
-      for (size_t i=0; i<ndim(); ++i, ++beg) res += str[i]* (*beg);
+      ptrdiff_t res = 0;
+      for (size_t i=0; i<ndim(); ++i, ++beg) res += str[i]* ptrdiff_t(*beg);
       return res;
       }
     /// Returns the common broadcast shape of *this and \a shp2
