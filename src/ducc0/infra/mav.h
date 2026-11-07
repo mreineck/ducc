@@ -57,6 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <array>
+#include <span>
 #include <vector>
 #include <memory>
 #include <numeric>
@@ -185,6 +186,18 @@ struct slice
     }
   };
 
+// C-contiguous strides for shape \a shp, written to \a str
+inline void shape2stride(span<const size_t> shp, span<ptrdiff_t> str)
+  {
+  MR_assert(shp.size()==str.size(), "dimensions mismatch");
+  ptrdiff_t stride=1;
+  for (size_t i=shp.size(); i>0; --i)
+    {
+    str[i-1]=stride;
+    stride*=ptrdiff_t(shp[i-1]);
+    }
+  }
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -201,14 +214,8 @@ class fmav_info
 
     static stride_t shape2stride(const shape_t &shp)
       {
-      auto ndim = shp.size();
-      // MR using the static_cast just to avoid a GCC warning.
-//      stride_t res(ndim);
-      stride_t res(static_cast<int>(ndim));
-      if (ndim==0) return res;
-      res[ndim-1]=1;
-      for (size_t i=2; i<=ndim; ++i)
-        res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
+      stride_t res(shp.size());
+      detail_mav::shape2stride(shp, res);
       return res;
       }
     template<typename... Ns> ptrdiff_t getIdx(size_t dim, size_t n, Ns... ns) const
@@ -431,11 +438,8 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
 
     static stride_t shape2stride(const shape_t &shp)
       {
-      stride_t res;
-      if constexpr (ndim==0) return res;
-      res[ndim-1]=1;
-      for (size_t i=2; i<=ndim; ++i)
-        res[ndim-i] = res[ndim-i+1]*ptrdiff_t(shp[ndim-i+1]);
+      stride_t res{};
+      detail_mav::shape2stride(shp, res);
       return res;
       }
     template<typename... Ns> ptrdiff_t getIdx(size_t dim, size_t n, Ns... ns) const
