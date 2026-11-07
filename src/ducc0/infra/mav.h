@@ -1109,31 +1109,20 @@ template<typename Ttuple> constexpr inline size_t tuplelike_size()
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { return tuple<invoke_result_t<Func,Ts>...>{func(get<Is>(inputs))...}; };
-  return impl(make_index_sequence<sizeof...(Ts)>{});
-  }
-template<typename... Ts, typename Func>
-inline void tuple_for_each(tuple<Ts...> &tpl, Func &&func)
-  {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { (func(get<Is>(tpl)), ...); };
-  impl(make_index_sequence<sizeof...(Ts)>{});
-  }
-template<typename... Ts, typename Func>
-inline void tuple_for_each(const tuple<Ts...> &tpl, Func &&func)
-  {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { (func(get<Is>(tpl)), ...); };
-  impl(make_index_sequence<sizeof...(Ts)>{});
+  return apply([&](auto &&... a)
+    { return tuple<invoke_result_t<Func, Ts>...>{func(a)...}; }, inputs);
   }
 
-template<typename... Ts, typename Func>
-inline void tuple_for_each_idx(tuple<Ts...> &tpl, Func &&func)
+template<typename Ttuple, typename Func>
+inline void tuple_for_each(Ttuple &tpl, Func &&func)
   {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { (func(get<Is>(tpl), Is), ...); };
-  impl(make_index_sequence<sizeof...(Ts)>{});
+  apply([&](auto &... a){ (func(a), ...); }, tpl);
+  }
+
+template<typename Ttuple, typename Func>
+inline void tuple_for_each_idx(Ttuple &tpl, Func &&func)
+  {
+  apply([&](auto &... a){ size_t i=0; (func(a, i++), ...); }, tpl);
   }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
