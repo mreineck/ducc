@@ -1129,13 +1129,6 @@ inline void tuple_for_each(const tuple<Ts...> &tpl, Func &&func)
   }
 
 template<typename... Ts, typename Func>
-inline auto tuple_transform_idx(const tuple<Ts...> &inputs, Func &&func)
-  {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { return tuple<invoke_result_t<Func, Ts, int>...>{func(get<Is>(inputs), Is)...}; };
-  return impl(make_index_sequence<sizeof...(Ts)>{});
-  }
-template<typename... Ts, typename Func>
 inline void tuple_for_each_idx(tuple<Ts...> &tpl, Func &&func)
   {
   auto impl = [&]<size_t... Is>(index_sequence<Is...>)
@@ -1155,9 +1148,6 @@ template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &ptrs,
                              { return ptr + i*str[idx][idim]; });
   }
 
-template<typename Ttuple> inline Ttuple update_pointers_contiguous (const Ttuple &ptrs,
-  size_t i)
-  { return tuple_transform(ptrs, [i](auto &&ptr) { return ptr+i; }); }
 template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
   { tuple_for_each(ptrs, [](auto &&ptr) { ++ptr; }); }
 template<typename Ttuple, size_t N> inline void advance (Ttuple &ptrs,
