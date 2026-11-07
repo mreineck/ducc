@@ -424,34 +424,56 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass<Tfs>
        does not rely on the compiler's vectorization of the loop over i (it
        failed for radix 5 and for the blocked twiddles), but takes the
        explicit SIMD path of the planar passes with interleaved data. */
-    template<bool fwd, typename Tcd> DUCC0_NOINLINE Tcd *exec_ (const Tcd * DUCC0_RESTRICT cc,
-      Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
+    template<bool fwd, typename Tcd> DUCC0_NOINLINE Tcd *exec_ (Tcd *cc, Tcd *ch,
+      Tcd * /*buf*/, size_t /*nthreads*/) const
       {
       if constexpr (is_same_v<Tcd,Tcs>)  // scalar data: explicit SIMD over i, as for planes
         {
         exec_planar_<fwd,true,true>(reinterpret_cast<const Tfs *>(cc), reinterpret_cast<Tfs *>(ch));
         return ch;
         }
-      const Tfs * DUCC0_RESTRICT wp = w.data();  // tells the compiler: ch does not alias w
-      for (size_t k=0; k<l1; ++k)
+      else
         {
+        if (cc==ch)  // SIMD data, requested by the caller: in place, only possible for l1==1
           {
-          array<Tcd,R> x;
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[ido*(j+R*k)]; });
-          dft<R,fwd,Tfs>(x);
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ ch[ido*(k+l1*j)]=x[j]; });
+          MR_assert(l1==1, "in-place pass needs l1==1");
+          for (size_t i=0; i<ido; ++i)  // every butterfly reads and writes the same places
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            cc[i]=x[0];
+            const Tfs *wp = w.data()+wi(i,0);
+            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+              { cc[i+ido*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
+            }
+          return cc;
           }
-        for (size_t i=1; i<ido; ++i)
+        const size_t so = ido*l1;
+        for (size_t k=0; k<l1; ++k)
           {
-          array<Tcd,R> x;
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*(j+R*k)]; });
-          dft<R,fwd,Tfs>(x);
-          ch[i+ido*k]=x[0];
-          static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
-            { ch[i+ido*(k+l1*(j+1))]=x[j+1].template special_mul<fwd>(Tcs(wp[wi(i,j)], wp[wi(i,j)+vl])); });
+          // few base pointers: otherwise the compiler runs out of registers for them
+          const Tcd * DUCC0_RESTRICT cck = cc+ido*R*k;
+          Tcd * DUCC0_RESTRICT chk = ch+ido*k;
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ chk[so*j]=x[j]; });
+            }
+          for (size_t i=1; i<ido; ++i)
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[i+ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            chk[i]=x[0];
+            const Tfs *wp = w.data()+wi(i,0);
+            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+              { chk[i+so*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
+            }
           }
+        return ch;
         }
-      return ch;
       }
 
     // one (V=Tfs) or vl consecutive (V=SIMD) complex values at idx, from/to
@@ -1056,11 +1078,16 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
             }
         static const auto tic=tidx<Tc *>();
         Tc *p1=cc, *p2=ch;
+        // With an odd number of codelet passes the result would end up in ch;
+        // the first pass can run in place on SIMD data (requested by cc==ch),
+        // which is faster and leaves the result in cc.
+        bool first_inplace = planar && (passes.size()&1) && (passes.size()>1) && (!is_same_v<T,Tfs>);
         for(const auto &pass: passes)
           {
-          auto res = static_cast<Tc *>(pass->exec(tic, p1, p2, buf,
+          auto res = static_cast<Tc *>(pass->exec(tic, p1, first_inplace ? p1 : p2, buf,
             fwd, nthreads));
           if (res==p2) swap (p1,p2);
+          first_inplace = false;
           }
         return p1;
         }
