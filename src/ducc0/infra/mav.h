@@ -771,7 +771,7 @@ template<typename T> class vfmav: public cfmav<T>
     using cfmav<T>::prefetch_r;
     template<typename... Ns> void prefetch_w(Ns... ns) const
       { cmembuf<T>::prefetch_w(idx(ns...)); }
-    void prefetch_r(const shape_t &ns) const
+    void prefetch_w(const shape_t &ns) const
       { cmembuf<T>::prefetch_w(idx(ns)); }
 
     vfmav subarray(const vector<slice> &slices) const
