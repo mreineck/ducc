@@ -1141,12 +1141,6 @@ template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
   return tuple_transform(tuple,[](auto &&ptr) -> typename std::add_lvalue_reference_t<decltype(*ptr)>{ return *ptr; });
   }
 
-template<typename Ttuple> inline Ttuple update_pointers (const Ttuple &ptrs,
-  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t i)
-  {
-  return tuple_transform_idx(ptrs, [i,idim,&str](auto &&ptr, size_t idx)
-                             { return ptr + i*str[idx][idim]; });
-  }
 
 template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
   { tuple_for_each(ptrs, [](auto &&ptr) { ++ptr; }); }
@@ -1162,6 +1156,13 @@ template<typename Ttuple> inline void advance_by_n (Ttuple &ptrs,
   tuple_for_each_idx(ptrs, [idim,n,&str](auto &&ptr, size_t idx)
                      { ptr += n*str[idx][idim]; });
   }
+template<typename Ttuple> inline Ttuple update_pointers (Ttuple ptrs,
+  const vector<vector<ptrdiff_t>> &str, size_t idim, size_t i)
+  {
+  advance_by_n(ptrs, str, idim, i);
+  return ptrs;
+  }
+
 template<typename Ttuple> inline auto get_strides
   (const vector<vector<ptrdiff_t>> &str, size_t idim)
   {
