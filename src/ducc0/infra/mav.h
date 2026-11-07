@@ -1160,7 +1160,7 @@ template<typename Ttuple, typename Func>
       }
     size_t n=min(hi-lo, shp[idim]-pos[idim]);
     locshp[idim] = n;
-    func(idim, locshp, locptrs, pos);
+    func(idim, locshp, locptrs);
     lo += n;
     }
   }
@@ -1255,8 +1255,7 @@ template<typename ReduceType, typename Func, typename Ttuple>
       {
       ReduceType local_rt;
       for_each_work_chunk(shp, str, ptrs, naxes, lo, hi,
-        [&](size_t idim, const vector<size_t> &locshp, const Ttuple &locptrs,
-          const vector<size_t> &/*pos*/)
+        [&](size_t idim, const vector<size_t> &locshp, const Ttuple &locptrs)
         {
         local_rt.reduceWith(applyReduceHelper<ReduceType>(idim, locshp, str,
           block0, block1, locptrs, func, last_contiguous));
@@ -1291,73 +1290,6 @@ template<typename Func, typename... Targs>
   {
   mav_apply_reduce<NoReduction>([&func](auto &... refs)
     { func(refs...); return NoReduction(); }, nthreads, std::move(args)...);
-  }
-
-DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
-  multiprep_noopt(const vector<fmav_info> &info);
-
-template<typename Func, typename Ttuple> inline void call_with_index
-  (Func &&func, const vector<size_t> &index, Ttuple &&tuple)
-  {
-  apply([&](auto &... r){ func(r..., index); }, tuple);
-  }
-template<typename Ttuple, typename Func>
-  DUCC0_NOINLINE void applyHelper_with_index(size_t idim, const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    vector<size_t> &index)
-  {
-  auto len = shp[idim];
-  if (idim+1<shp.size())
-    {
-    auto idxbak = index[idim];
-    for (size_t i=0; i<len; ++i, ++index[idim])
-      applyHelper_with_index(idim+1, shp, str, update_pointers(ptrs, str, idim, i),
-        func, index);
-    index[idim] = idxbak;
-    }
-  else
-    {
-    auto locptrs(ptrs);
-    const auto locstr = get_strides<Ttuple>(str, idim);
-    auto idxbak = index[idim];
-    for (size_t i=0; i<len; ++i, ++index[idim], advance(locptrs, locstr))
-      call_with_index(func, const_cast<const vector<size_t> &>(index), to_ref(locptrs));
-    index[idim] = idxbak;
-    }
-  }
-template<typename Func, typename Ttuple>
-  inline void applyHelper_with_index(const vector<size_t> &shp,
-    const vector<vector<ptrdiff_t>> &str, const Ttuple &ptrs, Func &&func,
-    size_t nthreads, vector<size_t> &index)
-  {
-  if (shp.size()==0)
-    call_with_index(std::forward<Func>(func), const_cast<const vector<size_t> &>(index), to_ref(ptrs));
-  else if (nthreads==1)
-    applyHelper_with_index(0, shp, str, ptrs, std::forward<Func>(func), index);
-  else
-    {
-    size_t naxes = parallel_naxes(shp, adjust_nthreads(nthreads), 0);
-    execParallel(leading_size(shp, naxes), nthreads, [&](size_t lo, size_t hi)
-      {
-      auto locidx(index);
-      for_each_work_chunk(shp, str, ptrs, naxes, lo, hi,
-        [&](size_t idim, const vector<size_t> &locshp, const Ttuple &locptrs,
-          const vector<size_t> &pos)
-        {
-        for (size_t i=0; i<pos.size(); ++i)
-          locidx[i] = pos[i];
-        applyHelper_with_index(idim, locshp, str, locptrs, func, locidx);
-        });
-      });
-    }
-  }
-template<typename Func, typename... Targs>
-  void mav_apply_with_index(Func &&func, int nthreads, Targs... args)
-  {
-  auto [shp, str] = multiprep_noopt({args...});
-  vector<size_t> index(shp.size(), 0);
-  applyHelper_with_index(shp, str, make_tuple(args.data()...),
-    std::forward<Func>(func), nthreads, index);
   }
 
 
@@ -1459,8 +1391,7 @@ template<typename Tptrs, typename Tinfos, typename Func>
     execParallel(leading_size(shp, naxes), nthreads, [&](size_t lo, size_t hi)
       {
       for_each_work_chunk(shp, str, ptrs, naxes, lo, hi,
-        [&](size_t idim, const vector<size_t> &locshp, const Tptrs &locptrs,
-          const vector<size_t> &/*pos*/)
+        [&](size_t idim, const vector<size_t> &locshp, const Tptrs &locptrs)
         { flexible_mav_applyHelper(idim, locshp, str, locptrs, infos, func); });
       });
     }
@@ -1496,7 +1427,6 @@ using detail_mav::vmav;
 using detail_mav::subarray;
 using detail_mav::mav_apply;
 using detail_mav::mav_apply_reduce;
-using detail_mav::mav_apply_with_index;
 using detail_mav::flexible_mav_apply;
 }
 

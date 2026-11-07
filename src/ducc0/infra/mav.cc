@@ -173,22 +173,4 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
   return make_tuple(shp, str, blk, blk);
   }
 
-DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
-  multiprep_noopt(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    {
-    shp.push_back(info[0].shape(i));
-    for (size_t j=0; j<narr; ++j)
-      str[j].push_back(info[j].stride(i));
-    }
-  return make_tuple(shp, str);
-  }
-
 }}
