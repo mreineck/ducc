@@ -55,6 +55,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef DUCC0_MAV_H
 #define DUCC0_MAV_H
 
+#include <algorithm>
 #include <array>
 #include <vector>
 #include <memory>
@@ -223,7 +224,7 @@ class fmav_info
     /// Constructs an object with the given shape and stride.
     fmav_info(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_),
-        sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>()))
+        sz(ranges::fold_left(shp, size_t(1), multiplies<>()))
       {
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
       }
@@ -454,7 +455,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     /// Constructs an object with the given shape and stride.
     mav_info_proto(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_),
-        sz(accumulate(shp.begin(),shp.end(),size_t(1),multiplies<>())) {}
+        sz(ranges::fold_left(shp, size_t(1), multiplies<>())) {}
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     mav_info_proto(const shape_t &shape_)
