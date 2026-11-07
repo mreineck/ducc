@@ -1442,9 +1442,11 @@ MR_fail("must not get here");
       rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
 
-      // FIXME TBD
-// do we need the vectorize flag at all?
-      size_t lim = 10000; //vectorize ? 10000 : 10000;
+      // up to 8 MB of data all passes run over the whole array; beyond that
+      // the transform is split into two nested ones that fit the caches
+      // better (measured on a 16 MB L3: splitting smaller arrays was up to 3x
+      // slower, not splitting 13 MB and more up to 1.7x slower)
+      size_t lim = (size_t(1)<<23)/sizeof(Cmplx<Tfs>);
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
