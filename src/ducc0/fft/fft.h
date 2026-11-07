@@ -198,12 +198,7 @@ template <typename Tfs> class cfftpass
       while ((N&3)==0)
         { factors.push_back(4); N>>=2; }
       if ((N&1)==0)
-        {
-        N>>=1;
-        // factor 2 should be at the front of the factor list
-        factors.push_back(2);
-        std::swap(factors[0], factors.back());
-        }
+        { factors.push_back(2); N>>=1; }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
         {
@@ -211,6 +206,10 @@ template <typename Tfs> class cfftpass
         N/=divisor;
         }
       if (N>1) factors.push_back(N);
+      // small radices first: the last pass then saves the most twiddle
+      // multiplications, and the pass before it (ido = last radix) keeps
+      // enough consecutive butterflies for SIMD
+      sort(factors.begin(), factors.end());
       return factors;
       }
 
