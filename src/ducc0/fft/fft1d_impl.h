@@ -746,7 +746,9 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
   public:
     cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots,
       bool vectorize=false)
-      : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
+      : l1(l1_), ido(ido_), ip(ip_),
+        // a vectorized sub-transform wants a length divisible by 16 (cfftp_soa)
+        ip2(vectorize ? util1d::good_size_cmplx(ip*2-1, 16) : util1d::good_size_cmplx(ip*2-1)),
         subplan(cfftpass<Tfs>::make_pass(ip2, vectorize)), wa((ip-1)*(ido-1)),
         bk(ip), bkf(ip2/2+1)
       {
@@ -793,6 +795,108 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
     virtual bool needs_copy() const { return need_cpy; }
     virtual size_t footprint() const
       { return subplan->footprint() + (wa.size()+bk.size()+bkf.size())*sizeof(Tcs); }
+
+    POCKETFFT_EXEC_DISPATCH
+  };
+
+/* Rader's algorithm: a DFT of prime length p is a cyclic convolution of
+   length p-1 (input and output indices permuted by the powers of a primitive
+   root g modulo p), which is computed with FFTs of length p-1. */
+template <typename Tfs> class cfftprader: public cfftpass<Tfs>
+  {
+  private:
+    using typename cfftpass<Tfs>::Tcs;
+
+    const size_t l1, ido, ip;
+    const Tcpass<Tfs> subplan;
+    aligned_array<Tcs> wa, cf;  // twiddles; FFT of the convolution kernel, scaled by 1/(ip-1)
+    aligned_array<size_t> gin, gout;  // gin[r]=g^r mod ip, gout[q]=g^-q mod ip
+    size_t bufsz;
+
+    auto WA(size_t x, size_t i) const
+      { return wa[i-1+x*(ido-1)]; }
+
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch,
+       Tcd * DUCC0_RESTRICT buf, size_t nthreads) const
+      {
+      static const auto ti=tidx<Tcd *>();
+      const size_t n = ip-1;
+      Tcd *akf = buf;
+      Tcd *akf2 = subplan->needs_copy() ? (buf+n) : akf;
+      Tcd *subbuf = akf2+n;
+
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return ch[a+ido*(b+l1*c)]; };
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return cc[a+ido*(b+ip*c)]; };
+
+      for (size_t k=0; k<l1; ++k)
+        for (size_t i=0; i<ido; ++i)
+          {
+          auto x0 = CC(i,0,k);
+          for (size_t r=0; r<n; ++r)
+            akf[r] = CC(i,gin[r],k);
+          auto res = static_cast<Tcd *>(subplan->exec(ti, akf, akf2, subbuf, fwd, nthreads));
+          auto X0 = x0+res[0];  // X[0] = x[0] + sum of the others
+          for (size_t m=0; m<n; ++m)
+            res[m] = res[m].template special_mul<!fwd>(cf[m]);
+          res = static_cast<Tcd *>(subplan->exec(ti, res, (res==akf) ? akf2 : akf, subbuf, !fwd, nthreads));
+          auto out = [&](size_t m) -> Tcd& { return (l1>1) ? CH(i,k,m) : CC(i,m,0); };
+          out(0) = X0;
+          if (i==0)
+            for (size_t q=0; q<n; ++q)
+              out(gout[q]) = x0+res[q];
+          else
+            for (size_t q=0; q<n; ++q)
+              out(gout[q]) = (x0+res[q]).template special_mul<fwd>(WA(gout[q]-1,i));
+          }
+      return (l1>1) ? ch : cc;
+      }
+
+  public:
+    cfftprader(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots,
+      bool vectorize=false)
+      : l1(l1_), ido(ido_), ip(ip_),
+        subplan(cfftpass<Tfs>::make_pass(ip-1, vectorize)), wa((ip-1)*(ido-1)),
+        cf(ip-1), gin(ip-1), gout(ip-1)
+      {
+      const size_t N=ip*l1*ido, n=ip-1;
+      auto rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      for (size_t j=1; j<ip; ++j)
+        for (size_t i=1; i<ido; ++i)
+          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+
+      size_t g=2;  // primitive root: smallest g whose powers run through all of 1..ip-1
+      for (;; ++g)
+        {
+        size_t x=g, cnt=1;
+        while (x!=1) { x=x*g%ip; ++cnt; }
+        if (cnt==n) break;
+        }
+      gin[0]=1;
+      for (size_t r=1; r<n; ++r) gin[r] = gin[r-1]*g%ip;
+      for (size_t r=0; r<n; ++r) gout[(n-r)%n] = gin[r];
+
+      /* kernel c[m] = exp(-2 pi i g^-m/ip); store its forward FFT divided by n */
+      auto rootsp = ((roots->size()%ip)==0) ?
+                    roots : make_shared<const UnityRoots<Tfs,Tcs>>(ip);
+      size_t rfctp = rootsp->size()/ip;
+      aligned_array<Tcs> c(n), c2(n), sbuf(subplan->bufsize());
+      for (size_t m=0; m<n; ++m)
+        c[m] = (*rootsp)[gout[m]*rfctp].conj()*(Tfs(1)/Tfs(n));
+      static const auto tics=tidx<Tcs *>();
+      auto res = static_cast<Tcs *>(subplan->exec(tics, c.data(), c2.data(), sbuf.data(), true));
+      for (size_t m=0; m<n; ++m) cf[m] = res[m];
+
+      bufsz = n*(1+subplan->needs_copy()) + subplan->bufsize();
+      }
+
+    virtual size_t bufsize() const { return bufsz; }
+    virtual bool needs_copy() const { return l1>1; }
+    virtual size_t footprint() const
+      { return subplan->footprint() + (wa.size()+cf.size())*sizeof(Tcs) + 2*gin.size()*sizeof(size_t); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -1272,10 +1376,17 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
       case 11:
         return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
       default:
-        if (ip<110)
+        /* Primes up to about 100 inside a composite length: the generic
+           O(ip^2) pass is fastest (it vectorizes along ido). A prime as the
+           whole transform, or a larger prime factor: convolution algorithms.
+           Rader needs FFTs of length ip-1; it wins when these need only
+           codelet passes and can use SIMD lanes (ip-1 divisible by 4),
+           otherwise Bluestein's padded power-of-two-like length is faster. */
+        if ((ip<110) && (l1*ido>1))
           return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
-        else
-          return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
+        if (((ip-1)%4==0) && (util1d::prime_factors(ip-1).back()<=13))
+          return make_shared<cfftprader<Tfs>>(l1, ido, ip, roots, vectorize);
+        return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
       }
     }
   else // more than one factor, need a multipass
