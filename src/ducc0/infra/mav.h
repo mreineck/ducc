@@ -425,9 +425,9 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     using stride_t = Tcontainer<ptrdiff_t, ndim>;
 
   protected:
-    shape_t shp;
-    stride_t str;
-    size_t sz;
+    shape_t shp{};
+    stride_t str{};
+    size_t sz{0};
 
     static stride_t shape2stride(const shape_t &shp)
       {
@@ -447,11 +447,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
 
   public:
     /// Constructs an object with all extents and strides set to zero.
-    mav_info_proto() : sz(0)
-      {
-      for (size_t i=0; i<ndim; ++i)
-        { shp[i]=0; str[i]=0; }
-      }
+    mav_info_proto() = default;
     /// Constructs an object with the given shape and stride.
     mav_info_proto(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_),
@@ -524,10 +520,8 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       {
       static_assert(nd2>=ndim, "new shape smaller than original one");
       MR_assert(axpos.size()==ndim, "bad axpos size");
-      Tcontainer<ptrdiff_t, nd2> new_stride;
-      fill(new_stride.begin(), new_stride.end(), 0);
-      Tcontainer<uint8_t, nd2> used;
-      fill(used.begin(), used.end(), 0);
+      Tcontainer<ptrdiff_t, nd2> new_stride{};
+      Tcontainer<uint8_t, nd2> used{};
       for (size_t i=0; i<ndim; ++i)
         {
         MR_assert(axpos[i]<nd2, "bad axis number");
@@ -555,10 +549,9 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       }
     mav_info_proto transpose(const shape_t &axes) const
       {
-      shape_t shp2;
-      stride_t str2;
-      shape_t control;
-      for (auto &c:control) c=0;
+      shape_t shp2{};
+      stride_t str2{};
+      shape_t control{};
       for (size_t i=0; i<ndim; ++i)
         {
         MR_assert(axes[i]<ndim, "invalid axis number");
@@ -587,11 +580,8 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
       MR_assert(slices.size()==ndim, "bad number of slices");
-      Tcontainer<size_t, nd2> nshp;
-      Tcontainer<ptrdiff_t, nd2> nstr;
-
-      // unnecessary, but gcc warns otherwise
-      for (size_t i=0; i<nd2; ++i) nshp[i]=nstr[i]=0;
+      Tcontainer<size_t, nd2> nshp{};
+      Tcontainer<ptrdiff_t, nd2> nstr{};
 
       size_t n0=0;
       for (auto x:slices) if (x.beg==x.end) ++n0;
