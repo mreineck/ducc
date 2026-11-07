@@ -632,6 +632,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     using tinfo = fmav_info;
     using fmav_info::idx;
 
+    // NOTE: assert_compactness is false for a fully reversed contiguous array.
     void assert_compactness() const
       {
       ptrdiff_t ofs=0;
