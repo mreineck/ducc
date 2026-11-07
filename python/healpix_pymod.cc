@@ -242,8 +242,8 @@ class Pyhpbase
       auto [out, nest] = get_OptNpArr_and_vfmav<int64_t>(out_, ring.shape());
       {
       py::gil_scoped_release release;
-      flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
-        { out() = base.ring2nest(in()); }, nthreads, ring, nest);
+      mav_apply([&](const auto &in, auto &out)
+        { out = base.ring2nest(in); }, nthreads, ring, nest);
       }
       return out;
       }
@@ -257,8 +257,8 @@ class Pyhpbase
       auto [out, ring] = get_OptNpArr_and_vfmav<int64_t>(out_, nest.shape());
       {
       py::gil_scoped_release release;
-      flexible_mav_apply<0,0>([&](const auto &in, const auto &out)
-        { out() = base.nest2ring(in()); }, nthreads, nest,ring);
+      mav_apply([&](const auto &in, auto &out)
+        { out = base.nest2ring(in); }, nthreads, nest, ring);
       }
       return out;
       }
