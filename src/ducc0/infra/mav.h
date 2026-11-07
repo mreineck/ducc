@@ -1103,9 +1103,6 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   multiprep(const vector<fmav_info> &info);
 
-template<typename Ttuple> constexpr inline size_t tuplelike_size()
-  { return tuple_size_v<remove_reference_t<Ttuple>>; }
-
 template<typename... Ts, typename Func>
 inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
   {
@@ -1155,7 +1152,7 @@ template<typename Ttuple> inline Ttuple update_pointers (Ttuple ptrs,
 template<typename Ttuple> inline auto get_strides
   (const vector<vector<ptrdiff_t>> &str, size_t idim)
   {
-  array<ptrdiff_t, tuplelike_size<Ttuple>()> res;
+  array<ptrdiff_t, tuple_size_v<Ttuple>> res;
   for (size_t i=0; i<res.size(); ++i)
     res[i] = str[i][idim];
   return res;
