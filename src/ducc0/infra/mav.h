@@ -228,6 +228,20 @@ inline void extend_and_broadcast_info(span<const size_t> shp,
     }
   }
 
+inline void transpose_info(span<const size_t> shp, span<const ptrdiff_t> str,
+  span<const size_t> axes, span<size_t> shp2, span<ptrdiff_t> str2)
+  {
+  MR_assert(axes.size()==shp.size(), "bad axes length");
+  for (size_t i=0; i<axes.size(); ++i)
+    {
+    MR_assert(axes[i]<shp.size(), "invalid axis number");
+    for (size_t j=0; j<i; ++j)
+      MR_assert(axes[j]!=axes[i], "repeated axis");
+    shp2[i] = shp[axes[i]];
+    str2[i] = str[axes[i]];
+    }
+  }
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -380,18 +394,9 @@ class fmav_info
       }
     fmav_info transpose(const shape_t &axes) const
       {
-      MR_assert(axes.size()==ndim(), "bad axes length");
       shape_t shp2(ndim());
       stride_t str2(ndim());
-      shape_t control(ndim(),0);
-      for (size_t i=0; i<ndim(); ++i)
-        {
-        MR_assert(axes[i]<ndim(), "invalid axis number");
-        MR_assert(control[axes[i]]==0, "repeated axis");
-        control[axes[i]] = 1;
-        shp2[i] = shp[axes[i]];
-        str2[i] = str[axes[i]];
-        }
+      transpose_info(shp, str, axes, shp2, str2);
       return fmav_info(shp2, str2);
       }
   protected:
@@ -550,15 +555,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       {
       shape_t shp2{};
       stride_t str2{};
-      shape_t control{};
-      for (size_t i=0; i<ndim; ++i)
-        {
-        MR_assert(axes[i]<ndim, "invalid axis number");
-        MR_assert(control[axes[i]]==0, "repeated axis");
-        control[axes[i]] = 1;
-        shp2[i] = shp[axes[i]];
-        str2[i] = str[axes[i]];
-        }
+      transpose_info(shp, str, axes, shp2, str2);
       return mav_info_proto(shp2, str2);
       }
     mav_info_proto<Tcontainer, ndim+1> prepend_1() const
