@@ -209,6 +209,16 @@ inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
   return true;
   }
 
+// Offset of the entry at multi-index \a ns for strides \a str
+template<typename... Ns> inline ptrdiff_t strided_idx(
+  [[maybe_unused]] span<const ptrdiff_t> str, Ns... ns)
+  {
+  ptrdiff_t res=0;
+  [[maybe_unused]] size_t dim=0;
+  ((res += str[dim++]*ptrdiff_t(ns)), ...);
+  return res;
+  }
+
 // Strides after inserting the axes of (shp, str) at positions \a axpos of a
 // higher-dimensional array; new axes get stride 0. \a new_str must be zeroed.
 inline void extend_and_broadcast_info(span<const size_t> shp,
@@ -299,12 +309,6 @@ class fmav_info
       detail_mav::shape2stride(shp, res);
       return res;
       }
-    template<typename... Ns> ptrdiff_t getIdx(size_t dim, size_t n, Ns... ns) const
-      { return str[dim]*ptrdiff_t(n) + getIdx(dim+1, ns...); }
-    ptrdiff_t getIdx(size_t dim, size_t n) const
-      { return str[dim]*ptrdiff_t(n); }
-    ptrdiff_t getIdx(size_t /*dim*/) const
-      { return 0; }
 
   public:
     /// Constructs a 1D object with all extents and strides set to zero.
@@ -357,7 +361,7 @@ class fmav_info
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
       {
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
-      return getIdx(0, ns...);
+      return strided_idx(str, ns...);
       }
     ptrdiff_t idx(const shape_t &ns) const
       {
@@ -467,12 +471,6 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       detail_mav::shape2stride(shp, res);
       return res;
       }
-    template<typename... Ns> ptrdiff_t getIdx(size_t dim, size_t n, Ns... ns) const
-      { return str[dim]*n + getIdx(dim+1, ns...); }
-    ptrdiff_t getIdx(size_t dim, size_t n) const
-      { return str[dim]*n; }
-    ptrdiff_t getIdx(size_t /*dim*/) const
-      { return 0; }
 
   public:
     /// Constructs an object with all extents and strides set to zero.
@@ -534,7 +532,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     template<typename... Ns> ptrdiff_t idx(Ns... ns) const
       {
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
-      return getIdx(0, ns...);
+      return strided_idx(str, ns...);
       }
     template<size_t nd2>
     mav_info_proto<Tcontainer, nd2> extend_and_broadcast(const Tcontainer<size_t, nd2> &new_shape,
