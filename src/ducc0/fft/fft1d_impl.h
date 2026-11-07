@@ -339,6 +339,7 @@ constexpr size_t sh_even(size_t i) { return 2*i; }
 constexpr size_t sh_odd(size_t i) { return 2*i+1; }
 template<size_t n> constexpr size_t sh_zip_lo(size_t i) { return (i&1) ? n+i/2 : i/2; }
 template<size_t n> constexpr size_t sh_zip_hi(size_t i) { return (i&1) ? n+n/2+i/2 : n/2+i/2; }
+template<size_t n> constexpr size_t sh_rev(size_t i) { return n-1-i; }
 template<size_t b, size_t n> constexpr size_t sh_tr_lo(size_t p) { return (p&b) ? p-b+n : p; }
 template<size_t b, size_t n> constexpr size_t sh_tr_hi(size_t p) { return (p&b) ? p+n : p+b; }
 template<size_t J, size_t M, size_t R, size_t n> constexpr size_t sh_gather(size_t t)
@@ -2320,15 +2321,27 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
+/* Real transform of even length N via a complex transform of length N/2
+   and a pass that combines the outputs k and N/2-k with the twiddles
+   tw[k]=exp(-2*pi*i*k/N), k<=N/4. */
 template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
   {
   private:
+    using Tcs = Cmplx<Tfs>;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>;
+    static constexpr bool havesimd = (vl>1) && simd_exists<Tfs,vl>;
     size_t N;
-    Troots<Tfs> roots;
-    size_t rfct;
     Tcpass<Tfs> pass;
-    size_t l1, ido;
-    static constexpr size_t ip=2;
+    aligned_array<Tcs> tw;
+
+    // vl complex values at p, optionally in reversed order
+    template<typename V> static Cmplx<V> ldv(const Tcs *p, bool rev)
+      {
+      auto x = vload<V>(p);
+      return rev ? Cmplx<V>(shuf<sh_rev<vl>>(x.r,x.r), shuf<sh_rev<vl>>(x.i,x.i)) : x;
+      }
+    template<typename V> static void stv(const Cmplx<V> &x, Tcs *p, bool rev)
+      { vstore(rev ? Cmplx<V>(shuf<sh_rev<vl>>(x.r,x.r), shuf<sh_rev<vl>>(x.i,x.i)) : x, p); }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * buf, size_t nthreads) const
@@ -2344,16 +2357,28 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
           ccc, cch, cbuf, true, nthreads));
         auto rres = (res==ccc) ? ch : cc;
         rres[0] = res[0].r+res[0].i;
-//FIXME: parallelize?
-        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+        size_t i=1, xi=N/2-1;
+        if constexpr (is_same_v<Tfd,Tfs> && havesimd)  // vl pairs (i, N/2-i) at a time
           {
-          auto xe = res[i]+res[xi].conj();
-          auto xo = Tcd(res[i].i+res[xi].i, res[xi].r-res[i].r)
-                  * (*roots)[rfct*i].conj();
-          rres[2*i-1] = Tfs(0.5)*(xe.r+xo.r);
-          rres[2*i] = Tfs(0.5)*(xe.i+xo.i);
-          rres[2*xi-1] = Tfs(0.5)*(xe.r-xo.r);
-          rres[2*xi] = Tfs(0.5)*(xo.i-xe.i);
+          using V = typename simd_select<Tfs,vl>::type;
+          for (; i+2*vl<=xi+2; i+=vl, xi-=vl)
+            {
+            auto a=ldv<V>(res+i, false), b=ldv<V>(res+xi+1-vl, true), t=ldv<V>(tw.data()+i, false);
+            V er=a.r+b.r, ei=a.i-b.i, dr=a.i+b.i, di=b.r-a.r;
+            V xr=dr*t.r-di*t.i, xi_=dr*t.i+di*t.r;
+            stv(Cmplx<V>(Tfs(0.5)*(er+xr), Tfs(0.5)*(ei+xi_)), reinterpret_cast<Tcs *>(rres+2*i-1), false);
+            stv(Cmplx<V>(Tfs(0.5)*(er-xr), Tfs(0.5)*(xi_-ei)), reinterpret_cast<Tcs *>(rres+2*(xi+1-vl)-1), true);
+            }
+          }
+        for (; i<=xi; ++i, --xi)
+          {
+          auto a=res[i], b=res[xi];
+          Tfd er=a.r+b.r, ei=a.i-b.i, dr=a.i+b.i, di=b.r-a.r;
+          Tfd xr=dr*tw[i].r-di*tw[i].i, xi_=dr*tw[i].i+di*tw[i].r;
+          rres[2*i-1] = Tfs(0.5)*(er+xr);
+          rres[2*i] = Tfs(0.5)*(ei+xi_);
+          rres[2*xi-1] = Tfs(0.5)*(er-xr);
+          rres[2*xi] = Tfs(0.5)*(xi_-ei);
           }
         rres[N-1] = res[0].r-res[0].i;
         return rres;
@@ -2361,15 +2386,27 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       else
         {
         cch[0] = Tcd(cc[0]+cc[N-1], cc[0]-cc[N-1]);
-//FIXME: parallelize?
-        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+        size_t i=1, xi=N/2-1;
+        if constexpr (is_same_v<Tfd,Tfs> && havesimd)
           {
-          Tcd t1 (cc[2*i-1], cc[2*i]);
-          Tcd t2 (cc[2*xi-1], -cc[2*xi]);
-          auto xe = t1+t2;
-          auto xo = (t1-t2)*(*roots)[rfct*i];
-          cch[i] = (xe + Tcd(-xo.i, xo.r));
-          cch[xi] = (xe.conj() + Tcd(xo.i, xo.r));
+          using V = typename simd_select<Tfs,vl>::type;
+          for (; i+2*vl<=xi+2; i+=vl, xi-=vl)
+            {
+            auto t1=ldv<V>(reinterpret_cast<const Tcs *>(cc+2*i-1), false),
+                 t2=ldv<V>(reinterpret_cast<const Tcs *>(cc+2*(xi+1-vl)-1), true), t=ldv<V>(tw.data()+i, false);
+            V er=t1.r+t2.r, ei=t1.i-t2.i, dr=t1.r-t2.r, di=t1.i+t2.i;
+            V xr=dr*t.r+di*t.i, xi_=di*t.r-dr*t.i;
+            stv(Cmplx<V>(er-xi_, ei+xr), cch+i, false);
+            stv(Cmplx<V>(er+xi_, xr-ei), cch+xi+1-vl, true);
+            }
+          }
+        for (; i<=xi; ++i, --xi)
+          {
+          Tfd t1r=cc[2*i-1], t1i=cc[2*i], t2r=cc[2*xi-1], t2i=-cc[2*xi];
+          Tfd er=t1r+t2r, ei=t1i+t2i, dr=t1r-t2r, di=t1i-t2i;
+          Tfd xr=dr*tw[i].r+di*tw[i].i, xi_=di*tw[i].r-dr*tw[i].i;  // (t1-t2)*conj(tw)
+          cch[i] = Tcd(er-xi_, ei+xr);
+          cch[xi] = Tcd(er+xi_, xr-ei);
           }
         auto res = static_cast<Tcd *>(pass->exec(ticd,
           cch, ccc, cbuf, false, nthreads));
@@ -2378,18 +2415,20 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       }
 
   public:
-    rfftp_complexify(size_t N_, const Troots<Tfs> &roots_, bool vectorize=false)
-      : N(N_), roots(roots_), pass(cfftpass<Tfs>::make_pass(N/2, vectorize))
+    rfftp_complexify(size_t N_, const Troots<Tfs> &roots, bool vectorize=false)
+      : N(N_), pass(cfftpass<Tfs>::make_pass(N/2, vectorize)), tw(N/4+1)
       {
-      rfct = roots->size()/N;
+      size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       MR_assert((N&1)==0, "N must be even");
+      for (size_t i=0; i<tw.size(); ++i)
+        tw[i] = (*roots)[rfct*i].conj();
       }
 
     virtual size_t bufsize() const { return 2*pass->bufsize(); }
     virtual bool needs_copy() const { return true; }
     virtual size_t footprint() const
-      { return pass->footprint() + roots->footprint(); }
+      { return pass->footprint() + tw.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2402,6 +2441,10 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
+  // a single transform of even length is fastest via the SIMD complex plan of
+  // half the length (measured: from 4 SIMD widths on; slower below)
+  if (vectorize && (l1==1) && (ido==1) && (ip>=4*fft1d_simdlen<Tfs>) && ((ip&1)==0))
+    return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
   if ((ip>1000) && ((ip&1)==0))  // use complex transform
     {
     bool doit = vectorize&&((ip&7)==0);  // vecpass might be beneficial
