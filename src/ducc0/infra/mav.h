@@ -198,6 +198,17 @@ inline void shape2stride(span<const size_t> shp, span<ptrdiff_t> str)
     }
   }
 
+inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
+  {
+  ptrdiff_t stride=1;
+  for (size_t i=shp.size(); i>0; --i)
+    {
+    if ((shp[i-1]!=1) && (str[i-1]!=stride)) return false;
+    stride *= ptrdiff_t(shp[i-1]);
+    }
+  return true;
+  }
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -266,15 +277,7 @@ class fmav_info
      *  shape of the last dimension etc. */
     bool contiguous() const
       {
-      auto ndim = shp.size();
-      ptrdiff_t stride=1;
-      for (size_t i=0; i<ndim; ++i)
-        {
-        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
-          return false;
-        stride *= ptrdiff_t(shp[ndim-1-i]);
-        }
-      return true;
+      return is_contiguous(shp, str);
       }
     /// Returns true iff this->shape and \a other.shape match.
     bool conformable(const fmav_info &other) const
@@ -496,14 +499,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
      *  shape of the last dimension etc. */
     bool contiguous() const
       {
-      ptrdiff_t stride=1;
-      for (size_t i=0; i<ndim; ++i)
-        {
-        if ((shp[ndim-1-i]!=1) && (str[ndim-1-i]!=stride))
-          return false;
-        stride *= ptrdiff_t(shp[ndim-1-i]);
-        }
-      return true;
+      return is_contiguous(shp, str);
       }
     /// Returns true iff this->shape and \a other.shape match.
     bool conformable(const mav_info_proto &other) const
