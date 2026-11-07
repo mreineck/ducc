@@ -345,7 +345,7 @@ class fmav_info
       for (size_t i=0; i<ndim(); ++i)
         {
         MR_assert(axpos[i]<new_shape.size(), "bad axis number");
-        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length mismatch");
         MR_assert(used[axpos[i]]==0, "repeated axis position");
         used[axpos[i]]=1;
         new_stride[axpos[i]] = str[i];
@@ -530,7 +530,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       for (size_t i=0; i<ndim; ++i)
         {
         MR_assert(axpos[i]<nd2, "bad axis number");
-        MR_assert(shp[i]==new_shape[axpos[i]], "axis length nismatch");
+        MR_assert(shp[i]==new_shape[axpos[i]], "axis length mismatch");
         MR_assert(used[axpos[i]]==0, "repeated axis position");
         used[axpos[i]]=1;
         new_stride[axpos[i]] = str[i];
