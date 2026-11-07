@@ -272,6 +272,28 @@ template <typename Tfs> class rfftpass
 template<typename T> using Tcpass = shared_ptr<cfftpass<T>>;
 template<typename T> using Trpass = shared_ptr<rfftpass<T>>;
 
+// Scratch space for the convenience exec() overloads of the plan classes:
+// one buffer per thread is kept and grown as needed, so repeated transforms
+// do not pay for allocation and page faults; very large requests get a
+// temporary buffer instead.
+template<typename T> class scratch_space
+  {
+  private:
+    static constexpr size_t maxkeep = (size_t(1)<<28)/sizeof(T);
+    aligned_array<T> tmp;
+    T *ptr;
+
+  public:
+    scratch_space(size_t n)
+      {
+      static thread_local aligned_array<T> kept;
+      if (n>maxkeep) { tmp = aligned_array<T>(n); ptr = tmp.data(); return; }
+      if (kept.size()<n) kept = aligned_array<T>(n);
+      ptr = kept.data();
+      }
+    T *data() { return ptr; }
+  };
+
 /* Buffers that the passes ping-pong between must not lie at a multiple of
    4 KB from each other: the loads of one butterfly then alias the stores of
    the previous one in the low address bits (measured on Zen 4: the twiddled
@@ -327,7 +349,7 @@ template<typename Tfs> class pocketfft_c
       }
     template<typename Tfd> DUCC0_NOINLINE void exec(Cmplx<Tfd> *in, Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      aligned_array<Cmplx<Tfd>> buf(bufsize());
+      scratch_space<Cmplx<Tfd>> buf(bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -376,7 +398,7 @@ template<typename Tfs> class pocketfft_r
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N*plan->needs_copy()+plan->bufsize());
+      scratch_space<Tfd> buf(N*plan->needs_copy()+plan->bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -422,7 +444,7 @@ template<typename Tfs> class pocketfft_hartley
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, nthreads);
       }
   };
@@ -468,7 +490,7 @@ template<typename Tfs> class pocketfft_fht
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, nthreads);
       }
   };
@@ -533,7 +555,7 @@ template<typename Tfs> class pocketfft_fftw
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -578,7 +600,7 @@ template<typename T0> class T_dct1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, ortho, 1, true, nthreads);
       }
 
@@ -617,7 +639,7 @@ template<typename T0> class T_dst1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, true, 1, false, nthreads);
       }
 
@@ -712,7 +734,7 @@ template<typename T0> class T_dcst23
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec(c, buf.data(), fct, ortho, type, cosine, nthreads);
       }
 
@@ -831,7 +853,7 @@ template<typename T0> class T_dcst4
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec(c, buf.data(), fct, true, 4, cosine, nthreads);
       }
 
