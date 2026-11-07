@@ -736,6 +736,8 @@ template<typename T> class vfmav: public cfmav<T>
     using tinfo::size, tinfo::shape, tinfo::stride;
 
   protected:
+    template<typename T2, size_t nd2> friend class vmav;
+
     vfmav(const fmav_info &info, const tbuf &buf)
       : cfmav<T>(info, buf) {}
     vfmav(const fmav_info &info, T *d_, const tbuf &buf)
@@ -762,8 +764,8 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(shp_, str_, UNINITIALIZED) {}
     vfmav(const shape_t &shp_, const stride_t &str_, PAGE_IN page_in)
       : cfmav<T>(shp_, str_, page_in) {}
-    vfmav(tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : cfmav<T>(buf, shp_, str_) {}
+    vfmav(const vfmav &other, const shape_t &shp_, const stride_t &str_)
+      : cfmav<T>(other, shp_, str_) {}
 
     T *data() const
       { return const_cast<T *>(tbuf::d); }
@@ -973,7 +975,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using tinfo::swap_axes;
     operator vfmav<T>() const
       {
-      return vfmav<T>(*const_cast<tbuf *>(static_cast<const tbuf *>(this)), {shp.begin(), shp.end()}, {str.begin(), str.end()});
+      return vfmav<T>(fmav_info({shp.begin(), shp.end()}, {str.begin(), str.end()}), *this);
       }
     // Needed for template tricks.
     vfmav<T> to_fmav() const { return operator vfmav<T>(); }

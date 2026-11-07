@@ -6,6 +6,7 @@
 
 #include <complex>
 #include <cstddef>
+#include <type_traits>
 #include <vector>
 
 using namespace ducc0;
@@ -96,3 +97,13 @@ void compile_wgridder_custom_buffer_2d()
         &mask2d, 1., 1., 1e-6, false, 1, 0, false, false, false, true,
         1.1, 2.6, 0., 0., true);
   }
+
+/* A writable vfmav must not be constructible from the buffer of a read-only
+   array; sharing the data of another writable array must keep working. */
+static_assert(!std::is_constructible_v<vfmav<double>, cfmav<double> &,
+  fmav_info::shape_t, fmav_info::stride_t>);
+static_assert(!std::is_constructible_v<vfmav<double>, cmav<double, 2> &,
+  fmav_info::shape_t, fmav_info::stride_t>);
+static_assert(std::is_constructible_v<vfmav<double>, const vfmav<double> &,
+  fmav_info::shape_t, fmav_info::stride_t>);
+static_assert(std::is_convertible_v<vmav<double, 2>, vfmav<double>>);
