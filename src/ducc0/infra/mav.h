@@ -209,6 +209,25 @@ inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
   return true;
   }
 
+// Strides after inserting the axes of (shp, str) at positions \a axpos of a
+// higher-dimensional array; new axes get stride 0. \a new_str must be zeroed.
+inline void extend_and_broadcast_info(span<const size_t> shp,
+  span<const ptrdiff_t> str, span<const size_t> new_shape,
+  span<const size_t> axpos, span<ptrdiff_t> new_str)
+  {
+  MR_assert(new_shape.size()>=shp.size(), "new shape smaller than original one");
+  MR_assert(axpos.size()==shp.size(), "bad axpos size");
+  MR_assert(new_str.size()==new_shape.size(), "bad stride size");
+  for (size_t i=0; i<shp.size(); ++i)
+    {
+    MR_assert(axpos[i]<new_shape.size(), "bad axis number");
+    MR_assert(shp[i]==new_shape[axpos[i]], "axis length mismatch");
+    for (size_t j=0; j<i; ++j)
+      MR_assert(axpos[j]!=axpos[i], "repeated axis position");
+    new_str[axpos[i]] = str[i];
+    }
+  }
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -348,19 +367,8 @@ class fmav_info
     fmav_info extend_and_broadcast(const shape_t &new_shape,
       const shape_t &axpos) const
       {
-      MR_assert(new_shape.size()>=ndim(),
-        "new shape smaller than original one");
-      MR_assert(axpos.size()==ndim(), "bad axpos size");
       stride_t new_stride(new_shape.size(), 0);
-      vector<uint8_t> used(new_shape.size(),0);
-      for (size_t i=0; i<ndim(); ++i)
-        {
-        MR_assert(axpos[i]<new_shape.size(), "bad axis number");
-        MR_assert(shp[i]==new_shape[axpos[i]], "axis length mismatch");
-        MR_assert(used[axpos[i]]==0, "repeated axis position");
-        used[axpos[i]]=1;
-        new_stride[axpos[i]] = str[i];
-        }
+      extend_and_broadcast_info(shp, str, new_shape, axpos, new_stride);
       return fmav_info(new_shape, new_stride);
       }
     fmav_info extend_and_broadcast(const shape_t &new_shape,
@@ -519,17 +527,8 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       const vector<size_t> &axpos) const
       {
       static_assert(nd2>=ndim, "new shape smaller than original one");
-      MR_assert(axpos.size()==ndim, "bad axpos size");
       Tcontainer<ptrdiff_t, nd2> new_stride{};
-      Tcontainer<uint8_t, nd2> used{};
-      for (size_t i=0; i<ndim; ++i)
-        {
-        MR_assert(axpos[i]<nd2, "bad axis number");
-        MR_assert(shp[i]==new_shape[axpos[i]], "axis length mismatch");
-        MR_assert(used[axpos[i]]==0, "repeated axis position");
-        used[axpos[i]]=1;
-        new_stride[axpos[i]] = str[i];
-        }
+      extend_and_broadcast_info(shp, str, new_shape, axpos, new_stride);
       return mav_info_proto<Tcontainer, nd2>(new_shape, new_stride);
       }
     template<size_t nd2>
