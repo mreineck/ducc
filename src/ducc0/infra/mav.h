@@ -1338,13 +1338,6 @@ template<typename Func, typename... Targs>
   applyHelper(shp, str, block0, block1, ptrs, std::forward<Func>(func), nthreads, last_contiguous);
   }
 
-template<typename ReduceType, typename Func, typename Ttuple> inline ReduceType call_reduce_with_tuple
-  (Func &&func, Ttuple &&tuple)
-  {
-  auto impl = [&]<size_t... Is>(index_sequence<Is...>)
-    { return func(std::forward<typename tuple_element<Is, Ttuple>::type>(get<Is>(tuple))...); };
-  return impl(make_index_sequence<tuplelike_size<Ttuple>()>());
-  }
 template<typename ReduceType, typename Ttuple, typename Func>
   DUCC0_NOINLINE ReduceType applyReduceHelper_block(size_t idim,
     const vector<size_t> &shp, const vector<vector<ptrdiff_t>> &str,
@@ -1366,7 +1359,7 @@ template<typename ReduceType, typename Ttuple, typename Func>
         {
         auto locptrs2(locptrs);
         for (size_t j=bj*bsj; j<min(lenj, (bj+1)*bsj); ++j, advance(locptrs2, strj))
-          rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs2)));
+          rt.reduceWith(apply(func, to_ref(locptrs2)));
         }
       }
   return rt;
@@ -1380,12 +1373,12 @@ template<typename ReduceType, typename Ttuple, typename Func>
   auto locptrs(ptrs);
   if (last_contiguous)
     for (size_t i=0; i<len; ++i, advance_contiguous(locptrs))
-      rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+      rt.reduceWith(apply(func, to_ref(locptrs)));
   else
     {
     const auto locstr = get_strides<Ttuple>(str, idim);
     for (size_t i=0; i<len; ++i, advance(locptrs, locstr))
-      rt.reduceWith(call_reduce_with_tuple<ReduceType>(func, to_ref(locptrs)));
+      rt.reduceWith(apply(func, to_ref(locptrs)));
     }
   return rt;
   }
@@ -1423,8 +1416,7 @@ template<typename ReduceType, typename Func, typename Ttuple>
   {
   ReduceType rt;
   if (shp.size()==0)
-    rt.reduceWith(call_reduce_with_tuple<ReduceType>(std::forward<Func>(func),
-      to_ref(ptrs)));
+    rt.reduceWith(apply(std::forward<Func>(func), to_ref(ptrs)));
   else if (nthreads==1)
     rt.reduceWith(applyReduceHelper<ReduceType>(0, shp, str, block0, block1,
       ptrs, std::forward<Func>(func), last_contiguous));
