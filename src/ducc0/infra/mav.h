@@ -242,6 +242,43 @@ inline void transpose_info(span<const size_t> shp, span<const ptrdiff_t> str,
     }
   }
 
+/// Number of dimensions that remain after applying \a slices
+inline size_t subdata_ndim(const vector<slice> &slices)
+  { return size_t(ranges::count_if(slices, [](const slice &x){ return x.beg!=x.end; })); }
+
+// Returns the offset; writes the output shape/stride (sized by the caller)
+inline ptrdiff_t subdata_info(span<const size_t> shp, span<const ptrdiff_t> str,
+  const vector<slice> &slices, span<size_t> nshp, span<ptrdiff_t> nstr)
+  {
+  MR_assert(slices.size()==shp.size(), "incorrect number of slices");
+  MR_assert(nshp.size()==subdata_ndim(slices), "bad extent");
+  MR_assert(nstr.size()==nshp.size(), "bad extent");
+  ptrdiff_t nofs=0;
+  for (size_t i=0, i2=0; i<shp.size(); ++i)
+    {
+    if (shp[i]==0)
+      {
+      MR_assert((slices[i].beg==0) && (slices[i].end==MAXIDX), "bad subset");
+      nshp[i2]=0;
+      nstr[i2]=0;
+      ++i2;
+      }
+    else
+      {
+      MR_assert(slices[i].beg<shp[i], "bad subset");
+      nofs+=slices[i].beg*str[i];
+      if (slices[i].beg!=slices[i].end)
+        {
+        auto ext = slices[i].size(shp[i]);
+        MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
+        nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
+        ++i2;
+        }
+      }
+    }
+  return nofs;
+  }
+
 /// Helper class containing shape and stride information of an `fmav` object
 class fmav_info
   {
@@ -402,38 +439,10 @@ class fmav_info
   protected:
     auto subdata(const vector<slice> &slices) const
       {
-      auto ndim = shp.size();
-      shape_t nshp(ndim);
-      stride_t nstr(ndim);
-      MR_assert(slices.size()==ndim, "incorrect number of slices");
-      size_t n0=0;
-      for (auto x:slices) if (x.beg==x.end) ++n0;
-      ptrdiff_t nofs=0;
-      nshp.resize(ndim-n0);
-      nstr.resize(ndim-n0);
-      for (size_t i=0, i2=0; i<ndim; ++i)
-        {
-        if (shp[i]==0)
-          {
-          MR_assert((slices[i].beg==0) && (slices[i].end==MAXIDX),
-            "bad subset");
-          nshp[i2]=0;
-          nstr[i2]=0;
-          ++i2;
-          }
-        else
-          {
-          MR_assert(slices[i].beg<shp[i], "bad subset");
-          nofs+=slices[i].beg*str[i];
-          if (slices[i].beg!=slices[i].end)
-            {
-            auto ext = slices[i].size(shp[i]);
-            MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-            nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
-            ++i2;
-            }
-          }
-        }
+      auto nd2 = subdata_ndim(slices);
+      shape_t nshp(nd2);
+      stride_t nstr(nd2);
+      auto nofs = subdata_info(shp, str, slices, nshp, nstr);
       return make_tuple(fmav_info(nshp, nstr), nofs);
       }
   };
@@ -575,37 +584,9 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
   protected:
     template<size_t nd2> auto subdata(const vector<slice> &slices) const
       {
-      MR_assert(slices.size()==ndim, "bad number of slices");
       Tcontainer<size_t, nd2> nshp{};
       Tcontainer<ptrdiff_t, nd2> nstr{};
-
-      size_t n0=0;
-      for (auto x:slices) if (x.beg==x.end) ++n0;
-      MR_assert(n0+nd2==ndim, "bad extent");
-      ptrdiff_t nofs=0;
-      for (size_t i=0, i2=0; i<ndim; ++i)
-        {
-        if (shp[i]==0)
-          {
-          MR_assert((slices[i].beg==0) && (slices[i].end==MAXIDX),
-            "bad subset");
-          nshp[i2]=0;
-          nstr[i2]=0;
-          ++i2;
-          }
-        else
-          {
-          MR_assert(slices[i].beg<shp[i], "bad subset");
-          nofs+=slices[i].beg*str[i];
-          if (slices[i].beg!=slices[i].end)
-            {
-            auto ext = slices[i].size(shp[i]);
-            MR_assert(slices[i].beg+(ext-1)*slices[i].step<shp[i], "bad subset");
-            nshp[i2]=ext; nstr[i2]=slices[i].step*str[i];
-            ++i2;
-            }
-          }
-        }
+      auto nofs = subdata_info(shp, str, slices, nshp, nstr);
       return make_tuple(mav_info_proto<Tcontainer, nd2>(nshp, nstr), nofs);
       }
   };
