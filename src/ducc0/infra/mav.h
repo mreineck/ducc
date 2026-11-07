@@ -801,42 +801,16 @@ template<typename T> class vfmav: public cfmav<T>
      *  The strides are chosen in such a way that critical strides (multiples
      *  of 4096 bytes) along any dimension are avoided, by enlarging the
      *  allocated memory slightly if necessary.
-     *  The array data is default-initialized. */
-    static vfmav build_noncritical(const shape_t &shape)
+     *  \a init is forwarded to the constructor (e.g., UNINITIALIZED or
+     *  PAGE_IN). Without it, the array data is default-initialized. */
+    template<typename... Tinit>
+    static vfmav build_noncritical(const shape_t &shape, Tinit... init)
       {
-      auto ndim = shape.size();
       auto shape2 = noncritical_shape(shape, sizeof(T));
-      vfmav tmp(shape2);
+      vfmav tmp(shape2, init...);
       if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray(slc);
-      }
-    /** Returns a writable fmav with the specified shape.
-     *  The strides are chosen in such a way that critical strides (multiples
-     *  of 4096 bytes) along any dimension are avoided, by enlarging the
-     *  allocated memory slightly if necessary.
-     *  The array data is not initialized. */
-    static vfmav build_noncritical(const shape_t &shape, uninitialized_dummy)
-      {
-      auto ndim = shape.size();
-      if (ndim<=1) return vfmav(shape, UNINITIALIZED);
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      vfmav tmp(shape2, UNINITIALIZED);
-      if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray(slc);
-      }
-    static vfmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
-      {
-      auto ndim = shape.size();
-      if (ndim<=1) return vfmav(shape, page_in);
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      vfmav tmp(shape2, page_in);
-      if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
+      vector<slice> slc(shape.size());
+      for (size_t i=0; i<shape.size(); ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
     vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
@@ -1046,30 +1020,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return vmav(static_cast<T *>(nullptr), nshp);
       }
 
-    static vmav build_noncritical(const shape_t &shape)
+    template<typename... Tinit>
+    static vmav build_noncritical(const shape_t &shape, Tinit... init)
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
-      vmav tmp(shape2);
-      if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray<ndim>(slc);
-      }
-    static vmav build_noncritical(const shape_t &shape, uninitialized_dummy)
-      {
-      if (ndim<=1) return vmav(shape, UNINITIALIZED);
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      vmav tmp(shape2, UNINITIALIZED);
-      if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray<ndim>(slc);
-      }
-    static vmav build_noncritical(const shape_t &shape, PAGE_IN page_in)
-      {
-      if (ndim<=1) return vmav(shape, page_in);
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      vmav tmp(shape2, page_in);
+      vmav tmp(shape2, init...);
       if (shape2==shape) return tmp;
       vector<slice> slc(ndim);
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
