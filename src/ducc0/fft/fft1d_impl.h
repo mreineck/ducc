@@ -383,6 +383,21 @@ template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vgather(
       });
     });
   }
+// the inverse: p[j+R*t] = x[j] lane t
+template<size_t J, size_t M, size_t R, size_t n> constexpr size_t sh_scatter(size_t p)
+  { return ((M*n+p)%R==J) ? n+(M*n+p)/R : p; }
+template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vscatter(const array<Tfv,R> &x, Tfs *p)
+  {
+  constexpr size_t vl = Tfv::size();
+  static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE
+    {
+    constexpr size_t M = decltype(m)::value;
+    Tfv v = x[0];
+    static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE  // collect the lanes going to memory vector m
+      { v = shuf<sh_scatter<decltype(j)::value,M,R,vl>>(v, x[j]); });
+    v.copy_to(p+M*vl, element_aligned_tag());
+    });
+  }
 // transpose a vlen x vlen block of numbers held in vlen SIMD values (real or complex)
 template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Tfv,vlen> &v)
   {
@@ -1684,8 +1699,66 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
   {
   private:
     using Tcs = Cmplx<Tfs>;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>;
     size_t l1, ido;
-    aligned_array<Tcs> wa;  // w^(l1*(j+1)*i/2) at wa[(R-1)*(i/2-1)+j], even i>0
+    /* twiddles w^(l1*j*i/2), i=2,4,..<ido, j=1..R-1, in blocks of vl values of
+       i (as in cfftpR): real parts at wa[wi(i/2-1,j-1)], imaginary parts vl later */
+    aligned_array<Tfs> wa;
+    size_t wi(size_t q, size_t j) const { return ((q/vl)*(R-1)+j)*2*vl + q%vl; }
+
+    // one complex value at p (V==Tfd), or V::size() consecutive ones of scalar data, optionally reversed
+    template<typename V, bool rev, typename Tfd> DUCC0_ALWAYS_INLINE static Cmplx<V> ld(const Tfd *p)
+      {
+      if constexpr (is_same_v<V,Tfd>) return Cmplx<V>(p[0], p[1]);
+      else
+        {
+        auto x = vload<V>(reinterpret_cast<const Tcs *>(p));
+        if constexpr (rev) return Cmplx<V>(shuf<sh_rev<V::size()>>(x.r,x.r), shuf<sh_rev<V::size()>>(x.i,x.i));
+        else return x;
+        }
+      }
+    template<typename V, bool rev, typename Tfd> DUCC0_ALWAYS_INLINE static void st(const Cmplx<V> &x, Tfd *p)
+      {
+      if constexpr (is_same_v<V,Tfd>) { p[0]=x.r; p[1]=x.i; }
+      else if constexpr (rev)
+        vstore(Cmplx<V>(shuf<sh_rev<V::size()>>(x.r,x.r), shuf<sh_rev<V::size()>>(x.i,x.i)), reinterpret_cast<Tcs *>(p));
+      else vstore(x, reinterpret_cast<Tcs *>(p));
+      }
+    template<typename V, typename Tfd> DUCC0_ALWAYS_INLINE auto tw(size_t q, size_t j) const
+      {
+      const Tfs *p = wa.data()+wi(q,j);
+      if constexpr (is_same_v<V,Tfd>) return Tcs(p[0], p[vl]);
+      else return Cmplx<V>(V(p, element_aligned_tag()), V(p+vl, element_aligned_tag()));
+      }
+    /* the butterfly at i (V==Tfd), or the V::size() ones starting there (scalar
+       data); complex values at (i-1,i), partners mirrored at (ido-i-1,ido-i);
+       c, o: block k of input, output */
+    template<bool fwd, typename V, typename Tfd> DUCC0_ALWAYS_INLINE void bfly(const Tfd *c, Tfd *o, size_t i) const
+      {
+      constexpr size_t n = is_same_v<V,Tfd> ? 1 : sizeof(V)/sizeof(Tfs);
+      const size_t so=ido*l1, q=i/2-1, im=ido-i-1-2*(n-1);  // im: lowest index of the mirrored values
+      array<Cmplx<V>,R> x;
+      if constexpr (fwd)
+        {
+        x[0]=ld<V,false>(c+i-1);
+        static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+          { x[j+1]=ld<V,false>(c+i-1+so*(j+1)).template special_mul<true>(tw<V,Tfd>(q,j)); });
+        dft<R,true,Tfs>(x);
+        static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE{ st<V,false>(x[m], o+i-1+ido*2*m); });
+        static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
+          { st<V,true>(Cmplx<V>(x[R-1-m].r, -x[R-1-m].i), o+im+ido*(2*m+1)); });
+        }
+      else
+        {
+        static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE{ x[m]=ld<V,false>(c+i-1+ido*2*m); });
+        static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
+          { auto y=ld<V,true>(c+im+ido*(2*m+1)); x[R-1-m]=Cmplx<V>(y.r, -y.i); });
+        dft<R,false,Tfs>(x);
+        st<V,false>(x[0], o+i-1);
+        static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+          { st<V,false>(x[j+1].template special_mul<false>(tw<V,Tfd>(q,j)), o+i-1+so*(j+1)); });
+        }
+      }
 
     // not inlined, for the same reason as cfftpR::exec_
     template<bool fwd, typename Tfd> DUCC0_NOINLINE Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
@@ -1695,8 +1768,44 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
       constexpr size_t h=(R-1)/2;
       const size_t so=ido*l1;
       const Tfd zero(0);
+      size_t k0=0;
+      if constexpr (is_same_v<Tfd,Tfs>)
+        if (ido==1)  // scalar data, only the real butterflies at i=0: SIMD over consecutive k
+          static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE  // full SIMD width, then narrower vectors
+          {
+          constexpr size_t v = vl>>decltype(s)::value;
+          if constexpr ((v>=2) && simd_exists<Tfs,v>)
+          {
+          using V = typename simd_select<Tfs,v>::type;
+          const V vzero(Tfs(0));
+          for (; k0+v<=l1; k0+=v)
+            {
+            array<Cmplx<V>,R> x;
+            array<V,R> y;
+            if constexpr (fwd)
+              {
+              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<V>(V(cc+k0+l1*j, element_aligned_tag()), vzero); });
+              dft<R,true,Tfs>(x);
+              y[0]=x[0].r;
+              static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE{ y[2*m+1]=x[m+1].r; y[2*m+2]=x[m+1].i; });
+              if constexpr ((R&1)==0) y[R-1]=x[R/2].r;
+              vscatter<R>(y, ch+R*k0);
+              }
+            else
+              {
+              vgather<R>(cc+R*k0, y);
+              x[0]=Cmplx<V>(y[0], vzero);
+              static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE
+                { x[m+1]=Cmplx<V>(y[2*m+1], y[2*m+2]); x[R-1-m]=Cmplx<V>(y[2*m+1], -y[2*m+2]); });
+              if constexpr ((R&1)==0) x[R/2]=Cmplx<V>(y[R-1], vzero);
+              dft<R,false,Tfs>(x);
+              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j].r.copy_to(ch+k0+l1*j, element_aligned_tag()); });
+              }
+            }
+          }
+          });
       // i=0: real values split into separate loop for vectorization over k
-      for (size_t k=0; k<l1; ++k)
+      for (size_t k=k0; k<l1; ++k)
         {
         const size_t ck = ido*k*(fwd ? 1 : R), ok = ido*k*(fwd ? R : 1);
         if constexpr (fwd)
@@ -1722,39 +1831,18 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
       if (ido==1) return ch;
       for (size_t k=0; k<l1; ++k)
         {
-        const size_t ck = ido*k*(fwd ? 1 : R), ok = ido*k*(fwd ? R : 1);
-        // complex values at (i-1,i), partners mirrored at (ido-i-1,ido-i)
-        for (size_t i=2; i<ido; i+=2)
-          {
-          const size_t im=ido-i-1;
-          const Tcs * DUCC0_RESTRICT w = wa.data()+(R-1)*(i/2-1);
-          array<C,R> x;
-          if constexpr (fwd)
+        // forward: cc[a+ido*(k+l1*j)] -> ch[a+ido*(j+R*k)], backward the other way
+        const Tfd * DUCC0_RESTRICT c = cc+ido*k*(fwd ? 1 : R);
+        Tfd * DUCC0_RESTRICT o = ch+ido*k*(fwd ? R : 1);
+        size_t i=2;
+        if constexpr (is_same_v<Tfd,Tfs>)
+          static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE  // full SIMD width, then narrower vectors
             {
-            x[0]=C(cc[ck+i-1], cc[ck+i]);
-            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
-              { x[j+1]=C(cc[ck+i-1+so*(j+1)], cc[ck+i+so*(j+1)]).template special_mul<true>(w[j]); });
-            dft<R,true,Tfs>(x);
-            static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE
-              { ch[ok+i-1+ido*2*m]=x[m].r; ch[ok+i+ido*2*m]=x[m].i; });
-            static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
-              { ch[ok+im+ido*(2*m+1)]=x[R-1-m].r; ch[ok+im+1+ido*(2*m+1)]=-x[R-1-m].i; });
-            }
-          else
-            {
-            static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE
-              { x[m]=C(cc[ck+i-1+ido*2*m], cc[ck+i+ido*2*m]); });
-            static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
-              { x[R-1-m]=C(cc[ck+im+ido*(2*m+1)], -cc[ck+im+1+ido*(2*m+1)]); });
-            dft<R,false,Tfs>(x);
-            ch[ok+i-1]=x[0].r; ch[ok+i]=x[0].i;
-            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
-              {
-              auto y = x[j+1].template special_mul<false>(w[j]);
-              ch[ok+i-1+so*(j+1)]=y.r; ch[ok+i+so*(j+1)]=y.i;
-              });
-            }
-          }
+            constexpr size_t v = vl>>decltype(s)::value;
+            if constexpr ((v>=2) && simd_exists<Tfs,v>)
+              for (; i+2*v-2<ido; i+=2*v) bfly<fwd,typename simd_select<Tfs,v>::type,Tfd>(c, o, i);
+            });
+        for (; i<ido; i+=2) bfly<fwd,Tfd,Tfd>(c, o, i);
         // even R, even ido: real values at i=ido-1, with half-step twiddles
         if constexpr ((R&1)==0)
           if ((ido&1)==0)
@@ -1763,17 +1851,17 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
             if constexpr (fwd)
               {
               static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
-                { x[j]=twmul<decltype(j)::value,2*R,true,Tfs>(C(cc[ck+ido-1+so*j], zero)); });
+                { x[j]=twmul<decltype(j)::value,2*R,true,Tfs>(C(c[ido-1+so*j], zero)); });
               dft<R,true,Tfs>(x);
-              static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE{ ch[ok+ido-1+ido*2*m]=x[m].r; ch[ok+ido*(2*m+1)]=x[m].i; });
+              static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE{ o[ido-1+ido*2*m]=x[m].r; o[ido*(2*m+1)]=x[m].i; });
               }
             else
               {
               static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
-                { x[m]=C(cc[ck+ido-1+ido*2*m], cc[ck+ido*(2*m+1)]); x[R-1-m]=C(x[m].r, -x[m].i); });
+                { x[m]=C(c[ido-1+ido*2*m], c[ido*(2*m+1)]); x[R-1-m]=C(x[m].r, -x[m].i); });
               dft<R,false,Tfs>(x);
               static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
-                { ch[ok+ido-1+so*j]=twmul<decltype(j)::value,2*R,false,Tfs>(x[j]).r; });
+                { o[ido-1+so*j]=twmul<decltype(j)::value,2*R,false,Tfs>(x[j]).r; });
               }
             }
         }
@@ -1782,7 +1870,7 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
 
   public:
     rfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((R-1)*((ido-1)/2))
+      : l1(l1_), ido(ido_), wa((((ido-1)/2+vl-1)/vl)*(R-1)*2*vl)
       {
       MR_assert((ido&1) || ((R&1)==0), "ido must be odd for odd radices");
       size_t N=R*l1*ido;
@@ -1790,12 +1878,15 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
       MR_assert(roots->size()==N*rfct, "mismatch");
       for (size_t q=0; q<(ido-1)/2; ++q)
         for (size_t j=0; j<R-1; ++j)
-          wa[(R-1)*q+j] = (*roots)[rfct*(j+1)*l1*(q+1)];
+          {
+          auto val = (*roots)[rfct*(j+1)*l1*(q+1)];
+          wa[wi(q,j)] = val.r; wa[wi(q,j)+vl] = val.i;
+          }
       }
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
