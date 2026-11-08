@@ -409,6 +409,7 @@ class fmav_info
         }
       shp = shp2;
       str = newstr;
+      sz = ranges::fold_left(shp, size_t(1), multiplies<>());
       }
 
     void swap_axes(size_t ax0, size_t ax1)
