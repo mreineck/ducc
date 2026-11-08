@@ -2591,6 +2591,14 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
         return make_shared<rfftpR<4,Tfs>>(l1, ido, roots);
       case 5:
         return make_shared<rfftpR<5,Tfs>>(l1, ido, roots);
+      case 7:
+        return make_shared<rfftpR<7,Tfs>>(l1, ido, roots);
+      case 9:
+        return make_shared<rfftpR<9,Tfs>>(l1, ido, roots);
+      case 11:
+        return make_shared<rfftpR<11,Tfs>>(l1, ido, roots);
+      case 13:
+        return make_shared<rfftpR<13,Tfs>>(l1, ido, roots);
       default:
         if (ip<135)
           return make_shared<rfftpg<Tfs>>(l1, ido, ip, roots);

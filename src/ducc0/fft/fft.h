@@ -256,6 +256,8 @@ template <typename Tfs> class rfftpass
         factors.push_back(2);
         std::swap(factors[0], factors.back());
         }
+      while ((N%9)==0)
+        { factors.push_back(9); N/=9; }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
         {
