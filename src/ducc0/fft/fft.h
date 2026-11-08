@@ -200,12 +200,18 @@ template <typename Tfs> class cfftpass
       MR_assert(N>0, "need a positive number");
       vector<size_t> factors;
       factors.reserve(15);
+      const bool odd = N&1;
       while ((N&7)==0)
         { factors.push_back(8); N>>=3; }
       while ((N&3)==0)
         { factors.push_back(4); N>>=2; }
       if ((N&1)==0)
         { factors.push_back(2); N>>=1; }
+      // radix 9 only for odd lengths: together with power-of-two factors it
+      // was slower than two radix-3 passes
+      if (odd)
+        while ((N%9)==0)
+          { factors.push_back(9); N/=9; }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
         {

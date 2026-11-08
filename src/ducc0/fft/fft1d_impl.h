@@ -1578,6 +1578,8 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
         return make_shared<cfftpR<7,Tfs>>(l1, ido, roots);
       case 8:
         return make_shared<cfftpR<8,Tfs>>(l1, ido, roots);
+      case 9:
+        return make_shared<cfftpR<9,Tfs>>(l1, ido, roots);
       case 11:
         return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
       default:
