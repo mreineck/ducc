@@ -87,7 +87,7 @@ static inline void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
   size_t pagesize = 4096;
   size_t npages = (sz+pagesize-1)/pagesize;
 // FIXME: perhaps reduce nthreads if number of pages is low?
-  nthreads = min(npages, max(size_t(1), npages/1024));
+  nthreads = min(nthreads, max(size_t(1), npages/1024));
   execParallel(npages, nthreads, [&](size_t lo, size_t hi) {
   for (size_t i=lo; i<hi; ++i)
     ptr[i*pagesize]=char(1);  // touch the memory page with a write access
