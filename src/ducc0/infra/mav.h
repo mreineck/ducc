@@ -65,6 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <tuple>
 #include "ducc0/infra/useful_macros.h"
@@ -389,7 +390,7 @@ class fmav_info
       for (size_t i=0; i<ndim(); ++i) res += str[i]*ptrdiff_t(ns[i]);
       return res;
       }
-    template<typename RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
+    template<random_access_iterator RAiter> ptrdiff_t idxval(RAiter beg, RAiter end) const
       {
       MR_assert(ndim()==size_t(end-beg), "incorrect number of indices");
       ptrdiff_t res = 0;
@@ -678,7 +679,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       { return raw(idx(ns...)); }
     const T &operator()(const shape_t &ns) const
       { return raw(idx(ns)); }
-    template<typename RAiter> const T& val(RAiter beg, RAiter end) const
+    template<random_access_iterator RAiter> const T& val(RAiter beg, RAiter end) const
       { return raw(idxval(beg, end)); }
 
     template<integral... Ns> void prefetch_r(Ns... ns) const
@@ -771,7 +772,7 @@ template<typename T> class vfmav: public cfmav<T>
     T &operator()(const shape_t &ns) const
       { return raw(idx(ns)); }
     using cfmav<T>::val;
-    template<typename RAiter> T& val(RAiter beg, RAiter end) const
+    template<random_access_iterator RAiter> T& val(RAiter beg, RAiter end) const
       { return raw(idxval(beg, end)); }
 
     using cfmav<T>::prefetch_r;
