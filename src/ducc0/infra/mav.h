@@ -439,21 +439,21 @@ class fmav_info
       swap(str[ax0], str[ax1]);
       }
 
-    fmav_info extend_and_broadcast(const shape_t &new_shape,
+    [[nodiscard]] fmav_info extend_and_broadcast(const shape_t &new_shape,
       const shape_t &axpos) const
       {
       stride_t new_stride(new_shape.size(), 0);
       extend_and_broadcast_info(shp, str, new_shape, axpos, new_stride);
       return fmav_info(new_shape, new_stride);
       }
-    fmav_info extend_and_broadcast(const shape_t &new_shape,
+    [[nodiscard]] fmav_info extend_and_broadcast(const shape_t &new_shape,
       size_t firstaxis) const
       {
       shape_t axpos(ndim());
       std::iota(axpos.begin(), axpos.end(), firstaxis);
       return extend_and_broadcast(new_shape, axpos);
       }
-    fmav_info transpose(const shape_t &axes) const
+    [[nodiscard]] fmav_info transpose(const shape_t &axes) const
       {
       shape_t shp2(ndim());
       stride_t str2(ndim());
@@ -554,7 +554,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       return strided_idx(str, ns...);
       }
     template<size_t nd2>
-    mav_info_proto<Tcontainer, nd2> extend_and_broadcast(const Tcontainer<size_t, nd2> &new_shape,
+    [[nodiscard]] mav_info_proto<Tcontainer, nd2> extend_and_broadcast(const Tcontainer<size_t, nd2> &new_shape,
       const vector<size_t> &axpos) const
       {
       static_assert(nd2>=ndim, "new shape smaller than original one");
@@ -563,7 +563,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       return mav_info_proto<Tcontainer, nd2>(new_shape, new_stride);
       }
     template<size_t nd2>
-    mav_info_proto<Tcontainer, nd2> extend_and_broadcast(const Tcontainer<size_t, nd2> &new_shape,
+    [[nodiscard]] mav_info_proto<Tcontainer, nd2> extend_and_broadcast(const Tcontainer<size_t, nd2> &new_shape,
       size_t firstaxis) const
       {
       vector<size_t> axpos(ndim);
@@ -577,14 +577,14 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       swap(shp[ax0], shp[ax1]);
       swap(str[ax0], str[ax1]);
       }
-    mav_info_proto transpose(const shape_t &axes) const
+    [[nodiscard]] mav_info_proto transpose(const shape_t &axes) const
       {
       shape_t shp2{};
       stride_t str2{};
       transpose_info(shp, str, axes, shp2, str2);
       return mav_info_proto(shp2, str2);
       }
-    mav_info_proto<Tcontainer, ndim+1> prepend_1() const
+    [[nodiscard]] mav_info_proto<Tcontainer, ndim+1> prepend_1() const
       {
       typename mav_info_proto<Tcontainer, ndim+1>::shape_t newshp;
       typename mav_info_proto<Tcontainer, ndim+1>::stride_t newstr;
@@ -691,15 +691,15 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       auto [ninfo, nofs] = subdata(slices);
       return cfmav(ninfo, tbuf::d+nofs, *this);
       }
-    cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
+    [[nodiscard]] cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
       {
       return cfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
       }
-    cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
+    [[nodiscard]] cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
       {
       return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
-    cfmav transpose(const shape_t &axes) const
+    [[nodiscard]] cfmav transpose(const shape_t &axes) const
       {
       return cfmav(tinfo::transpose(axes), *this);
       }
@@ -801,15 +801,15 @@ template<typename T> class vfmav: public cfmav<T>
       for (size_t i=0; i<shape.size(); ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
-    vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
+    [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
       }
-    vfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
+    [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
       {
       return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
       }
-    vfmav transpose(const shape_t &axes) const
+    [[nodiscard]] vfmav transpose(const shape_t &axes) const
       {
       return vfmav(tinfo::transpose(axes), *this);
       }
@@ -883,12 +883,12 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       return cmav<T,nd2> (ninfo, tbuf::d+nofs, *this);
       }
     template<size_t nd2>
-    cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
+    [[nodiscard]] cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
                                      const vector<size_t> &axpos) const
       {
       return {tinfo::template extend_and_broadcast<nd2>(new_shape, axpos), *this};
       }
-    template<size_t nd2> cmav<T,nd2>
+    template<size_t nd2> [[nodiscard]] cmav<T,nd2>
     extend_and_broadcast(const array<size_t, nd2> &new_shape, size_t firstaxis) const
       {
       return {tinfo::template extend_and_broadcast<nd2>(new_shape, firstaxis), *this};
@@ -911,11 +911,11 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       nshp.fill(0);
       return cmav(static_cast<T *>(nullptr), nshp);
       }
-    cmav transpose(const shape_t &axes) const
+    [[nodiscard]] cmav transpose(const shape_t &axes) const
       {
       return cmav(tinfo::transpose(axes), *this);
       }
-    cmav<T, ndim+1> prepend_1() const
+    [[nodiscard]] cmav<T, ndim+1> prepend_1() const
       {
       return cmav<T, ndim+1>(tinfo::prepend_1(), *this);
       }
@@ -1019,11 +1019,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray<ndim>(slc);
       }
-    vmav transpose(const shape_t &axes) const
+    [[nodiscard]] vmav transpose(const shape_t &axes) const
       {
       return vmav(tinfo::transpose(axes), *this);
       }
-    vmav<T, ndim+1> prepend_1() const
+    [[nodiscard]] vmav<T, ndim+1> prepend_1() const
       {
       return vmav<T, ndim+1>(tinfo::prepend_1(), *this);
       }
