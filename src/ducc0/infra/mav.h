@@ -99,7 +99,7 @@ template<typename T> void page_in_memory(T *ptr, size_t sz, size_t nthreads=1)
 struct PAGE_IN
   {
   size_t nthreads;
-  PAGE_IN(size_t nthreads_) : nthreads(nthreads_) {}
+  explicit PAGE_IN(size_t nthreads_) : nthreads(nthreads_) {}
   };
 
 template<typename T> class cmembuf
@@ -113,12 +113,12 @@ template<typename T> class cmembuf
       : ptr(other.ptr), rawptr(other.rawptr), d(d_) {}
 
     // externally owned data pointer
-    cmembuf(const T *d_)
+    explicit cmembuf(const T *d_)
       : d(d_) {}
     // share another memory buffer, but read-only
     cmembuf(const cmembuf &other)
       : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
-    cmembuf(size_t sz)
+    explicit cmembuf(size_t sz)
       : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
 #if 1
     cmembuf(size_t sz, uninitialized_dummy)
@@ -322,7 +322,7 @@ class fmav_info
       }
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
-    fmav_info(const shape_t &shape_)
+    explicit fmav_info(const shape_t &shape_)
       : fmav_info(shape_, shape2stride(shape_)) {}
     void assign(const fmav_info &other)
       {
@@ -482,9 +482,9 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
         sz(ranges::fold_left(shp, size_t(1), multiplies<>())) {}
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
-    mav_info_proto(const shape_t &shape_)
+    explicit mav_info_proto(const shape_t &shape_)
       : mav_info_proto(shape_, shape2stride(shape_)) {}
-    mav_info_proto(const fmav_info &inp)
+    explicit mav_info_proto(const fmav_info &inp)
       {
       MR_assert(inp.ndim()==ndim, "dimensionality mismatch");
       sz=1;
@@ -615,7 +615,7 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
 
 
   protected:
-    cfmav(const shape_t &shp_)
+    explicit cfmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     cfmav(const shape_t &shp_, uninitialized_dummy)
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
@@ -717,7 +717,7 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(d_, shp_, str_) {}
     vfmav(T *d_, const shape_t &shp_)
       : cfmav<T>(d_, shp_) {}
-    vfmav(const shape_t &shp_)
+    explicit vfmav(const shape_t &shp_)
       : cfmav<T>(shp_) {}
     vfmav(const shape_t &shp_, uninitialized_dummy)
       : cfmav<T>(shp_, UNINITIALIZED) {}
@@ -819,7 +819,7 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_), tbuf(size(), UNINITIALIZED) {}
     cmav(const shape_t &shp_, PAGE_IN page_in)
       : tinfo(shp_), tbuf(size(), page_in) {}
-    cmav(const shape_t &shp_)
+    explicit cmav(const shape_t &shp_)
       : tinfo(shp_), tbuf(size()) {}
     cmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
       : tinfo(shp_, str_), tbuf(buf) {}
@@ -833,7 +833,7 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       : tinfo(shp_, str_), tbuf(d_) {}
     cmav(const T *d_, const shape_t &shp_)
       : tinfo(shp_), tbuf(d_) {}
-    cmav(const cfmav<T> &inp)
+    explicit cmav(const cfmav<T> &inp)
       : tinfo(inp), tbuf(inp) {}
     void assign(const cmav &other)
       {
@@ -936,13 +936,13 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(d_, shp_, str_) {}
     vmav(T *d_, const shape_t &shp_)
       : parent(d_, shp_) {}
-    vmav(const shape_t &shp_)
+    explicit vmav(const shape_t &shp_)
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
     vmav(const shape_t &shp_, PAGE_IN page_in)
       : parent(shp_, page_in) {}
-    vmav(const vfmav<T> &inp)
+    explicit vmav(const vfmav<T> &inp)
       : parent(inp) {}
 
     void assign(const vmav &other)
