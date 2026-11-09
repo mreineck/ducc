@@ -105,6 +105,11 @@ struct PAGE_IN
   explicit PAGE_IN(size_t nthreads_) : nthreads(nthreads_) {}
   };
 
+/// Optional initialization argument of the allocating array constructors:
+/// UNINITIALIZED or PAGE_IN(nthreads). Without one, entries are value-initialized.
+template<typename T> concept mav_init
+  = same_as<T, uninitialized_dummy> || same_as<T, PAGE_IN>;
+
 template<typename T> class cmembuf
   {
   protected:
@@ -792,7 +797,7 @@ template<typename T> class vfmav: public cfmav<T>
      *  allocated memory slightly if necessary.
      *  \a init is forwarded to the constructor (e.g., UNINITIALIZED or
      *  PAGE_IN). Without it, the array data is default-initialized. */
-    template<typename... Tinit>
+    template<mav_init... Tinit> requires (sizeof...(Tinit)<=1)
     static vfmav build_noncritical(const shape_t &shape, Tinit... init)
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
@@ -1010,7 +1015,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return vmav(static_cast<T *>(nullptr), nshp);
       }
 
-    template<typename... Tinit>
+    template<mav_init... Tinit> requires (sizeof...(Tinit)<=1)
     static vmav build_noncritical(const shape_t &shape, Tinit... init)
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
