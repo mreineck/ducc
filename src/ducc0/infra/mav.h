@@ -147,16 +147,16 @@ template<typename T> class cmembuf
       d = other.d;
       }
     // read access to element #i
-    template<typename I> const T &raw(I i) const
+    template<integral I> const T &raw(I i) const
       { return d[i]; }
     // read access to data area
     const T *data() const
       { return d; }
 
     // prefetch the specified element for reading
-    template<typename I> void prefetch_r(I i) const
+    template<integral I> void prefetch_r(I i) const
       { DUCC0_PREFETCH_R(&d[i]); }
-    template<typename I> void prefetch_w(I i) const
+    template<integral I> void prefetch_w(I i) const
       { DUCC0_PREFETCH_W(&d[i]); }
   };
 
@@ -754,7 +754,7 @@ template<typename T> class vfmav: public cfmav<T>
 
     T *data() const
      { return const_cast<T *>(tbuf::d); }
-    template<typename I> T &raw(I i) const
+    template<integral I> T &raw(I i) const
       { return data()[i]; }
 
     // no-op. Needed for template tricks.
@@ -999,7 +999,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     T *data() const
      { return const_cast<T *>(tbuf::d); }
     // read access to element #i
-    template<typename I> T &raw(I i) const
+    template<integral I> T &raw(I i) const
       { return data()[i]; }
 
     static vmav build_empty()
