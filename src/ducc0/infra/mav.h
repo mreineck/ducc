@@ -195,15 +195,24 @@ struct slice
   };
 
 // C-contiguous strides for shape \a shp, written to \a str
-inline void shape2stride(span<const size_t> shp, span<ptrdiff_t> str)
+template<size_t Extent> inline void shape2stride(span<const size_t, Extent> shp, span<ptrdiff_t, Extent> str)
   {
-  MR_assert(shp.size()==str.size(), "dimensions mismatch");
   ptrdiff_t stride=1;
-  for (size_t i=shp.size(); i>0; --i)
+  if constexpr (Extent==std::dynamic_extent)
     {
-    str[i-1]=stride;
-    stride*=ptrdiff_t(shp[i-1]);
+    MR_assert(shp.size()==str.size(), "dimensions mismatch");
+    for (size_t i=shp.size(); i>0; --i)
+      {
+      str[i-1]=stride;
+      stride*=ptrdiff_t(shp[i-1]);
+      }
     }
+  else
+    for (size_t i=Extent; i>0; --i)
+      {
+      str[i-1]=stride;
+      stride*=ptrdiff_t(shp[i-1]);
+      }
   }
 template<size_t N> inline void shape2stride(const array<size_t, N> &shp,
   array<ptrdiff_t, N> &str)
@@ -224,14 +233,24 @@ template<size_t N> inline size_t shape_size(const array<size_t, N> &shp)
     { return (size_t(1) * ... * shp[Is]); }(make_index_sequence<N>{});
   }
 
-inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
+template<size_t Extent> inline bool is_contiguous(span<const size_t, Extent> shp, span<const ptrdiff_t, Extent> str)
   {
   ptrdiff_t stride=1;
-  for (size_t i=shp.size(); i>0; --i)
+  if constexpr (Extent==std::dynamic_extent)
     {
-    if ((shp[i-1]!=1) && (str[i-1]!=stride)) return false;
-    stride *= ptrdiff_t(shp[i-1]);
+    MR_assert(shp.size()==str.size(), "dimensions mismatch");
+    for (size_t i=shp.size(); i>0; --i)
+      {
+      if ((shp[i-1]!=1) && (str[i-1]!=stride)) return false;
+      stride *= ptrdiff_t(shp[i-1]);
+      }
     }
+  else
+    for (size_t i=Extent; i>0; --i)
+      {
+      if ((shp[i-1]!=1) && (str[i-1]!=stride)) return false;
+      stride *= ptrdiff_t(shp[i-1]);
+      }
   return true;
   }
 
@@ -332,7 +351,7 @@ class fmav_info
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res(shp.size());
-      detail_mav::shape2stride(shp, res);
+      detail_mav::shape2stride(span(shp), span(res));
       return res;
       }
 
@@ -376,7 +395,7 @@ class fmav_info
      *  shape of the last dimension etc. */
     bool contiguous() const
       {
-      return is_contiguous(shp, str);
+      return is_contiguous(span(shp), span(str));
       }
     /// Returns true iff this->shape and \a other.shape match.
     bool conformable(const fmav_info &other) const
@@ -494,7 +513,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     static stride_t shape2stride(const shape_t &shp)
       {
       stride_t res{};
-      detail_mav::shape2stride(shp, res);
+      detail_mav::shape2stride(span<const size_t,ndim>(shp), span<ptrdiff_t,ndim>(res));
       return res;
       }
 

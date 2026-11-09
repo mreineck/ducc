@@ -103,8 +103,8 @@ DUCC0_NOINLINE void opt_shp_str(fmav_info::shape_t &shp, vector<fmav_info::strid
     }
   }
 
-static tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
-  prep_common(const vector<fmav_info> &info)
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep(const vector<fmav_info> &info)
   {
   auto narr = info.size();
   MR_assert(narr>=1, "need at least one array");
@@ -123,16 +123,12 @@ static tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
   return make_tuple(shp, str);
   }
 
-DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
-  multiprep(const vector<fmav_info> &info)
-  { return prep_common(info); }
-
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, size_t>
   multiprep(const vector<fmav_info> &info, const vector<size_t> &tsizes)
   {
   auto narr = info.size();
   MR_assert(tsizes.size()==narr, "tsizes has wrong length");
-  auto [shp, str] = prep_common(info);
+  auto [shp, str] = multiprep(info);
 
   bool transpose=false;
   size_t ndim=shp.size();
