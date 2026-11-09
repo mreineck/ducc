@@ -358,7 +358,7 @@ class fmav_info
     /// Returns the strides of the object.
     const stride_t &stride() const { return str; }
     /// Returns the stride along dimension \a i.
-    const ptrdiff_t &stride(size_t i) const { return str[i]; }
+    ptrdiff_t stride(size_t i) const { return str[i]; }
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
@@ -526,7 +526,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     /// Returns the strides of the object.
     const stride_t &stride() const { return str; }
     /// Returns the stride along dimension \a i.
-    const ptrdiff_t &stride(size_t i) const { return str[i]; }
+    ptrdiff_t stride(size_t i) const { return str[i]; }
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
@@ -1291,7 +1291,7 @@ template<typename T, size_t ndim> class mavref
     /// Returns the strides of the object.
     const stride_t &stride() const { return info.stride(); }
     /// Returns the stride along dimension \a i.
-    const ptrdiff_t &stride(size_t i) const { return info.stride(i); }
+    ptrdiff_t stride(size_t i) const { return info.stride(i); }
     /// Returns true iff the last dimension has stride 1.
     /**  Typically used for optimization purposes. */
     bool last_contiguous() const
