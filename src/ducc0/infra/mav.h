@@ -1247,7 +1247,7 @@ template<typename ReduceType, typename Func, typename Ttuple>
   }
 
 template<typename ReduceType, typename Func, typename... Targs>
-  ReduceType mav_apply_reduce(Func &&func, int nthreads, Targs... args)
+  ReduceType mav_apply_reduce(Func &&func, size_t nthreads, Targs... args)
   {
   auto [shp, str, block0, block1] = multiprep({args...},
     {sizeof(args.data()[0])...});
@@ -1263,7 +1263,7 @@ template<typename ReduceType, typename Func, typename... Targs>
 
 struct NoReduction { void reduceWith(NoReduction) {} };
 template<typename Func, typename... Targs>
-  void mav_apply(Func &&func, int nthreads, Targs... args)
+  void mav_apply(Func &&func, size_t nthreads, Targs... args)
   {
   mav_apply_reduce<NoReduction>([&func](auto &... refs)
     { func(refs...); return NoReduction(); }, nthreads, std::move(args)...);
