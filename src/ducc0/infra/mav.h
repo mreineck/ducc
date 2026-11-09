@@ -80,9 +80,9 @@ namespace detail_mav {
 using namespace std;
 
 struct uninitialized_dummy {};
-constexpr uninitialized_dummy UNINITIALIZED;
+inline constexpr uninitialized_dummy UNINITIALIZED;
 
-static inline void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
+inline void page_in_memory2(char *ptr, size_t sz, size_t nthreads=1)
   {
   if (sz==0) return;
 // FIXME: can we determine the real page size for the underlying chunk of memory?
@@ -160,7 +160,7 @@ template<typename T> class cmembuf
       { DUCC0_PREFETCH_W(&d[i]); }
   };
 
-constexpr size_t MAXIDX=numeric_limits<size_t>::max();
+inline constexpr size_t MAXIDX=numeric_limits<size_t>::max();
 
 struct slice
   {
@@ -1108,7 +1108,7 @@ template<typename Ttuple> inline auto get_strides
 // most a factor of (BALANCE_FACTOR+1)/BALANCE_FACTOR slower than a perfectly
 // balanced distribution (12.5% for the value 8). Larger values balance better,
 // but split the work into shorter pieces increasing per-piece overhead.
-constexpr size_t BALANCE_FACTOR=8;
+inline constexpr size_t BALANCE_FACTOR=8;
 inline size_t parallel_naxes(const vector<size_t> &shp, size_t nthreads,
   size_t block0)
   {
