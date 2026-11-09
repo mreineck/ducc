@@ -197,6 +197,24 @@ inline void shape2stride(span<const size_t> shp, span<ptrdiff_t> str)
     stride*=ptrdiff_t(shp[i-1]);
     }
   }
+template<size_t N> inline void shape2stride(const array<size_t, N> &shp,
+  array<ptrdiff_t, N> &str)
+  {
+  [&]<size_t... Is>(index_sequence<Is...>)
+    {
+    [[maybe_unused]] ptrdiff_t stride=1;
+    ((str[N-1-Is]=stride, stride*=ptrdiff_t(shp[N-1-Is])), ...);
+    }(make_index_sequence<N>{});
+  }
+
+// Number of entries of an array with shape \a shp
+inline size_t shape_size(span<const size_t> shp)
+  { return ranges::fold_left(shp, size_t(1), multiplies<>()); }
+template<size_t N> inline size_t shape_size(const array<size_t, N> &shp)
+  {
+  return [&]<size_t... Is>(index_sequence<Is...>)
+    { return (size_t(1) * ... * shp[Is]); }(make_index_sequence<N>{});
+  }
 
 inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
   {
@@ -315,8 +333,7 @@ class fmav_info
     fmav_info() : shp(1,0), str(1,0), sz(0) {}
     /// Constructs an object with the given shape and stride.
     fmav_info(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_),
-        sz(ranges::fold_left(shp, size_t(1), multiplies<>()))
+      : shp(shape_), str(stride_), sz(shape_size(shp))
       {
       MR_assert(shp.size()==str.size(), "dimensions mismatch");
       }
@@ -409,7 +426,7 @@ class fmav_info
         }
       shp = shp2;
       str = newstr;
-      sz = ranges::fold_left(shp, size_t(1), multiplies<>());
+      sz = shape_size(shp);
       }
 
     void swap_axes(size_t ax0, size_t ax1)
@@ -478,8 +495,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
     mav_info_proto() = default;
     /// Constructs an object with the given shape and stride.
     mav_info_proto(const shape_t &shape_, const stride_t &stride_)
-      : shp(shape_), str(stride_),
-        sz(ranges::fold_left(shp, size_t(1), multiplies<>())) {}
+      : shp(shape_), str(stride_), sz(shape_size(shp)) {}
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     explicit mav_info_proto(const shape_t &shape_)
