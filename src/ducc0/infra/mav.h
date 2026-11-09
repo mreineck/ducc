@@ -65,6 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <tuple>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/error_handling.h"
@@ -159,7 +160,7 @@ template<typename T> class cmembuf
       { DUCC0_PREFETCH_W(&d[i]); }
   };
 
-constexpr size_t MAXIDX=~(size_t(0));
+constexpr size_t MAXIDX=numeric_limits<size_t>::max();
 
 struct slice
   {
