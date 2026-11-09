@@ -57,6 +57,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <span>
 #include <vector>
 #include <memory>
@@ -228,7 +229,7 @@ inline bool is_contiguous(span<const size_t> shp, span<const ptrdiff_t> str)
   }
 
 // Offset of the entry at multi-index \a ns for strides \a str
-template<typename... Ns> inline ptrdiff_t strided_idx(
+template<integral... Ns> inline ptrdiff_t strided_idx(
   [[maybe_unused]] span<const ptrdiff_t> str, Ns... ns)
   {
   ptrdiff_t res=0;
@@ -375,7 +376,7 @@ class fmav_info
       { return shp==other.shp; }
     /// Returns the one-dimensional index of an entry from the given
     /// multi-dimensional index tuple, taking strides into account.
-    template<typename... Ns> ptrdiff_t idx(Ns... ns) const
+    template<integral... Ns> ptrdiff_t idx(Ns... ns) const
       {
       MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return strided_idx(str, ns...);
@@ -546,7 +547,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
       { return shp==other; }
     /// Returns the one-dimensional index of an entry from the given
     /// multi-dimensional index tuple, taking strides into account.
-    template<typename... Ns> ptrdiff_t idx(Ns... ns) const
+    template<integral... Ns> ptrdiff_t idx(Ns... ns) const
       {
       static_assert(ndim==sizeof...(ns), "incorrect number of indices");
       return strided_idx(str, ns...);
@@ -672,14 +673,14 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       }
 
     /// Returns the data entry at the given set of indices.
-    template<typename... Ns> const T &operator()(Ns... ns) const
+    template<integral... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     const T &operator()(const shape_t &ns) const
       { return raw(idx(ns)); }
     template<typename RAiter> const T& val(RAiter beg, RAiter end) const
       { return raw(idxval(beg, end)); }
 
-    template<typename... Ns> void prefetch_r(Ns... ns) const
+    template<integral... Ns> void prefetch_r(Ns... ns) const
       { cmembuf<T>::prefetch_r(idx(ns...)); }
     void prefetch_r(const shape_t &ns) const
       { cmembuf<T>::prefetch_r(idx(ns)); }
@@ -764,7 +765,7 @@ template<typename T> class vfmav: public cfmav<T>
       cmembuf<T>::assign(other);
       }
 
-    template<typename... Ns> T &operator()(Ns... ns) const
+    template<integral... Ns> T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
     T &operator()(const shape_t &ns) const
       { return raw(idx(ns)); }
@@ -773,7 +774,7 @@ template<typename T> class vfmav: public cfmav<T>
       { return raw(idxval(beg, end)); }
 
     using cfmav<T>::prefetch_r;
-    template<typename... Ns> void prefetch_w(Ns... ns) const
+    template<integral... Ns> void prefetch_w(Ns... ns) const
       { cmembuf<T>::prefetch_w(idx(ns...)); }
     void prefetch_r(const shape_t &ns) const
       { cmembuf<T>::prefetch_w(idx(ns)); }
@@ -869,10 +870,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     // Needed for template tricks.
     cfmav<T> to_fmav() const { return operator cfmav<T>(); }
 
-    template<typename... Ns> const T &operator()(Ns... ns) const
+    template<integral... Ns> const T &operator()(Ns... ns) const
       { return raw(idx(ns...)); }
 
-    template<typename... Ns> void prefetch_r(Ns... ns) const
+    template<integral... Ns> void prefetch_r(Ns... ns) const
       { cmembuf<T>::prefetch_r(idx(ns...)); }
 
     template<size_t nd2> cmav<T,nd2> subarray(const vector<slice> &slices) const
@@ -981,11 +982,11 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     // Needed for template tricks.
     vfmav<T> to_fmav() const { return operator vfmav<T>(); }
 
-    template<typename... Ns> T &operator()(Ns... ns) const
+    template<integral... Ns> T &operator()(Ns... ns) const
       { return const_cast<T &>(parent::operator()(ns...)); }
 
     using parent::prefetch_r;
-    template<typename... Ns> void prefetch_w(Ns... ns) const
+    template<integral... Ns> void prefetch_w(Ns... ns) const
       { cmembuf<T>::prefetch_w(idx(ns...)); }
 
     template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices) const
@@ -1290,7 +1291,7 @@ template<typename T, size_t ndim> class mavref
     using element_type = T;
     using value_type = remove_cv_t<T>;
     mavref(const mav_info<ndim> &info_, T *d_) : info(info_), d(d_) {}
-    template<typename... Ns> T &operator()(Ns... ns) const
+    template<integral... Ns> T &operator()(Ns... ns) const
       { return d[info.idx(ns...)]; }
     /// Returns the total number of entries in the object.
     size_t size() const { return info.size(); }
