@@ -628,6 +628,8 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
     using tbuf::raw, tbuf::data;
+    using element_type = const T;
+    using value_type = T;
 
 
   protected:
@@ -726,6 +728,8 @@ template<typename T> class vfmav: public cfmav<T>
 
   public:
     using tbuf::data, tinfo::ndim;
+    using element_type = T;
+    using value_type = T;
     vfmav() {}
     vfmav(T *d_, const fmav_info &info)
       : cfmav<T>(d_, info) {}
@@ -827,6 +831,8 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
     using tbuf::raw, tbuf::data;
+    using element_type = const T;
+    using value_type = T;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
@@ -936,6 +942,8 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
     using tbuf::data;
+    using element_type = T;
+    using value_type = T;
     using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
@@ -1250,7 +1258,7 @@ template<typename ReduceType, typename Func, typename... Targs>
   ReduceType mav_apply_reduce(Func &&func, size_t nthreads, Targs... args)
   {
   auto [shp, str, block0, block1] = multiprep({args...},
-    {sizeof(args.data()[0])...});
+    {sizeof(typename Targs::value_type)...});
   bool last_contiguous = true;
   if (shp.size()>0)
     for (const auto &s:str)
@@ -1279,6 +1287,8 @@ template<typename T, size_t ndim> class mavref
   public:
     using shape_t = typename mav_info<ndim>::shape_t;
     using stride_t = typename mav_info<ndim>::stride_t;
+    using element_type = T;
+    using value_type = remove_cv_t<T>;
     mavref(const mav_info<ndim> &info_, T *d_) : info(info_), d(d_) {}
     template<typename... Ns> T &operator()(Ns... ns) const
       { return d[info.idx(ns...)]; }
