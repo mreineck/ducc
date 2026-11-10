@@ -184,3 +184,25 @@ void compile_cmav_ranks()
   (void)f.prepend_1();
   (void)cfmav<double>::build_uniform({2, 3}, 1.);
   }
+
+/* vfmav is the dynamic-rank vmav, with the same conversion rules as cfmav. */
+static_assert(std::is_same_v<vfmav<double>, vmav<double, dynamic_rank>>);
+static_assert(std::is_convertible_v<vmav<double, 2>, vfmav<double>>);
+static_assert(std::is_convertible_v<vmav<double, 2>, cfmav<double>>);
+static_assert(!std::is_convertible_v<vfmav<double>, vmav<double, 2>>);
+static_assert(std::is_constructible_v<vmav<double, 2>, vfmav<double>>);
+static_assert(!std::is_constructible_v<vmav<double, 2>, cmav<double, 2>>);
+template<typename T> size_t takes_vfmav(const vfmav<T> &a) { return a.ndim(); }
+void compile_vmav_ranks()
+  {
+  std::vector<double> d(6);
+  vmav<double, 2> a(d.data(), {2, 3});
+  vfmav<double> f(d.data(), {2, 3});
+  (void)takes_vfmav(f);
+  (void)takes_vfmav(a.to_fmav());
+  vmav<double, 1> s = subarray<1>(f, {{1}, {}});
+  s(0) = 1.;
+  f(fmav_info::shape_t{1, 2}) = 2.;
+  (void)f.prepend_1();
+  (void)vfmav<double>::build_noncritical({2, 3}, UNINITIALIZED);
+  }

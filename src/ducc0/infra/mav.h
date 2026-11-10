@@ -681,125 +681,22 @@ template<size_t nd2=dynamic_rank, typename T, size_t R> cmav<T, nd2> subarray
   (const cmav<T, R> &arr, const vector<slice> &slices)
   { return arr.template subarray<nd2>(slices); }
 
-template<typename T> class vfmav: public cfmav<T>
+/// Writable view of an array, see cmav.
+template<typename T, size_t R> class vmav: public cmav<T, R>
   {
   protected:
+    template<typename T2, size_t R2> friend class vmav;
+
+    using parent = cmav<T, R>;
+    using tinfo = mav_info<R>;
     using tbuf = cmembuf<T>;
-    using tinfo = fmav_info;
-    using tinfo::shp, tinfo::str;
-    using fmav_info::idx;
+    using tinfo::dyn, tinfo::idx, tinfo::idxval;
 
   public:
     using typename tinfo::shape_t;
     using typename tinfo::stride_t;
-    using tinfo::size, tinfo::shape, tinfo::stride;
-
-  protected:
-    template<typename T2, size_t nd2> friend class vmav;
-
-    vfmav(const fmav_info &info, const tbuf &buf)
-      : cfmav<T>(info, buf) {}
-    vfmav(const fmav_info &info, T *d_, const tbuf &buf)
-      : cfmav<T>(info, d_, buf) {}
-
-  public:
-    using tbuf::data, tinfo::ndim;
     using element_type = T;
     using value_type = T;
-    vfmav() {}
-    vfmav(T *d_, const fmav_info &info)
-      : cfmav<T>(d_, info) {}
-    vfmav(T *d_, const shape_t &shp_, const stride_t &str_)
-      : cfmav<T>(d_, shp_, str_) {}
-    vfmav(T *d_, const shape_t &shp_)
-      : cfmav<T>(d_, shp_) {}
-    explicit vfmav(const shape_t &shp_)
-      : cfmav<T>(shp_) {}
-    vfmav(const shape_t &shp_, uninitialized_dummy)
-      : cfmav<T>(shp_, UNINITIALIZED) {}
-    vfmav(const shape_t &shp_, PAGE_IN page_in)
-      : cfmav<T>(shp_, page_in) {}
-    vfmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
-      : cfmav<T>(shp_, str_, UNINITIALIZED) {}
-    vfmav(const shape_t &shp_, const stride_t &str_, PAGE_IN page_in)
-      : cfmav<T>(shp_, str_, page_in) {}
-    vfmav(const vfmav &other, const shape_t &shp_, const stride_t &str_)
-      : cfmav<T>(other, shp_, str_) {}
-
-    T *data() const
-      { return const_cast<T *>(tbuf::d); }
-    template<integral I> T &raw(I i) const
-      { return data()[i]; }
-
-    // no-op. Needed for template tricks.
-    vfmav to_fmav() const { return *this; }
-
-    void assign(const vfmav &other)
-      {
-      fmav_info::assign(other);
-      cmembuf<T>::assign(other);
-      }
-
-    template<integral... Ns> T &operator()(Ns... ns) const
-      { return raw(idx(ns...)); }
-    T &operator()(const shape_t &ns) const
-      { return raw(idx(ns)); }
-    using cfmav<T>::val;
-    template<random_access_iterator RAiter> T& val(RAiter beg, RAiter end) const
-      { return raw(idxval(beg, end)); }
-
-    using cfmav<T>::prefetch_r;
-    template<integral... Ns> void prefetch_w(Ns... ns) const
-      { cmembuf<T>::prefetch_w(idx(ns...)); }
-    void prefetch_w(const shape_t &ns) const
-      { cmembuf<T>::prefetch_w(idx(ns)); }
-
-    vfmav subarray(const vector<slice> &slices) const
-      {
-      auto [ninfo, nofs] = tinfo::subdata(slices);
-      return vfmav(ninfo, data()+nofs, *this);
-      }
-    /** Returns a writable fmav with the specified shape.
-     *  The strides are chosen in such a way that critical strides (multiples
-     *  of 4096 bytes) along any dimension are avoided, by enlarging the
-     *  allocated memory slightly if necessary.
-     *  \a init is forwarded to the constructor (e.g., UNINITIALIZED or
-     *  PAGE_IN). Without it, the array data is default-initialized. */
-    template<mav_init... Tinit> requires (sizeof...(Tinit)<=1)
-    static vfmav build_noncritical(const shape_t &shape, Tinit... init)
-      {
-      auto shape2 = noncritical_shape(shape, sizeof(T));
-      vfmav tmp(shape2, init...);
-      if (shape2==shape) return tmp;
-      vector<slice> slc(shape.size());
-      for (size_t i=0; i<shape.size(); ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray(slc);
-      }
-    [[nodiscard]] vfmav transpose(const shape_t &axes) const
-      { return vfmav(tinfo::transpose(axes), *this); }
-  };
-
-template<typename T> vfmav<T> subarray
-  (const vfmav<T> &arr, const vector<slice> &slices)
-  { return arr.subarray(slices); }
-
-template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
-  {
-  protected:
-    template<typename T2, size_t nd2> friend class vmav;
-
-    using parent = cmav<T, ndim>;
-    using tinfo = mav_info<ndim>;
-    using tbuf = cmembuf<T>;
-    using tinfo::shp, tinfo::str;
-
-  public:
-    using typename tinfo::shape_t;
-    using typename tinfo::stride_t;
-    using tbuf::data;
-    using element_type = T;
-    using value_type = T;
-    using tinfo::contiguous, tinfo::size, tinfo::idx, tinfo::conformable;
 
   protected:
     vmav(const tinfo &info, T *d_, const tbuf &buf)
@@ -807,7 +704,7 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     vmav(const tinfo &info, const tbuf &buf)
       : parent(info, buf) {}
     vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
-      : parent(buf, shp_, str_){}
+      : parent(buf, shp_, str_) {}
 
   public:
     vmav() {}
@@ -815,38 +712,52 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       : parent(d_, shp_, str_) {}
     vmav(T *d_, const shape_t &shp_)
       : parent(d_, shp_) {}
+    vmav(T *d_, const tinfo &info)
+      : parent(d_, info) {}
     explicit vmav(const shape_t &shp_)
       : parent(shp_) {}
     vmav(const shape_t &shp_, uninitialized_dummy)
       : parent(shp_, UNINITIALIZED) {}
     vmav(const shape_t &shp_, PAGE_IN page_in)
       : parent(shp_, page_in) {}
-    explicit vmav(const vfmav<T> &inp)
-      : parent(inp) {}
+    vmav(const shape_t &shp_, const stride_t &str_, uninitialized_dummy)
+      : parent(shp_, str_, UNINITIALIZED) {}
+    vmav(const shape_t &shp_, const stride_t &str_, PAGE_IN page_in)
+      : parent(shp_, str_, page_in) {}
+    /// Shares the data of \a other, with a new shape and strides.
+    vmav(const vmav &other, const shape_t &shp_, const stride_t &str_)
+      : parent(other, shp_, str_) {}
+    /// Converts between fixed and dynamic rank: implicitly towards dynamic
+    /// rank, explicitly (with a runtime check) towards fixed rank.
+    template<size_t R2> requires ((R2!=R) && (dyn || (R2==dynamic_rank)))
+    explicit(!dyn) vmav(const vmav<T, R2> &other)
+      : parent(other) {}
 
     void assign(const vmav &other)
       { parent::assign(other); }
     void unassign()
       { assign(vmav()); }
-    using tinfo::swap_axes;
-    operator vfmav<T>() const
-      {
-      return vfmav<T>(fmav_info({shp.begin(), shp.end()}, {str.begin(), str.end()}), *this);
-      }
     // Needed for template tricks.
-    vfmav<T> to_fmav() const { return operator vfmav<T>(); }
+    vmav<T, dynamic_rank> to_fmav() const { return *this; }
 
     template<integral... Ns> T &operator()(Ns... ns) const
-      { return const_cast<T &>(parent::operator()(ns...)); }
+      { return raw(idx(ns...)); }
+    T &operator()(const shape_t &ns) const
+      { return raw(idx(ns)); }
+    template<random_access_iterator RAiter> T &val(RAiter beg, RAiter end) const
+      { return raw(idxval(beg, end)); }
 
     using parent::prefetch_r;
     template<integral... Ns> void prefetch_w(Ns... ns) const
-      { cmembuf<T>::prefetch_w(idx(ns...)); }
+      { tbuf::prefetch_w(idx(ns...)); }
+    void prefetch_w(const shape_t &ns) const
+      { tbuf::prefetch_w(idx(ns)); }
 
-    template<size_t nd2> vmav<T,nd2> subarray(const vector<slice> &slices) const
+    /// View of the sub-array described by \a slices, with rank \a nd2.
+    template<size_t nd2=dynamic_rank> vmav<T, nd2> subarray(const vector<slice> &slices) const
       {
-      auto [ninfo, nofs] = tinfo::template subdata<nd2> (slices);
-      return vmav<T,nd2> (ninfo, data()+nofs, *this);
+      auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
+      return vmav<T, nd2>(ninfo, data()+nofs, *this);
       }
 
     T *data() const
@@ -855,35 +766,42 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
     template<integral I> T &raw(I i) const
       { return data()[i]; }
 
-    static vmav build_empty()
-      {
-      shape_t nshp;
-      nshp.fill(0);
-      return vmav(static_cast<T *>(nullptr), nshp);
-      }
+    static vmav build_empty() requires (!dyn)
+      { return vmav(static_cast<T *>(nullptr), shape_t{}); }
 
+    /** Returns a writable array with the specified shape.
+     *  The strides are chosen in such a way that critical strides (multiples
+     *  of 4096 bytes) along any dimension are avoided, by enlarging the
+     *  allocated memory slightly if necessary.
+     *  \a init is forwarded to the constructor (e.g., UNINITIALIZED or
+     *  PAGE_IN). Without it, the array data is default-initialized. */
     template<mav_init... Tinit> requires (sizeof...(Tinit)<=1)
     static vmav build_noncritical(const shape_t &shape, Tinit... init)
       {
       auto shape2 = noncritical_shape(shape, sizeof(T));
       vmav tmp(shape2, init...);
       if (shape2==shape) return tmp;
-      vector<slice> slc(ndim);
-      for (size_t i=0; i<ndim; ++i) slc[i] = slice(0, shape[i]);
-      return tmp.subarray<ndim>(slc);
+      vector<slice> slc(shape.size());
+      for (size_t i=0; i<shape.size(); ++i) slc[i] = slice(0, shape[i]);
+      return tmp.template subarray<R>(slc);
       }
+    // extend_and_broadcast() is inherited from cmav: the result is read-only,
+    // since broadcast axes (stride 0) let many indices share one entry.
     [[nodiscard]] vmav transpose(const shape_t &axes) const
       { return vmav(tinfo::transpose(axes), *this); }
-    [[nodiscard]] vmav<T, ndim+1> prepend_1() const
-      { return vmav<T, ndim+1>(tinfo::prepend_1(), *this); }
-    template<size_t ndim2> vmav<T, ndim2> reinterpret
-      (const typename vmav<T, ndim2>::shape_t &newshp,
-       const typename vmav<T, ndim2>::stride_t &newstr) const
-      { return vmav<T, ndim2>(*this, newshp, newstr); }
+    [[nodiscard]] vmav<T, dyn ? R : R+1> prepend_1() const
+      { return {tinfo::prepend_1(), *this}; }
+    template<size_t R2> vmav<T, R2> reinterpret
+      (const typename vmav<T, R2>::shape_t &newshp,
+       const typename vmav<T, R2>::stride_t &newstr) const
+      { return vmav<T, R2>(*this, newshp, newstr); }
   };
 
-template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
-  (const vmav<T, ndim> &arr, const vector<slice> &slices)
+/// Writable view of an array with a runtime number of dimensions
+template<typename T> using vfmav = vmav<T, dynamic_rank>;
+
+template<size_t nd2=dynamic_rank, typename T, size_t R> vmav<T, nd2> subarray
+  (const vmav<T, R> &arr, const vector<slice> &slices)
   { return arr.template subarray<nd2>(slices); }
 
 // various operations involving fmav objects of the same shape -- experimental
