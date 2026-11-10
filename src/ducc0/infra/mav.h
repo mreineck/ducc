@@ -1043,9 +1043,12 @@ template<typename ReduceType, typename Func, typename Ttuple>
   }
 
 template<typename ReduceType, typename Func, typename... Targs>
-  ReduceType mav_apply_reduce(Func &&func, size_t nthreads, Targs... args)
+  ReduceType mav_apply_reduce(Func &&func, size_t nthreads, const Targs &... args)
   {
-  auto [shp, str, block0, block1] = multiprep({args...},
+  vector<fmav_info> infos;  // not from {args...}: that would copy all infos
+  infos.reserve(sizeof...(args));
+  (infos.emplace_back(args), ...);
+  auto [shp, str, block0, block1] = multiprep(infos,
     {sizeof(typename Targs::value_type)...});
   bool last_contiguous = true;
   if (shp.size()>0)
@@ -1059,10 +1062,10 @@ template<typename ReduceType, typename Func, typename... Targs>
 
 struct NoReduction { void reduceWith(NoReduction) {} };
 template<typename Func, typename... Targs>
-  void mav_apply(Func &&func, size_t nthreads, Targs... args)
+  void mav_apply(Func &&func, size_t nthreads, const Targs &... args)
   {
   mav_apply_reduce<NoReduction>([&func](auto &... refs)
-    { func(refs...); return NoReduction(); }, nthreads, std::move(args)...);
+    { func(refs...); return NoReduction(); }, nthreads, args...);
   }
 
 
