@@ -160,3 +160,27 @@ void compile_mav_info_ranks()
   (void)f.contiguous();
   (void)f.extend_and_broadcast(fmav_info::shape_t{4, 2, 3}, 1);
   }
+
+/* cfmav is the dynamic-rank cmav: conversions between ranks are implicit
+   towards dynamic rank and explicit towards fixed rank, deduction through
+   the alias keeps working, and rank-specific helpers exist for both. */
+static_assert(std::is_same_v<cfmav<double>, cmav<double, dynamic_rank>>);
+static_assert(std::is_convertible_v<cmav<double, 2>, cfmav<double>>);
+static_assert(!std::is_convertible_v<cfmav<double>, cmav<double, 2>>);
+static_assert(std::is_constructible_v<cmav<double, 2>, cfmav<double>>);
+static_assert(!std::is_constructible_v<cmav<double, 2>, cmav<double, 3>>);
+template<typename T> size_t takes_cfmav(const cfmav<T> &a) { return a.ndim(); }
+void compile_cmav_ranks()
+  {
+  std::vector<double> d(6);
+  cmav<double, 2> a(d.data(), {2, 3});
+  cfmav<double> f(d.data(), {2, 3});
+  (void)takes_cfmav(f);
+  (void)takes_cfmav(a.to_fmav());
+  (void)a.subarray(vector<slice>{{0, 1}, {}});
+  (void)subarray<1>(f, {{1}, {}});
+  (void)a.extend_and_broadcast(std::array<size_t, 3>{4, 2, 3}, 1);
+  (void)f.extend_and_broadcast(fmav_info::shape_t{4, 2, 3}, 1);
+  (void)f.prepend_1();
+  (void)cfmav<double>::build_uniform({2, 3}, 1.);
+  }
