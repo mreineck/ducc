@@ -386,6 +386,10 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
     mav_info_proto(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_), sz(shape_size(shp))
       { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
+    /// Same, taking over the storage of \a shape_ and \a stride_.
+    mav_info_proto(shape_t &&shape_, stride_t &&stride_) requires dyn
+      : shp(std::move(shape_)), str(std::move(stride_)), sz(shape_size(shp))
+      { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     explicit mav_info_proto(const shape_t &shape_)
@@ -543,7 +547,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       auto nshp = zeros<typename res_t::shape_t>(nd);
       auto nstr = zeros<typename res_t::stride_t>(nd);
       auto nofs = subdata_info(shp, str, slices, nshp, nstr);
-      return make_tuple(res_t(nshp, nstr), nofs);
+      return make_tuple(res_t(std::move(nshp), std::move(nstr)), nofs);
       }
   };
 
@@ -599,6 +603,8 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       : tinfo(info), tbuf(buf) {}
     cmav(const tinfo &info, const T *d_, const tbuf &buf)
       : tinfo(info), tbuf(d_, buf) {}
+    cmav(tinfo &&info, const T *d_, const tbuf &buf)
+      : tinfo(std::move(info)), tbuf(d_, buf) {}
 
   public:
     cmav() {}
@@ -645,7 +651,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
     template<size_t nd2=dynamic_rank> cmav<T, nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
-      return cmav<T, nd2>(ninfo, tbuf::d+nofs, *this);
+      return {std::move(ninfo), tbuf::d+nofs, *this};
       }
     /// View of a sub-array, in the style of std::submdspan: an integer
     /// selects one index and drops the axis, a slice keeps the axis
@@ -658,7 +664,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
       const array<slice, sizeof...(S)> slc{slice(s)...};
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
-      return cmav<T, nd2>(ninfo, tbuf::d+nofs, *this);
+      return cmav<T, nd2>(std::move(ninfo), tbuf::d+nofs, *this);
       }
     /// The result has the rank of \a new_shape.
     template<typename Tshp> [[nodiscard]] cmav<T, rank_of<Tshp>> extend_and_broadcast
@@ -712,6 +718,8 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
   protected:
     vmav(const tinfo &info, T *d_, const tbuf &buf)
       : parent(info, d_, buf) {}
+    vmav(tinfo &&info, T *d_, const tbuf &buf)
+      : parent(std::move(info), d_, buf) {}
     vmav(const tinfo &info, const tbuf &buf)
       : parent(info, buf) {}
     vmav(const tbuf &buf, const shape_t &shp_, const stride_t &str_)
@@ -768,7 +776,7 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
     template<size_t nd2=dynamic_rank> vmav<T, nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
-      return vmav<T, nd2>(ninfo, data()+nofs, *this);
+      return {std::move(ninfo), data()+nofs, *this};
       }
     /// Writable counterpart of cmav::sub().
     template<typename... S> requires (((integral<S> || same_as<S, slice>) && ...)
@@ -778,7 +786,7 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
       constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
       const array<slice, sizeof...(S)> slc{slice(s)...};
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
-      return vmav<T, nd2>(ninfo, data()+nofs, *this);
+      return vmav<T, nd2>(std::move(ninfo), data()+nofs, *this);
       }
 
     T *data() const
