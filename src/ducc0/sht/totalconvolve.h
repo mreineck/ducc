@@ -443,7 +443,7 @@ template<typename T> class ConvolverPlan
             }
           }
 
-      auto subplanes=subarray<3>(planes,{{}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
@@ -478,7 +478,7 @@ template<typename T> class ConvolverPlan
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -586,7 +586,7 @@ template<typename T> class ConvolverPlan
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane}, {nbtheta, nbtheta+ntheta_b}, {nbphi,nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -601,7 +601,7 @@ template<typename T> class ConvolverPlan
             }
           });
         }
-      auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(0, nplanes), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
 
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
@@ -658,7 +658,7 @@ template<typename T> class ConvolverPlan
     void prepPsi(const vmav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
-      auto newpart = subarray<3>(subcube, {{npsi_s, MAXIDX}, {}, {}});
+      auto newpart = subcube.sub(slice(npsi_s, MAXIDX), slice(), slice());
       mav_apply([](T &v){v=T(0);}, nthreads, newpart);
       auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
       for (size_t k=0; k<npsi_s; ++k)

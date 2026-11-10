@@ -623,7 +623,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (ntheta_tmp<=nrings) ?
-        subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
+        leg.sub(slice(), slice(0, ntheta_tmp), slice()) :
         allocate_leg<T>(leg.shape(0), ntheta_tmp, leg.shape(2), true, true, nthreads);
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_theta(leg_tmp, true, true, leg, npi, spi, spin, nthreads, false);
@@ -637,7 +637,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (ntheta_tmp<=leg.shape(1)) ?
-        subarray<3>(leg,{{},{0,ntheta_tmp},{}}) :
+        leg.sub(slice(), slice(0, ntheta_tmp), slice()) :
         allocate_leg<T>(leg.shape(0), ntheta_tmp, leg.shape(2), true, true, nthreads);
       alm2leg(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode);
       resample_leg_CC_to_irregular(leg_tmp, leg, theta, spin, mval, nthreads);
@@ -688,8 +688,8 @@ template<typename T> void alm2leg(  // associated Legendre transform
       vmav<complex<double>,2> glm({nalm,isspin2*(lmax+3)}, UNINITIALIZED);
       vmav<complex<double>,2> almtmp0(&almtmp(0,0), {almtmp.shape(1),1}, {1,1});
       vmav<complex<double>,2> almtmp1(&almtmp(1,0), {almtmp.shape(1),1}, {1,1});
-      auto leg0 = subarray<3>(leg,{{0,1},{},{}});
-      auto leg1 = subarray<3>(leg,{{1,2},{},{}});
+      auto leg0 = leg.sub(slice(0, 1), slice(), slice());
+      auto leg1 = leg.sub(slice(1, 2), slice(), slice());
 
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
@@ -825,7 +825,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<=leg.shape(1)) ?
-        subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
+        leg.sub(slice(), slice(0, ntheta_tmp), slice()) :
         allocate_leg<T>(leg.shape(0), ntheta_tmp, leg.shape(2), false, true, nthreads);
       resample_theta(leg, npi, spi, leg_tmp, true, true, spin, nthreads, true);
       leg2alm_internal(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, false, true);
@@ -839,7 +839,7 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
       for (size_t i=0; i<ntheta_tmp; ++i)
         theta_tmp(i) = i*pi/(ntheta_tmp-1);
       auto leg_tmp = (leg_can_be_overwritten && ntheta_tmp<=leg.shape(1)) ?
-        subarray<3>(leg, {{},{0,ntheta_tmp},{}}) :
+        leg.sub(slice(), slice(0, ntheta_tmp), slice()) :
         allocate_leg<T>(leg.shape(0), ntheta_tmp, leg.shape(2), false, true, nthreads);
       resample_leg_irregular_to_CC(leg, leg_tmp, theta, spin, mval, nthreads);
       leg2alm_internal(alm, leg_tmp, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads, mode, false, true);
@@ -882,8 +882,8 @@ template<typename T> void leg2alm_internal(  // associated Legendre transform
       vmav<complex<double>,2> glm({nalm,isspin2*(lmax+5)}, UNINITIALIZED);
       vmav<complex<double>,2> almtmp0(&almtmp(0,0), {almtmp.shape(1),1}, {1,1});
       vmav<complex<double>,2> almtmp1(&almtmp(1,0), {almtmp.shape(1),1}, {1,1});
-      auto leg0 = subarray<3>(leg,{{0,1},{},{}});
-      auto leg1 = subarray<3>(leg,{{1,2},{},{}});
+      auto leg0 = leg.sub(slice(0, 1), slice(), slice());
+      auto leg1 = leg.sub(slice(1, 2), slice(), slice());
 
       while (auto rng=sched.getNext()) for(auto mi=rng.lo; mi<rng.hi; ++mi)
         {
@@ -1058,7 +1058,7 @@ template<typename T> void leg2map(  // FFT
             }
           for (size_t ix=2*mmax+1; ix<nphmax; ++ix) xmap(icomp, iring, ix) = T(0);
           }
-        vfmav<T> xmapf=subarray<2>(xmap,{{icomp},{lo,hi},{}});
+        vfmav<T> xmapf=xmap.sub(icomp, slice(lo, hi), slice());
         r2r_fftpack(xmapf,xmapf,{1},false,false,T(1),1);
         }
       });
@@ -1074,7 +1074,7 @@ template<typename T> void leg2map(  // FFT
         double rf = ringfactor(ith);
         for (size_t icomp=0; icomp<ncomp; ++icomp)
           {
-          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          auto ltmp = leg.sub(icomp, ith, slice());
           helper.phase2ring (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
           for (size_t i=0; i<nphi(ith); ++i)
             map(icomp,ringstart(ith)+i*pixstride) = T(ringtmp(i+1)*rf);
@@ -1130,8 +1130,8 @@ template<typename T> void map2leg(  // FFT
         for (size_t iblock=lo; iblock<hi; ++iblock)
           {
           size_t r0=iblock*blksz, r1=min(nrings,(iblock+1)*blksz);
-          cfmav<T> xmapf=subarray<2>(xmap,{{icomp},{r0,r1},{}});
-          vfmav<T> buff=subarray<2>(buf,{{0,r1-r0},{}});
+          cfmav<T> xmapf=xmap.sub(icomp, slice(r0, r1), slice());
+          vfmav<T> buff=buf.sub(slice(0, r1-r0), slice());
           r2r_fftpack(xmapf,buff,{1},true,true,T(1),1);
           for (size_t iring=r0; iring<r1; ++iring)
             {
@@ -1157,7 +1157,7 @@ template<typename T> void map2leg(  // FFT
           {
           for (size_t i=0; i<nphi(ith); ++i)
             ringtmp(i+1) = map(icomp,ringstart(ith)+i*pixstride)*rf;
-          auto ltmp = subarray<1>(leg, {{icomp}, {ith}, {}});
+          auto ltmp = leg.sub(icomp, ith, slice());
           helper.ring2phase (nphi(ith),phi0(ith),ringtmp,mmax,ltmp);
           }
         }
@@ -1201,8 +1201,8 @@ template<typename T> void resample_to_prepared_CC(const cmav<complex<T>,3> &legi
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
+        auto llegi(legi.sub(n, slice(), slice(rng.lo, MAXIDX)));
+        auto llego(lego.sub(n, slice(), slice(rng.lo, MAXIDX)));
 // FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
@@ -1316,8 +1316,8 @@ template<typename T> void resample_from_prepared_CC(const cmav<complex<T>,3> &le
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{rng.lo,MAXIDX}}));
+        auto llegi(legi.sub(n, slice(), slice(rng.lo, MAXIDX)));
+        auto llego(lego.sub(n, slice(), slice(rng.lo, MAXIDX)));
 // FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
@@ -1467,8 +1467,8 @@ template<typename T> void synthesis(
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
     auto leg(allocate_leg<T>(map.shape(0), max(theta.shape(0),ntheta_tmp),
                           mstart.shape(0), true, true, nthreads));
-    auto legi(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
-    auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
+    auto legi(leg.sub(slice(), slice(0, ntheta_tmp), slice()));
+    auto lego(leg.sub(slice(), slice(0, theta.shape(0)), slice()));
     alm2leg(alm, legi, spin, lmax, mval, mstart, lstride, theta_tmp, nthreads,
       mode, theta_interpol);
     resample_theta(legi, true, true, lego, npi, spi, spin, nthreads, false);
@@ -1582,8 +1582,8 @@ template<typename T> void adjoint_synthesis(
       theta_tmp(i) = i*pi/(ntheta_tmp-1);
     auto leg(allocate_leg<T>(map.shape(0), max(theta.shape(0),ntheta_tmp),
                           mstart.shape(0), false, true, nthreads));
-    auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
-    auto lego(subarray<3>(leg, {{},{0,ntheta_tmp},{}}));
+    auto legi(leg.sub(slice(), slice(0, theta.shape(0)), slice()));
+    auto lego(leg.sub(slice(), slice(0, ntheta_tmp), slice()));
     map2leg(map, legi, nphi, phi0, ringstart, ringfactor, pixstride, nthreads);
     resample_theta(legi, npi, spi, lego, true, true, spin, nthreads, true);
     leg2alm_internal(alm, lego, spin, lmax, mval, mstart, lstride, theta_tmp,
@@ -1774,8 +1774,8 @@ template<typename T> void analysis_2d(
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(allocate_leg<T>(map.shape(0), max(theta.shape(0),ntheta_leg),
                           mstart.shape(0), false, true, nthreads));
-    auto legi(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
-    auto lego(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
+    auto legi(leg.sub(slice(), slice(0, theta.shape(0)), slice()));
+    auto lego(leg.sub(slice(), slice(0, ntheta_leg), slice()));
     vmav<double,1> ringfactor2(ringfactor.shape());
     for (size_t i=0; i<nphi.shape(0); ++i)
       ringfactor2(i) = ringfactor(i)/nphi(i);
@@ -1873,8 +1873,8 @@ template<typename T> void adjoint_analysis_2d(
     size_t ntheta_leg = good_size_complex(lmax+1)+1;
     auto leg(allocate_leg<T>(map.shape(0), max(ntheta_leg,theta.shape(0)),
                           mstart.shape(0), true, true, nthreads));
-    auto legi(subarray<3>(leg, {{},{0,ntheta_leg},{}}));
-    auto lego(subarray<3>(leg, {{},{0,theta.shape(0)},{}}));
+    auto legi(leg.sub(slice(), slice(0, ntheta_leg), slice()));
+    auto lego(leg.sub(slice(), slice(0, theta.shape(0)), slice()));
 
     vmav<double,1> theta_tmp({ntheta_leg}, UNINITIALIZED);
     for (size_t i=0; i<ntheta_leg; ++i)
@@ -1947,8 +1947,8 @@ template<typename T, typename Tloc> void synthesis_general(
   auto planes = inter.build_planes();
   timers.poppush("getPlane");
   inter.getPlane(alm, mstart, lstride, planes, mode, timers);
-  auto xtheta = subarray<1>(loc, {{},{0}});
-  auto xphi = subarray<1>(loc, {{},{1}});
+  auto xtheta = loc.sub(slice(), 0);
+  auto xphi = loc.sub(slice(), 1);
   timers.poppush("interpol (u2nu)");
   inter.interpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.pop();
@@ -1988,8 +1988,8 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   auto planes = inter.build_planes();
   mav_apply([](auto &v){v=0;}, nthreads, planes);
   timers.poppush("deinterpol (nu2u)");
-  auto xtheta = subarray<1>(loc, {{},{0}});
-  auto xphi = subarray<1>(loc, {{},{1}});
+  auto xtheta = loc.sub(slice(), 0);
+  auto xphi = loc.sub(slice(), 1);
   inter.deinterpol(planes, 0, 0, xtheta, xphi, map, timers);
   timers.poppush("updateAlm");
   inter.updateAlm(alm, mstart, lstride, planes, mode, timers);

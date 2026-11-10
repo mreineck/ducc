@@ -1646,13 +1646,13 @@ template<typename T> [[maybe_unused]] void oscarize(const vfmav<T> &data, size_t
   vector<slice> slc(data.ndim());
   slc[ax0] = slice(1,(nu+1)/2);
   slc[ax1] = slice(1,(nv+1)/2);
-  auto all = subarray(data, slc);
+  auto all = data.subarray(slc);
   slc[ax0] = slice(nu-1,nu/2,-1);
-  auto ahl = subarray(data, slc);
+  auto ahl = data.subarray(slc);
   slc[ax1] = slice(nv-1,nv/2,-1);
-  auto ahh = subarray(data, slc);
+  auto ahh = data.subarray(slc);
   slc[ax0] = slice(1,(nu+1)/2);
-  auto alh = subarray(data, slc);
+  auto alh = data.subarray(slc);
   mav_apply([](T &ll, T &hl, T &hh, T &lh)
     {
     T tll=ll, thl=hl, tlh=lh, thh=hh;

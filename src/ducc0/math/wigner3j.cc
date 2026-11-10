@@ -807,7 +807,7 @@ void flexible_wigner3j (double l2, double l3, double m2, double m3,
   MR_assert(intcheck(l1min_real-l1min),"l1min_real-l1min is not integer");
   MR_assert(l1min_real>=l1min, "result does not fit into result array");
   MR_assert(l1min_real+ncoef<=l1min+res.shape(0), "result does not fit into result array");
-  auto sub = subarray<1>(res, {{size_t(l1min_real-l1min), size_t(l1min_real-l1min+ncoef)}});
+  auto sub = res.sub(slice(size_t(l1min_real-l1min), size_t(l1min_real-l1min+ncoef)));
   wigner3j_internal(l2, l3, m2, m3, m1, l1min_real, l1max_real, ncoef, sub);
   for (size_t i=0; i<size_t(l1min_real-l1min); ++i) res(i) = 0.;
   for (size_t i=size_t(l1min_real-l1min+ncoef); i<res.shape(0); ++i) res(i) = 0.;
@@ -832,7 +832,7 @@ template<typename Tsimd> void flexible_wigner3j_vec
     }
   if (can_vectorize)
     {
-    auto sub = subarray<1>(res, {{size_t(xofs1[0]), size_t(xofs1[0]+xncoef[0])}});
+    auto sub = res.sub(slice(size_t(xofs1[0]), size_t(xofs1[0]+xncoef[0])));
     wigner3j_internal_vec(l2, l3, m2, m3, sub);
     for (size_t i=0; i<size_t(xofs1[0]); ++i) res(i) = 0.;
     for (size_t i=size_t(xofs1[0]+xncoef[0]); i<res.shape(0); ++i) res(i) = 0.;

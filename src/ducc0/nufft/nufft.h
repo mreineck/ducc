@@ -659,7 +659,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       // try to use points_out for temporary points_in_2 storage
       auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
         points_in.shape(0)<=points_out.shape(0) ?
-        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        points_out.sub(slice(0, points_in.shape(0))) :
         vmav<complex<Tpoints>,1>(points_in.shape()));
 
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
@@ -690,7 +690,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       // try to use points_out for temporary points_in_2 storage
       auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
         points_in.shape(0)<=points_out.shape(0) ?
-        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        points_out.sub(slice(0, points_in.shape(0))) :
         vmav<complex<Tpoints>,1>(points_in.shape()));
 
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
@@ -757,7 +757,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   // try to use points_out for temporary points_in_2 storage
   auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
     points_in.shape(0)<=points_out.shape(0) ?
-    subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+    points_out.sub(slice(0, points_in.shape(0))) :
     vmav<complex<Tpoints>,1>(points_in.shape()));
   // prephase input values
   execStatic(points_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)

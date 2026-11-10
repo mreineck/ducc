@@ -178,7 +178,7 @@ void compile_cmav_ranks()
   (void)takes_cfmav(f);
   (void)takes_cfmav(a.to_fmav());
   (void)a.subarray(vector<slice>{{0, 1}, {}});
-  (void)subarray<1>(f, {{1}, {}});
+  (void)f.sub(1, slice());
   (void)a.extend_and_broadcast(std::array<size_t, 3>{4, 2, 3}, 1);
   (void)f.extend_and_broadcast(fmav_info::shape_t{4, 2, 3}, 1);
   (void)f.prepend_1();
@@ -200,9 +200,22 @@ void compile_vmav_ranks()
   vfmav<double> f(d.data(), {2, 3});
   (void)takes_vfmav(f);
   (void)takes_vfmav(a.to_fmav());
-  vmav<double, 1> s = subarray<1>(f, {{1}, {}});
+  vmav<double, 1> s(f.sub(1, slice()));
   s(0) = 1.;
   f(fmav_info::shape_t{1, 2}) = 2.;
   (void)f.prepend_1();
   (void)vfmav<double>::build_noncritical({2, 3}, UNINITIALIZED);
   }
+
+/* sub(): integers drop an axis, slices keep it; the result rank is known at
+   compile time for fixed rank and stays dynamic for dynamic rank. */
+template<typename A, typename... S> concept has_sub
+  = requires(const A &a, S... s) { a.sub(s...); };
+static_assert(std::is_same_v<decltype(std::declval<cmav<double, 3>>()
+  .sub(1, slice(), slice(0, 2))), cmav<double, 2>>);
+static_assert(std::is_same_v<decltype(std::declval<vmav<double, 3>>()
+  .sub(1, size_t(2), slice())), vmav<double, 1>>);
+static_assert(std::is_same_v<decltype(std::declval<vfmav<double>>()
+  .sub(1, slice())), vfmav<double>>);
+static_assert(!has_sub<cmav<double, 3>, int, slice>);      // wrong count
+static_assert(!has_sub<cmav<double, 2>, double, slice>);   // not an index

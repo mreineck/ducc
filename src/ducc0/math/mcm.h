@@ -320,7 +320,7 @@ template<size_t opmask, typename Tout> void coupling_matrix_rect(
     });
   if (l_exact>=0)
     for (size_t imat=0; imat<mat.shape(0); ++imat)
-      toeplitz_fill(subarray<2>(mat,{{imat},{},{}}), subarray<1>(diag,{{imat},{}}), l_exact, l_toeplitz, dl_band, nthreads);
+      toeplitz_fill(mat.sub(imat, slice(), slice()), diag.sub(imat, slice()), l_exact, l_toeplitz, dl_band, nthreads);
   }
 
 }

@@ -640,11 +640,21 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       { tbuf::prefetch_r(idx(ns)); }
 
     /// View of the sub-array described by \a slices, with rank \a nd2.
+    /// Meant for slice lists whose length is only known at runtime; if length
+    /// is known at compile time, prefer sub().
     template<size_t nd2=dynamic_rank> cmav<T, nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
       return cmav<T, nd2>(ninfo, tbuf::d+nofs, *this);
       }
+    /// View of a sub-array, in the style of std::submdspan: an integer
+    /// selects one index and drops the axis, a slice keeps the axis
+    /// (slice() keeps all of it). For fixed rank, the result rank is
+    /// computed at compile time; for dynamic rank, it stays dynamic.
+    template<typename... S> requires (((integral<S> || same_as<S, slice>) && ...)
+      && (dyn || (sizeof...(S)==R)))
+    auto sub(S... s) const
+      { return subarray<dyn ? R : (size_t(!integral<S>) + ... + 0)>({slice(s)...}); }
     /// The result has the rank of \a new_shape.
     template<typename Tshp> [[nodiscard]] cmav<T, rank_of<Tshp>> extend_and_broadcast
       (const Tshp &new_shape, const vector<size_t> &axpos) const
@@ -676,10 +686,6 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
 
 /// Read-only view of an array with a runtime number of dimensions
 template<typename T> using cfmav = cmav<T, dynamic_rank>;
-
-template<size_t nd2=dynamic_rank, typename T, size_t R> cmav<T, nd2> subarray
-  (const cmav<T, R> &arr, const vector<slice> &slices)
-  { return arr.template subarray<nd2>(slices); }
 
 /// Writable view of an array, see cmav.
 template<typename T, size_t R> class vmav: public cmav<T, R>
@@ -759,6 +765,11 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
       return vmav<T, nd2>(ninfo, data()+nofs, *this);
       }
+    /// Writable counterpart of cmav::sub().
+    template<typename... S> requires (((integral<S> || same_as<S, slice>) && ...)
+      && (dyn || (sizeof...(S)==R)))
+    auto sub(S... s) const
+      { return subarray<dyn ? R : (size_t(!integral<S>) + ... + 0)>({slice(s)...}); }
 
     T *data() const
      { return const_cast<T *>(tbuf::d); }
@@ -799,10 +810,6 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
 
 /// Writable view of an array with a runtime number of dimensions
 template<typename T> using vfmav = vmav<T, dynamic_rank>;
-
-template<size_t nd2=dynamic_rank, typename T, size_t R> vmav<T, nd2> subarray
-  (const vmav<T, R> &arr, const vector<slice> &slices)
-  { return arr.template subarray<nd2>(slices); }
 
 // various operations involving fmav objects of the same shape -- experimental
 
@@ -1173,7 +1180,6 @@ using detail_mav::cfmav;
 using detail_mav::vfmav;
 using detail_mav::cmav;
 using detail_mav::vmav;
-using detail_mav::subarray;
 using detail_mav::mav_apply;
 using detail_mav::mav_apply_reduce;
 using detail_mav::flexible_mav_apply;
