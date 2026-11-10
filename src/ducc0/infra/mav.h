@@ -113,57 +113,52 @@ template<typename T> concept mav_init
 template<typename T> class cmembuf
   {
   protected:
-    shared_ptr<vector<T>> ptr;
-    shared_ptr<quick_array<T>> rawptr;
-    const T *d;
+    // ptr.get() is the data pointer. Ownership is type-erased in the control
+    // block (none for externally owned data), so any kind of memory fits.
+    shared_ptr<T> ptr;
 
     cmembuf(const T *d_, const cmembuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(d_) {}
+      : ptr(other.ptr, const_cast<T *>(d_)) {}
+    // takes ownership of a container with a data() member
+    template<typename C> explicit cmembuf(shared_ptr<C> c)
+      : ptr(c, c->data()) {}
 
     // externally owned data pointer
     explicit cmembuf(const T *d_)
-      : d(d_) {}
+      : cmembuf(d_, cmembuf()) {}
     // share another memory buffer, but read-only
-    cmembuf(const cmembuf &other)
-      : ptr(other.ptr), rawptr(other.rawptr), d(other.d) {}
+    cmembuf(const cmembuf &other) = default;
     explicit cmembuf(size_t sz)
-      : ptr(make_shared<vector<T>>(sz)), d(ptr->data()) {}
-#if 1
+      : cmembuf(make_shared<vector<T>>(sz)) {}
     cmembuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data()) {}
-    cmembuf(size_t sz, PAGE_IN page_in)
-      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
-      { page_in_memory(rawptr->data(), sz, page_in.nthreads); }
-# else // "poison" the array with a fixed value; use for debugging
-    cmembuf(size_t sz, uninitialized_dummy)
-      : rawptr(make_shared<quick_array<T>>(sz)), d(rawptr->data())
-      { for (size_t i=0; i<sz; ++i) (*rawptr)[i]=T(42000000); }
-    cmembuf(size_t sz, PAGE_IN)
-      : cmembuf(sz, UNINITIALIZED) {}
+      : cmembuf(make_shared<quick_array<T>>(sz))
+      {
+#if 0 // "poison" the array with a fixed value; use for debugging
+      for (size_t i=0; i<sz; ++i) ptr.get()[i]=T(42000000);
 #endif
+      }
+    cmembuf(size_t sz, PAGE_IN page_in)
+      : cmembuf(sz, UNINITIALIZED)
+      { page_in_memory(ptr.get(), sz, page_in.nthreads); }
     // take over another memory buffer
     cmembuf(cmembuf &&other) = default;
 
   public:
-    cmembuf(): d(nullptr) {}
+    cmembuf() {}
     void assign(const cmembuf &other)
-      {
-      ptr = other.ptr;
-      rawptr = other.rawptr;
-      d = other.d;
-      }
+      { ptr = other.ptr; }
     // read access to element #i
     template<integral I> const T &raw(I i) const
-      { return d[i]; }
+      { return data()[i]; }
     // read access to data area
     const T *data() const
-      { return d; }
+      { return ptr.get(); }
 
     // prefetch the specified element for reading
     template<integral I> void prefetch_r(I i) const
-      { DUCC0_PREFETCH_R(&d[i]); }
+      { DUCC0_PREFETCH_R(&data()[i]); }
     template<integral I> void prefetch_w(I i) const
-      { DUCC0_PREFETCH_W(&d[i]); }
+      { DUCC0_PREFETCH_W(&data()[i]); }
   };
 
 inline constexpr size_t MAXIDX=numeric_limits<size_t>::max();
@@ -652,7 +647,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
     template<size_t nd2=dynamic_rank> cmav<T, nd2> subarray(const vector<slice> &slices) const
       {
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slices);
-      return {std::move(ninfo), tbuf::d+nofs, *this};
+      return {std::move(ninfo), data()+nofs, *this};
       }
     /// View of a sub-array, in the style of std::submdspan: an integer
     /// selects one index and drops the axis, a slice keeps the axis
@@ -665,7 +660,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       constexpr size_t nd2 = newR((size_t(!integral<S>) + ... + 0));
       const array<slice, sizeof...(S)> slc{slice(s)...};
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
-      return cmav<T, nd2>(std::move(ninfo), tbuf::d+nofs, *this);
+      return cmav<T, nd2>(std::move(ninfo), data()+nofs, *this);
       }
     /// The result has the rank of \a new_shape.
     template<typename Tshp> [[nodiscard]] cmav<T, rank_of<Tshp>> extend_and_broadcast
@@ -792,7 +787,7 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
       }
 
     T *data() const
-     { return const_cast<T *>(tbuf::d); }
+     { return tbuf::ptr.get(); }
     // read access to element #i
     template<integral I> T &raw(I i) const
       { return data()[i]; }
