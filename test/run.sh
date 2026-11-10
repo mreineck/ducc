@@ -9,13 +9,10 @@ CXXFLAGS=(-std=c++23 -O1 -g -Isrc -DDUCC0_NAMESPACE=ducc0
           -fsanitize=address,undefined -fno-omit-frame-pointer)
 SOURCES=(
   src/ducc0/healpix/healpix_base.cc
-  src/ducc0/healpix/healpix_tables.cc
   src/ducc0/infra/mav.cc
   src/ducc0/infra/threading.cc
   src/ducc0/math/gl_integrator.cc
   src/ducc0/math/space_filling.cc
-  src/ducc0/math/pointing.cc
-  src/ducc0/math/geom_utils.cc
   src/ducc0/infra/string_utils.cc
 )
 OUT="$(mktemp -d "${TMPDIR:-/tmp}/ducc0-cpp-tests.XXXXXX")"

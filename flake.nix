@@ -83,7 +83,7 @@
         # with, e.g., `pip3 install .`
         devShells.default = pkgs.mkShell {
           buildInputs = ducc.dependencies ++ ducc.build-system
-            ++ (with py-pkgs; [ venvShellHook matplotlib pip pytest pybind11 ]);
+            ++ (with py-pkgs; [ venvShellHook matplotlib pip pytest pytest-xdist pybind11 ]);
           venvDir = ".nix-venv";
 
           shellHook = ''
