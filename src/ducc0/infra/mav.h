@@ -361,9 +361,7 @@ class fmav_info
     /// Constructs an object with the given shape and stride.
     fmav_info(const shape_t &shape_, const stride_t &stride_)
       : shp(shape_), str(stride_), sz(shape_size(shp))
-      {
-      MR_assert(shp.size()==str.size(), "dimensions mismatch");
-      }
+      { MR_assert(shp.size()==str.size(), "dimensions mismatch"); }
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     explicit fmav_info(const shape_t &shape_)
@@ -394,9 +392,7 @@ class fmav_info
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
     bool contiguous() const
-      {
-      return is_contiguous(span(shp), span(str));
-      }
+      { return is_contiguous(span(shp), span(str)); }
     /// Returns true iff this->shape and \a other.shape match.
     bool conformable(const fmav_info &other) const
       { return shp==other.shp; }
@@ -562,9 +558,7 @@ template<template<typename, size_t> typename Tcontainer, size_t ndim> class mav_
      *  last dimension is 1, the stride for the next-to-last dimension is the
      *  shape of the last dimension etc. */
     bool contiguous() const
-      {
-      return is_contiguous(shp, str);
-      }
+      { return is_contiguous(shp, str); }
     /// Returns true iff this->shape and \a other.shape match.
     bool conformable(const mav_info_proto &other) const
       { return shp==other.shp; }
@@ -717,17 +711,11 @@ template<typename T> class cfmav: public fmav_info, public cmembuf<T>
       return cfmav(ninfo, tbuf::d+nofs, *this);
       }
     [[nodiscard]] cfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
-      {
-      return cfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
-      }
+      { return cfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this); }
     [[nodiscard]] cfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
-      {
-      return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
-      }
+      { return cfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this); }
     [[nodiscard]] cfmav transpose(const shape_t &axes) const
-      {
-      return cfmav(tinfo::transpose(axes), *this);
-      }
+      { return cfmav(tinfo::transpose(axes), *this); }
   };
 
 template<typename T> cfmav<T> subarray
@@ -778,7 +766,7 @@ template<typename T> class vfmav: public cfmav<T>
       : cfmav<T>(buf, shp_, str_) {}
 
     T *data() const
-     { return const_cast<T *>(tbuf::d); }
+      { return const_cast<T *>(tbuf::d); }
     template<integral I> T &raw(I i) const
       { return data()[i]; }
 
@@ -827,17 +815,11 @@ template<typename T> class vfmav: public cfmav<T>
       return tmp.subarray(slc);
       }
     [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
-      {
-      return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this);
-      }
+      { return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this); }
     [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
-      {
-      return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this);
-      }
+      { return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this); }
     [[nodiscard]] vfmav transpose(const shape_t &axes) const
-      {
-      return vfmav(tinfo::transpose(axes), *this);
-      }
+      { return vfmav(tinfo::transpose(axes), *this); }
   };
 
 template<typename T> vfmav<T> subarray
@@ -890,9 +872,7 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       cmembuf<T>::assign(other);
       }
     operator cfmav<T>() const
-      {
-      return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()});
-      }
+      { return cfmav<T>(*this, {shp.begin(), shp.end()}, {str.begin(), str.end()}); }
     // Needed for template tricks.
     cfmav<T> to_fmav() const { return operator cfmav<T>(); }
 
@@ -910,14 +890,10 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
     template<size_t nd2>
     [[nodiscard]] cmav<T,nd2> extend_and_broadcast(const array<size_t, nd2> &new_shape,
                                      const vector<size_t> &axpos) const
-      {
-      return {tinfo::template extend_and_broadcast<nd2>(new_shape, axpos), *this};
-      }
+      { return {tinfo::template extend_and_broadcast<nd2>(new_shape, axpos), *this}; }
     template<size_t nd2> [[nodiscard]] cmav<T,nd2>
     extend_and_broadcast(const array<size_t, nd2> &new_shape, size_t firstaxis) const
-      {
-      return {tinfo::template extend_and_broadcast<nd2>(new_shape, firstaxis), *this};
-      }
+      { return {tinfo::template extend_and_broadcast<nd2>(new_shape, firstaxis), *this}; }
 
     static cmav build_uniform(const shape_t &shape, const T &value)
       {
@@ -937,19 +913,13 @@ template<typename T, size_t ndim> class cmav: public mav_info<ndim>, public cmem
       return cmav(static_cast<T *>(nullptr), nshp);
       }
     [[nodiscard]] cmav transpose(const shape_t &axes) const
-      {
-      return cmav(tinfo::transpose(axes), *this);
-      }
+      { return cmav(tinfo::transpose(axes), *this); }
     [[nodiscard]] cmav<T, ndim+1> prepend_1() const
-      {
-      return cmav<T, ndim+1>(tinfo::prepend_1(), *this);
-      }
+      { return cmav<T, ndim+1>(tinfo::prepend_1(), *this); }
     template<size_t ndim2> cmav<T, ndim2> reinterpret
       (const typename cmav<T, ndim2>::shape_t &newshp,
        const typename cmav<T, ndim2>::stride_t &newstr) const
-      {
-      return cmav<T, ndim2>(*this, newshp, newstr);
-      }
+      { return cmav<T, ndim2>(*this, newshp, newstr); }
   };
 template<size_t nd2, typename T, size_t ndim> cmav<T,nd2> subarray
   (const cmav<T, ndim> &arr, const vector<slice> &slices)
@@ -1045,19 +1015,13 @@ template<typename T, size_t ndim> class vmav: public cmav<T, ndim>
       return tmp.subarray<ndim>(slc);
       }
     [[nodiscard]] vmav transpose(const shape_t &axes) const
-      {
-      return vmav(tinfo::transpose(axes), *this);
-      }
+      { return vmav(tinfo::transpose(axes), *this); }
     [[nodiscard]] vmav<T, ndim+1> prepend_1() const
-      {
-      return vmav<T, ndim+1>(tinfo::prepend_1(), *this);
-      }
+      { return vmav<T, ndim+1>(tinfo::prepend_1(), *this); }
     template<size_t ndim2> vmav<T, ndim2> reinterpret
       (const typename vmav<T, ndim2>::shape_t &newshp,
        const typename vmav<T, ndim2>::stride_t &newstr) const
-      {
-      return vmav<T, ndim2>(*this, newshp, newstr);
-      }
+      { return vmav<T, ndim2>(*this, newshp, newstr); }
   };
 
 template<size_t nd2, typename T, size_t ndim> vmav<T,nd2> subarray
@@ -1080,20 +1044,14 @@ inline auto tuple_transform(tuple<Ts...> const& inputs, Func &&func)
 
 template<typename Ttuple, typename Func>
 inline void tuple_for_each(Ttuple &tpl, Func &&func)
-  {
-  apply([&](auto &... a){ (func(a), ...); }, tpl);
-  }
+  { apply([&](auto &... a){ (func(a), ...); }, tpl); }
 
 template<typename Ttuple, typename Func>
 inline void tuple_for_each_idx(Ttuple &tpl, Func &&func)
-  {
-  apply([&](auto &... a){ size_t i=0; (func(a, i++), ...); }, tpl);
-  }
+  { apply([&](auto &... a){ size_t i=0; (func(a, i++), ...); }, tpl); }
 
 template<typename Ttuple> inline auto to_ref (const Ttuple &tuple)
-  {
-  return tuple_transform(tuple, [](auto &&ptr) -> auto & { return *ptr; });
-  }
+  { return tuple_transform(tuple, [](auto &&ptr) -> auto & { return *ptr; }); }
 
 
 template<typename Ttuple> inline void advance_contiguous (Ttuple &ptrs)
