@@ -816,10 +816,6 @@ template<typename T> class vfmav: public cfmav<T>
       for (size_t i=0; i<shape.size(); ++i) slc[i] = slice(0, shape[i]);
       return tmp.subarray(slc);
       }
-    [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, const shape_t &axpos) const
-      { return vfmav(fmav_info::extend_and_broadcast(new_shape, axpos), *this); }
-    [[nodiscard]] vfmav extend_and_broadcast(const shape_t &new_shape, size_t firstaxis) const
-      { return vfmav(fmav_info::extend_and_broadcast(new_shape, firstaxis), *this); }
     [[nodiscard]] vfmav transpose(const shape_t &axes) const
       { return vfmav(tinfo::transpose(axes), *this); }
   };

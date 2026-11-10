@@ -107,3 +107,8 @@ static_assert(!std::is_constructible_v<vfmav<double>, cmav<double, 2> &,
 static_assert(std::is_constructible_v<vfmav<double>, const vfmav<double> &,
   fmav_info::shape_t, fmav_info::stride_t>);
 static_assert(std::is_convertible_v<vmav<double, 2>, vfmav<double>>);
+
+static_assert(std::is_same_v<decltype(std::declval<vfmav<double>>()
+  .extend_and_broadcast(fmav_info::shape_t{}, 0)), cfmav<double>>);
+static_assert(std::is_same_v<decltype(std::declval<vmav<double, 1>>()
+  .extend_and_broadcast(std::array<size_t, 2>{}, 0)), cmav<double, 2>>);
