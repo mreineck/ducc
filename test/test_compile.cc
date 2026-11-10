@@ -112,3 +112,51 @@ static_assert(std::is_same_v<decltype(std::declval<vfmav<double>>()
   .extend_and_broadcast(fmav_info::shape_t{}, 0)), cfmav<double>>);
 static_assert(std::is_same_v<decltype(std::declval<vmav<double, 1>>()
   .extend_and_broadcast(std::array<size_t, 2>{}, 0)), cmav<double, 2>>);
+
+/* mav_info_proto handles fixed and dynamic rank in one class template and
+   must keep working with shape/stride containers other than std::array
+   (e.g. cuda::std::array in GPU code). */
+template<typename T, size_t N> struct dev_array
+  {
+  T v[N];
+  constexpr size_t size() const { return N; }
+  T *begin() { return v; }
+  T *end() { return v+N; }
+  const T *begin() const { return v; }
+  const T *end() const { return v+N; }
+  T *data() { return v; }
+  const T *data() const { return v; }
+  T &operator[](size_t i) { return v[i]; }
+  const T &operator[](size_t i) const { return v[i]; }
+  const T &back() const { return v[N-1]; }
+  bool operator==(const dev_array &) const = default;
+  };
+template<typename C> concept has_rank
+  = requires { detail_mav::rank_of_impl<C>::value; };
+static_assert(detail_mav::rank_of<std::vector<size_t>> == dynamic_rank);
+static_assert(detail_mav::rank_of<std::array<size_t, 3>> == 3);
+static_assert(detail_mav::rank_of<dev_array<size_t, 2>> == 2);
+static_assert(!has_rank<const std::array<size_t, 3>>);
+static_assert(!has_rank<std::array<size_t, 3> &>);
+static_assert(!has_rank<const std::vector<size_t> &>);
+static_assert(!has_rank<int>);
+static_assert(std::is_same_v<fmav_info, mav_info<dynamic_rank>>);
+static_assert(std::is_convertible_v<mav_info<2>, fmav_info>);
+static_assert(!std::is_convertible_v<fmav_info, mav_info<2>>);
+static_assert(std::is_constructible_v<mav_info<2>, fmav_info>);
+static_assert(!std::is_constructible_v<mav_info<2>, mav_info<3>>);
+void compile_mav_info_ranks()
+  {
+  using dev_info = detail_mav::mav_info_proto<dev_array, 2>;
+  dev_info d({2, 3});
+  fmav_info f = d;
+  dev_info d2(f);
+  (void)d2.idx(1, 2);
+  (void)d.contiguous();
+  (void)d.transpose({1, 0});
+  (void)d.prepend_1();
+  (void)d.extend_and_broadcast(dev_array<size_t, 3>{4, 2, 3}, 1);
+  (void)f.idx(1, 2);
+  (void)f.contiguous();
+  (void)f.extend_and_broadcast(fmav_info::shape_t{4, 2, 3}, 1);
+  }
