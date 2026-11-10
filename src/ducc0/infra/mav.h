@@ -298,12 +298,12 @@ inline void transpose_info(span<const size_t> shp, span<const ptrdiff_t> str,
   }
 
 /// Number of dimensions that remain after applying \a slices
-inline size_t subdata_ndim(const vector<slice> &slices)
+inline size_t subdata_ndim(span<const slice> slices)
   { return size_t(ranges::count_if(slices, [](const slice &x){ return x.beg!=x.end; })); }
 
 // Returns the offset; writes the output shape/stride (sized by the caller)
 inline ptrdiff_t subdata_info(span<const size_t> shp, span<const ptrdiff_t> str,
-  const vector<slice> &slices, span<size_t> nshp, span<ptrdiff_t> nstr)
+  span<const slice> slices, span<size_t> nshp, span<ptrdiff_t> nstr)
   {
   MR_assert(slices.size()==shp.size(), "incorrect number of slices");
   MR_assert(nshp.size()==subdata_ndim(slices), "bad extent");
@@ -536,7 +536,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
   protected:
     // Info and offset of the sub-array described by \a slices; the result
     // has rank \a nd2.
-    template<size_t nd2=dynamic_rank> auto subdata(const vector<slice> &slices) const
+    template<size_t nd2=dynamic_rank> auto subdata(span<const slice> slices) const
       {
       using res_t = mav_info_proto<Tcontainer, nd2>;
       auto nd = subdata_ndim(slices);
@@ -654,7 +654,12 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
     template<typename... S> requires (((integral<S> || same_as<S, slice>) && ...)
       && (dyn || (sizeof...(S)==R)))
     auto sub(S... s) const
-      { return subarray<dyn ? R : (size_t(!integral<S>) + ... + 0)>({slice(s)...}); }
+      {
+      constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
+      const array<slice, sizeof...(S)> slc{slice(s)...};
+      auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
+      return cmav<T, nd2>(ninfo, tbuf::d+nofs, *this);
+      }
     /// The result has the rank of \a new_shape.
     template<typename Tshp> [[nodiscard]] cmav<T, rank_of<Tshp>> extend_and_broadcast
       (const Tshp &new_shape, const vector<size_t> &axpos) const
@@ -769,7 +774,12 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
     template<typename... S> requires (((integral<S> || same_as<S, slice>) && ...)
       && (dyn || (sizeof...(S)==R)))
     auto sub(S... s) const
-      { return subarray<dyn ? R : (size_t(!integral<S>) + ... + 0)>({slice(s)...}); }
+      {
+      constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
+      const array<slice, sizeof...(S)> slc{slice(s)...};
+      auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
+      return vmav<T, nd2>(ninfo, data()+nofs, *this);
+      }
 
     T *data() const
      { return const_cast<T *>(tbuf::d); }
