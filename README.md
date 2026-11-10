@@ -15,7 +15,7 @@ interface.
 - only when compiling from source: [pybind11](https://github.com/pybind/pybind11)
 - only when compiling from source: [nanobind](https://github.com/wjakob/nanobind)
 - only when compiling from source: a C++23-capable compiler, e.g.
-  - `g++` (verified with gcc 11.2.0, earlier versions might also work)
+  - `g++` (verified with gcc 12.4.0, earlier versions might also work)
   - `clang++` (verified with clang++ 18.1.3, earlier versions might also work)
   - MSVC (verified with Visual Studio Enterprise 2022, earlier versions might also work)
   - Intel `icpx` (oneAPI compiler series,

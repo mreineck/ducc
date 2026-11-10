@@ -43,6 +43,7 @@ static tuple<double, double, double> calc_gl_iterative(size_t n, size_t i)
   const Tfloat dn = Tfloat(n);
   const Tfloat t0 = Tfloat(1) - (1-Tfloat(1)/dn) / (Tfloat(8)*dn*dn);
   const Tfloat t1 = Tfloat(1)/(Tfloat(4)*dn+Tfloat(2));
+// FIXME: why not long double pi? On the other hand, it's only a starting guess...
   Tfloat x0 = cos(double(pi * ((i<<2)-1) * t1)) * t0;
 
   bool dobreak=false;
@@ -230,7 +231,7 @@ GL_Integrator::GL_Integrator(size_t n, size_t /*nthreads*/)
     {
     static array<vector<double>,100> xcache, wcache, thcache;
     static Mutex mut;
-  
+
     bool not_yet_computed = true;
     {
     LockGuard lock(mut);

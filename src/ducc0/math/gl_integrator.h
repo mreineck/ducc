@@ -52,6 +52,7 @@ class GL_Integrator
     /** \note The \a nthreads parameter is obsolescent and ignored. */
     GL_Integrator(size_t n, size_t /*nthreads*/=1);
 
+//FIXME: perhaps do the integrations inwards, starting from the smallest weights?
     /// Returns the approximated integral of \a func in [-1;1]
     template<typename Func> auto integrate(Func f) -> decltype(f(0.))
       {

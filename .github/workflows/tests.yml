@@ -77,13 +77,11 @@ jobs:
             python: '3.14t'
           - os: windows-11-arm
             python: '3.15t'
-          - os: ubuntu-22.04
           - os: ubuntu-24.04
             compiler: intel
           - os: ubuntu-24.04
             compiler: clang
           - os: ubuntu-26.04
-          - os: ubuntu-22.04-arm
           - os: ubuntu-24.04-arm
           - os: ubuntu-26.04-arm
           - os: macos-15-intel

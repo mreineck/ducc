@@ -127,20 +127,8 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
   multiprep(const vector<fmav_info> &info, const vector<size_t> &tsizes)
   {
   auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
   MR_assert(tsizes.size()==narr, "tsizes has wrong length");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    if (info[0].shape(i)!=1) // remove axes of length 1
-      {
-      shp.push_back(info[0].shape(i));
-      for (size_t j=0; j<narr; ++j)
-        str[j].push_back(info[j].stride(i));
-      }
-  opt_shp_str(shp, str);
+  auto [shp, str] = multiprep(info);
 
   bool transpose=false;
   size_t ndim=shp.size();
@@ -171,24 +159,6 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
   if (crit1) return make_tuple(shp, str, max<size_t>(8, 16384/(4*load)), 4);
   size_t blk = max<size_t>(8, size_t(sqrt(16384./load)));
   return make_tuple(shp, str, blk, blk);
-  }
-
-DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
-  multiprep_noopt(const vector<fmav_info> &info)
-  {
-  auto narr = info.size();
-  MR_assert(narr>=1, "need at least one array");
-  for (size_t i=1; i<narr; ++i)
-    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
-  fmav_info::shape_t shp;
-  vector<fmav_info::stride_t> str(narr);
-  for (size_t i=0; i<info[0].ndim(); ++i)
-    {
-    shp.push_back(info[0].shape(i));
-    for (size_t j=0; j<narr; ++j)
-      str[j].push_back(info[j].stride(i));
-    }
-  return make_tuple(shp, str);
   }
 
 }}
