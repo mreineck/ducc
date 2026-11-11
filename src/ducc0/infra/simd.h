@@ -58,6 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // NOTE: this header is only there to potentially #define __GLIBCXX__
 // Do not delete this #include or move it farther below!
 #include <cstdint>
+#include <concepts>
 
 #include "ducc0/infra/useful_macros.h"
 
@@ -82,17 +83,9 @@ using stdx::native_simd;
 template<typename T, int len> struct simd_select
   { using type = stdx::simd<T, stdx::simd_abi::deduce_t<T, len>>; };
 
-template<typename T, bool vect> struct vectorizable_helper;
-
-template<typename T> struct vectorizable_helper<T,false>
-  { static constexpr bool value = false; };
-
-template<typename T> struct vectorizable_helper<T,true>
-  { static constexpr bool value = native_simd<T>::size()>1; };
-
 using stdx::element_aligned_tag;
-template<typename T> constexpr inline bool vectorizable = vectorizable_helper<T,
-  std::is_arithmetic_v<T> && (!std::is_same_v<T,bool>)>::value;
+template<typename T> concept vectorizable = std::is_arithmetic_v<T>
+  && (!std::same_as<T,bool>) && (native_simd<T>::size()>1);
 
 template<typename T, int N> constexpr bool simd_exists_h()
   {
@@ -107,7 +100,7 @@ template<typename T, int N> constexpr bool simd_exists_h()
   }
 template<typename T, int N> constexpr inline bool simd_exists = simd_exists_h<T,N>();
 
-template<typename Func, typename T, typename Abi> inline stdx::simd<T, Abi> apply(stdx::simd<T, Abi> in, Func func)
+template<typename T, typename Abi> inline stdx::simd<T, Abi> apply(stdx::simd<T, Abi> in, std::invocable<T> auto func)
   {
   stdx::simd<T, Abi> res;
   for (size_t i=0; i<in.size(); ++i)
@@ -199,12 +192,11 @@ namespace DUCC0_NAMESPACE {
 namespace detail_simd {
 
 /// true iff SIMD support is provided for \a T.
-template<typename T> constexpr inline bool vectorizable = false;
 #if (!defined(DUCC0_NO_SIMD))
 #if defined(__SSE2__) || defined (DUCC0_USE_SVE) || defined (DUCC0_USE_NEON)
-template<> constexpr inline bool vectorizable<float> = true;
-template<> constexpr inline bool vectorizable<double> = true;
-#endif
+template<typename T> concept vectorizable = std::same_as<T,float> || std::same_as<T,double>;
+#else
+template<typename T> concept vectorizable = false;
 #endif
 
 /// true iff a SIMD type with vector length \a len exists for \a T.
@@ -353,14 +345,14 @@ template<typename T, size_t len> inline bool all_of(const vmask_<T, len> &mask)
   { return mask.all(); }
 template<typename T, size_t len> inline vtp<T,len> blend (const vmask_<T, len> &mask, const vtp<T,len> &a, const vtp<T,len> &b)
   { return vtp<T,len>::blend(mask, a, b); }
-template<typename Op, typename T, size_t len> T reduce(const vtp<T, len> &v, Op op)
+template<typename T, size_t len> T reduce(const vtp<T, len> &v, std::regular_invocable<T,T> auto op)
   {
   T res=v[0];
   for (size_t i=1; i<len; ++i)
     res = op(res, v[i]);
   return res;
   }
-template<typename Func, typename T, size_t vlen> vtp<T, vlen> apply(vtp<T, vlen> in, Func func)
+template<typename T, size_t vlen> vtp<T, vlen> apply(vtp<T, vlen> in, std::invocable<T> auto func)
   {
   vtp<T, vlen> res;
   for (size_t i=0; i<in.size(); ++i)
