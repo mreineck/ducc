@@ -413,8 +413,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       sz = other.sz;
       }
     /// Returns the dimensionality of the object.
-    static constexpr size_t ndim() requires (!dyn) { return R; }
-    size_t ndim() const requires (dyn) { return shp.size(); }
+    size_t constexpr ndim() const { return shp.size(); }
     /// Returns the total number of entries in the object.
     size_t size() const { return sz; }
     /// Returns the shape of the object.
