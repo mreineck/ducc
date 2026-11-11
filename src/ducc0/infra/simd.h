@@ -61,6 +61,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <concepts>
 
 #include "ducc0/infra/useful_macros.h"
+#include <cstddef>
+
+namespace DUCC0_NAMESPACE {
+namespace detail_simd {
+/// Satisfied by vtp<T,len> and std::experimental::simd<T,Abi>.
+template<typename T> concept simd_like = requires(T v, size_t i)
+  { typename T::value_type; { T::size() } -> std::convertible_to<size_t>; v[i]; };
+}
+using detail_simd::simd_like;
+}
 
 // for some reason, MacOS doesn't seem to have stdx::simd_abi::deduce_t (yet?),
 // so we don't use the standard library SIMD support on MacOS.
@@ -115,9 +125,9 @@ template<typename T, typename Abi> inline stdx::simd<T,Abi> cos(stdx::simd<T,Abi
 template<typename M, typename T> inline T blend(M mask, T a, T b)
   { T res=b; where(mask, res) = a; return res; }
 
-template<typename Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
+template<simd_like Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
   { return Tsimd(ptr, element_aligned_tag()); }
-template<typename Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
+template<simd_like Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
   { v.copy_to(ptr, element_aligned_tag()); }
 
 }
@@ -131,7 +141,7 @@ using detail_simd::blend;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
-template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+template<simd_like Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
   { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 
@@ -859,9 +869,9 @@ template<typename T, size_t len> inline vtp<T,len> sin(vtp<T,len> in)
 template<typename T, size_t len> inline vtp<T,len> cos(vtp<T,len> in)
   { return apply(in,[](T v){return std::cos(v);}); }
 
-template<typename Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
+template<simd_like Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
   { return Tsimd(ptr, element_aligned_tag()); }
-template<typename Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
+template<simd_like Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
   { v.copy_to(ptr, element_aligned_tag()); }
 }
 
@@ -873,7 +883,7 @@ using detail_simd::vectorizable;
 using detail_simd::loadu;
 using detail_simd::storeu;
 
-template<typename Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
+template<simd_like Tsimd> inline void unaligned_add(typename Tsimd::value_type *ptr, Tsimd v)
   { storeu(loadu<Tsimd>(ptr)+v, ptr); }
 }
 #endif

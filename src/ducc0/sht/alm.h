@@ -212,7 +212,7 @@ struct ft_partial_sph_isometry_plan
       int n;
 
     private:
-      template<typename Tv, size_t N, size_t Ncomp> DUCC0_NOINLINE int eval_helper
+      template<simd_like Tv, size_t N, size_t Ncomp> DUCC0_NOINLINE int eval_helper
         (int jmin, int limit_in, int limit_out, const vector<double> &c, vector<double> &f) const
         {
         constexpr double eps = 0x1p-52;

@@ -377,7 +377,7 @@ bailout_bwd:
   }
 
 #if 0  // currently unused
-template<typename Tsimd> void wigner3j_00_internal_vec
+template<simd_like Tsimd> void wigner3j_00_internal_vec
   (Tsimd l2, Tsimd l3, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen = Tsimd::size();
@@ -429,7 +429,7 @@ template<typename Tsimd> void wigner3j_00_internal_vec
     res(k)*=cnorm;
   }
 
-template<typename Tsimd> void wigner3j_internal_vec
+template<simd_like Tsimd> void wigner3j_internal_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, const vmav<Tsimd,1> &res)
   {
   if ((m2==0) && (m3==0))
@@ -812,7 +812,7 @@ void flexible_wigner3j (double l2, double l3, double m2, double m3,
   for (size_t i=0; i<size_t(l1min_real-l1min); ++i) res(i) = 0.;
   for (size_t i=size_t(l1min_real-l1min+ncoef); i<res.shape(0); ++i) res(i) = 0.;
   }
-template<typename Tsimd> void flexible_wigner3j_vec
+template<simd_like Tsimd> void flexible_wigner3j_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res)
   {
   constexpr size_t vlen = Tsimd::size();
