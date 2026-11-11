@@ -425,7 +425,7 @@ def runbench3(npoints_in, npoints_out, minmax_in, minmax_out, nthreads, fname, s
 
 singleprec = False
 # FINUFFT benchmarks, analogous to figures 6.1-6.3 in the 2018 paper
-if False:
+if True:
     runbench12((   1000000,),  10000000, 1, "finufft_1d_serial.png"  , singleprec)
     runbench12(( 1000,1000,),  10000000, 1, "finufft_2d_serial.png"  , singleprec)
     runbench12((100,100,100),  10000000, 1, "finufft_3d_serial.png"  , singleprec)
