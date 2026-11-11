@@ -530,7 +530,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       }
     [[nodiscard]] auto prepend_1() const
       {
-      using res_t = mav_info_proto<Tcontainer, newR(ndim()+1)>;
+      using res_t = mav_info_proto<Tcontainer, newR(R+1)>;
       auto newshp = zeros<typename res_t::shape_t>(ndim()+1);
       auto newstr = zeros<typename res_t::stride_t>(ndim()+1);
       newshp[0] = 1;
