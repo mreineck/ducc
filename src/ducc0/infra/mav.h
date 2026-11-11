@@ -362,6 +362,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
   {
   public:
     static constexpr bool dyn = (R==dynamic_rank);
+    static constexpr size_t newR (auto val) { return dyn ? R : val; }
     using shape_t  = conditional_t<dyn, vector<size_t>,    Tcontainer<size_t, R>   >;
     using stride_t = conditional_t<dyn, vector<ptrdiff_t>, Tcontainer<ptrdiff_t, R>>;
 
@@ -412,7 +413,8 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       sz = other.sz;
       }
     /// Returns the dimensionality of the object.
-    size_t ndim() const { return shp.size(); }
+    static constexpr size_t ndim() requires (!dyn) { return R; }
+    size_t ndim() const requires (dyn) { return shp.size(); }
     /// Returns the total number of entries in the object.
     size_t size() const { return sz; }
     /// Returns the shape of the object.
@@ -445,7 +447,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       if constexpr (dyn)
         MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       else
-        static_assert(R==sizeof...(ns), "incorrect number of indices");
+        static_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       return strided_idx(str, ns...);
       }
     ptrdiff_t idx(const shape_t &ns) const
@@ -506,7 +508,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       (const Tshp &new_shape, const vector<size_t> &axpos) const
       {
       using res_t = mav_info_proto<Tcontainer, rank_of<Tshp>>;
-      static_assert(dyn || res_t::dyn || (rank_of<Tshp> >= R),
+      static_assert(dyn || res_t::dyn || (rank_of<Tshp> >= ndim()),
         "new shape smaller than original one");
       auto new_stride = zeros<typename res_t::stride_t>(new_shape.size());
       extend_and_broadcast_info(shp, str, new_shape, axpos, new_stride);
@@ -528,7 +530,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       }
     [[nodiscard]] auto prepend_1() const
       {
-      using res_t = mav_info_proto<Tcontainer, dyn ? R : R+1>;
+      using res_t = mav_info_proto<Tcontainer, newR(ndim()+1)>;
       auto newshp = zeros<typename res_t::shape_t>(ndim()+1);
       auto newstr = zeros<typename res_t::stride_t>(ndim()+1);
       newshp[0] = 1;
@@ -566,7 +568,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
 
     using tinfo = mav_info<R>;
     using tbuf = cmembuf<T>;
-    using tinfo::shp, tinfo::str, tinfo::dyn;
+    using tinfo::shp, tinfo::str, tinfo::dyn, tinfo::newR;
 
     // NOTE: assert_compactness is false for a fully reversed contiguous array.
     void assert_compactness() const
@@ -661,7 +663,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       && (dyn || (sizeof...(S)==R)))
     auto sub(S... s) const
       {
-      constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
+      constexpr size_t nd2 = newR((size_t(!integral<S>) + ... + 0));
       const array<slice, sizeof...(S)> slc{slice(s)...};
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
       return cmav<T, nd2>(std::move(ninfo), tbuf::d+nofs, *this);
@@ -687,7 +689,7 @@ template<typename T, size_t R> class cmav: public mav_info<R>, public cmembuf<T>
       { return cmav(static_cast<T *>(nullptr), shape_t{}); }
     [[nodiscard]] cmav transpose(const shape_t &axes) const
       { return cmav(tinfo::transpose(axes), *this); }
-    [[nodiscard]] cmav<T, dyn ? R : R+1> prepend_1() const
+    [[nodiscard]] cmav<T, newR(R+1)> prepend_1() const
       { return {tinfo::prepend_1(), *this}; }
     template<size_t R2> cmav<T, R2> reinterpret
       (const typename cmav<T, R2>::shape_t &newshp,
@@ -707,10 +709,11 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
     using parent = cmav<T, R>;
     using tinfo = mav_info<R>;
     using tbuf = cmembuf<T>;
-    using tinfo::dyn, tinfo::idx, tinfo::idxval;
+    using tinfo::dyn, tinfo::newR, tinfo::idx, tinfo::idxval;
 
   public:
     using typename tinfo::shape_t;
+    using tinfo::ndim;
     using typename tinfo::stride_t;
     using element_type = T;
     using value_type = T;
@@ -783,7 +786,7 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
       && (dyn || (sizeof...(S)==R)))
     auto sub(S... s) const
       {
-      constexpr size_t nd2 = dyn ? R : (size_t(!integral<S>) + ... + 0);
+      constexpr size_t nd2 = newR((size_t(!integral<S>) + ... + 0));
       const array<slice, sizeof...(S)> slc{slice(s)...};
       auto [ninfo, nofs] = tinfo::template subdata<nd2>(slc);
       return vmav<T, nd2>(std::move(ninfo), data()+nofs, *this);
@@ -818,7 +821,7 @@ template<typename T, size_t R> class vmav: public cmav<T, R>
     // since broadcast axes (stride 0) let many indices share one entry.
     [[nodiscard]] vmav transpose(const shape_t &axes) const
       { return vmav(tinfo::transpose(axes), *this); }
-    [[nodiscard]] vmav<T, dyn ? R : R+1> prepend_1() const
+    [[nodiscard]] vmav<T, newR(R+1)> prepend_1() const
       { return {tinfo::prepend_1(), *this}; }
     template<size_t R2> vmav<T, R2> reinterpret
       (const typename vmav<T, R2>::shape_t &newshp,
