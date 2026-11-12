@@ -1,0 +1,59 @@
+name: ducc-vendoring-tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scipy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out DUCC
+        uses: actions/checkout@v7
+        with:
+          path: ducc
+          persist-credentials: false
+
+      - name: Check out SciPy
+        uses: actions/checkout@v7
+        with:
+          repository: scipy/scipy
+          ref: main
+          path: scipy
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install SciPy prerequisites
+        working-directory: scipy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ gfortran libopenblas-dev liblapack-dev pkg-config
+
+      - name: Install Python dependencies
+        working-directory: scipy
+        run: |
+          python -m pip install --group build --group dev-cli --group test-core --group test-mp --group optional-runtime-deps
+          python -m pip install 'pytest==9.1.1'
+
+      - name: Vendor this DUCC revision using SciPy's script
+        working-directory: scipy
+        run: |
+          DUCC_SHA="$(git -C ../ducc rev-parse HEAD)"
+          sed -i \
+            -e "s|^REPO_URL=.*|REPO_URL=\"$GITHUB_WORKSPACE/ducc\"|" \
+            -e "s|^COMMIT_HASH=.*|COMMIT_HASH=\"$DUCC_SHA\"|" \
+            tools/vendoring/vendor_duccfft.sh
+          grep -E '^(REPO_URL|COMMIT_HASH)=' tools/vendoring/vendor_duccfft.sh
+          ./tools/vendoring/vendor_duccfft.sh
+
+      - name: Build and test SciPy
+        working-directory: scipy
+        run: |
+          spin build --release
+          spin test -m full
