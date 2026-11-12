@@ -441,7 +441,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       if constexpr (dyn)
         MR_assert(ndim()==sizeof...(ns), "incorrect number of indices");
       else
-        static_assert(ndim()==sizeof...(ns), "incorrect number of indices");
+        static_assert(R==sizeof...(ns), "incorrect number of indices");
       return strided_idx(str, ns...);
       }
     ptrdiff_t idx(const shape_t &ns) const
@@ -502,7 +502,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
       (const Tshp &new_shape, const vector<size_t> &axpos) const
       {
       using res_t = mav_info_proto<Tcontainer, rank_of<Tshp>>;
-      static_assert(dyn || res_t::dyn || (rank_of<Tshp> >= ndim()),
+      static_assert(dyn || res_t::dyn || (rank_of<Tshp> >= R),
         "new shape smaller than original one");
       auto new_stride = zeros<typename res_t::stride_t>(new_shape.size());
       extend_and_broadcast_info(shp, str, new_shape, axpos, new_stride);
