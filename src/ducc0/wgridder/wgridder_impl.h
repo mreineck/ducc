@@ -1798,7 +1798,7 @@ timers.pop();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void ms2dirty_bda(
     const cmav<double,2> &uvw,                        // (nrows,3)
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
@@ -1819,7 +1819,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
@@ -1836,7 +1836,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void dirty2ms_bda(
     const cmav<double,2> &uvw,
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
@@ -1856,7 +1856,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,

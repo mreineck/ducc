@@ -308,7 +308,7 @@ template<typename T, typename Func> auto execWorklist
   (size_t nthreads, const std::vector<T> &items, Func &&func)
   {
   Worklist<T> wl(items);
-  execParallel(nthreads, [&wl, &func](auto &) {
+  execParallel(nthreads, [&wl, &func](Scheduler &) {
     wl.startup();
     while(auto wrk=wl.get_item())
       func(wrk.value(), [&wl](const T &item){wl.put_item(item);});

@@ -104,7 +104,7 @@ template<typename T> static void toeplitz_fill(const vmav<T,2> &mat,
     });
   }
 
-template<typename Tsimd, typename Tout> inline void zero_mat
+template<simd_like Tsimd, typename Tout> inline void zero_mat
   (int el1, int el2, size_t s1_, size_t s2_, const vmav<Tout,3> &mat, const vmav<Tout,2> &diag)
   {
   int s1=int(s1_), s2=int(s2_);
@@ -121,7 +121,7 @@ template<typename Tsimd, typename Tout> inline void zero_mat
     }
   }
 
-template<typename Tsimd, typename Tout, typename Tval> inline void store_mat02
+template<simd_like Tsimd, typename Tout, typename Tval> inline void store_mat02
   (int el1, int el2, size_t s1_, size_t s2_, const vector<int> &optype,
    const vmav<Tout,3> &mat, const vmav<Tout,2> &diag, const Tval &val)
   {
@@ -167,7 +167,7 @@ template<typename Tsimd, typename Tout, typename Tval> inline void store_mat02
     }
   }
 
-template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4>,nspec> sum_wig_general
+template<size_t opmask, simd_like Tsimd, size_t nspec> inline array<array<Tsimd,4>,nspec> sum_wig_general
   (int el1, int el2, size_t lmax_spec, const Wigner3j_direct<Tsimd> &w3j,
    const vmav<double,2> &spec2)
   {
@@ -200,7 +200,7 @@ template<size_t opmask, typename Tsimd, size_t nspec> inline array<array<Tsimd,4
     }
   return val;
   }
-template<size_t opmask, typename Tsimd, typename Tval> inline void sum_wig_general
+template<size_t opmask, simd_like Tsimd, typename Tval> inline void sum_wig_general
   (int el1, int el2, size_t lmax_spec, size_t nspec, const Wigner3j_direct<Tsimd> &w3j,
    const vmav<double,2> &spec2, Tval &val)
   {

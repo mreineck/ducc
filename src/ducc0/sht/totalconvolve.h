@@ -36,6 +36,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/type_concepts.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
@@ -53,7 +54,7 @@ namespace detail_totalconvolve {
 
 using namespace std;
 
-template<typename T> class ConvolverPlan
+template<fp_scalar T> class ConvolverPlan
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
@@ -82,7 +83,7 @@ template<typename T> class ConvolverPlan
       return fct;
       }
 
-    template<typename Tloc> quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta,
+    template<fp_scalar Tloc> quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta,
       const cmav<Tloc,1> &phi, const cmav<Tloc,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
@@ -528,7 +529,7 @@ template<typename T> class ConvolverPlan
       getPlane(vslm, vblm, mbeam, planes);
       }
 
-    template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
+    template<fp_scalar Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<Tloc,1> &psi, const vmav<T,1> &signal) const
       {
@@ -536,7 +537,7 @@ template<typename T> class ConvolverPlan
       interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
-    template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
+    template<fp_scalar Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<Tloc,1> &psi, const cmav<T,1> &signal) const
       {

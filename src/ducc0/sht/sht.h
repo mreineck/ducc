@@ -30,6 +30,7 @@
 #include <complex>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/type_concepts.h"
 
 namespace DUCC0_NAMESPACE {
 
@@ -47,7 +48,7 @@ vmav<double,1> get_gridweights(const string &type, size_t nrings);
 // and number of rings.
 size_t maximum_safe_l(const string &geometry, size_t ntheta);
 
-template<typename T> void alm2leg(  // associated Legendre transform
+template<fp_scalar T> void alm2leg(  // associated Legendre transform
   const cmav<complex<T>,2> &alm, // (ncomp, lmidx)
   const vmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   size_t spin,
@@ -59,7 +60,7 @@ template<typename T> void alm2leg(  // associated Legendre transform
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol=false);
-template<typename T> void leg2alm(  // associated Legendre transform
+template<fp_scalar T> void leg2alm(  // associated Legendre transform
   const vmav<complex<T>,2> &alm, // (ncomp, lmidx)
   const cmav<complex<T>,3> &leg, // (ncomp, nrings, nm)
   size_t spin,
@@ -72,7 +73,7 @@ template<typename T> void leg2alm(  // associated Legendre transform
   SHT_mode mode,
   bool theta_interpol=false);
 
-template<typename T> void map2leg(  // FFT
+template<fp_scalar T> void map2leg(  // FFT
   const cmav<T,2> &map, // (ncomp, pix)
   const vmav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const cmav<size_t,1> &nphi, // (nrings)
@@ -81,7 +82,7 @@ template<typename T> void map2leg(  // FFT
   const cmav<double,1> &ringfactor, // (nrings)
   ptrdiff_t pixstride,
   size_t nthreads);
-template<typename T> void leg2map(  // FFT
+template<fp_scalar T> void leg2map(  // FFT
   const vmav<T,2> &map, // (ncomp, pix)
   const cmav<complex<T>,3> &leg, // (ncomp, nrings, mmax+1)
   const cmav<size_t,1> &nphi, // (nrings)
@@ -91,7 +92,7 @@ template<typename T> void leg2map(  // FFT
   ptrdiff_t pixstride,
   size_t nthreads);
 
-template<typename T> void synthesis(
+template<fp_scalar T> void synthesis(
   const cmav<complex<T>,2> &alm, // (ncomp, *)
   const vmav<T,2> &map, // (ncomp, *)
   size_t spin,
@@ -107,7 +108,7 @@ template<typename T> void synthesis(
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol=false);
-template<typename T> void synthesis_2d(
+template<fp_scalar T> void synthesis_2d(
   const cmav<complex<T>,2> &alm,
   const vmav<T,3> &map,
   size_t spin,
@@ -119,7 +120,7 @@ template<typename T> void synthesis_2d(
   const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads,
   SHT_mode mode);
-template<typename T, typename Tloc> void synthesis_general(
+template<fp_scalar T, fp_scalar Tloc> void synthesis_general(
   const cmav<complex<T>,2> &alm,
   const vmav<T,2> &map,
   size_t spin,
@@ -133,7 +134,7 @@ template<typename T, typename Tloc> void synthesis_general(
   SHT_mode mode,
   bool verbose=false);
 
-template<typename T> void adjoint_synthesis(
+template<fp_scalar T> void adjoint_synthesis(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
   const cmav<T,2> &map, // (ncomp, *)
   size_t spin,
@@ -149,7 +150,7 @@ template<typename T> void adjoint_synthesis(
   size_t nthreads,
   SHT_mode mode,
   bool theta_interpol=false);
-template<typename T> void adjoint_synthesis_2d(
+template<fp_scalar T> void adjoint_synthesis_2d(
   const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map,
   size_t spin,
@@ -161,7 +162,7 @@ template<typename T> void adjoint_synthesis_2d(
   const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads,
   SHT_mode mode);
-template<typename T, typename Tloc> void adjoint_synthesis_general(
+template<fp_scalar T, fp_scalar Tloc> void adjoint_synthesis_general(
   const vmav<complex<T>,2> &alm,
   const cmav<T,2> &map,
   size_t spin,
@@ -175,7 +176,7 @@ template<typename T, typename Tloc> void adjoint_synthesis_general(
   SHT_mode mode,
   bool verbose=false);
 
-template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
+template<fp_scalar T> tuple<size_t, size_t, double, double> pseudo_analysis(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
   const cmav<T,2> &map, // (ncomp, *)
   size_t spin,
@@ -193,7 +194,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis(
   double epsilon,
   bool theta_interpol=false,
   bool alm_contains_initial_guess=false);
-template<typename T> void analysis_2d(
+template<fp_scalar T> void analysis_2d(
   const vmav<complex<T>,2> &alm,
   const cmav<T,3> &map,
   size_t spin,
@@ -204,7 +205,7 @@ template<typename T> void analysis_2d(
   double phi0,
   const cmav<double,1> &ringfactor, // (ntheta)
   size_t nthreads);
-template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
+template<fp_scalar T> tuple<size_t, size_t, double, double> pseudo_analysis_general(
   const vmav<complex<T>,2> &alm, // (ncomp, *)
   const cmav<T,2> &map, // (ncomp, npix)
   size_t spin,
@@ -219,7 +220,7 @@ template<typename T> tuple<size_t, size_t, double, double> pseudo_analysis_gener
   bool verbose=false,
   bool alm_contains_initial_guess=false);
 
-template<typename T> void adjoint_analysis_2d(
+template<fp_scalar T> void adjoint_analysis_2d(
   const cmav<complex<T>,2> &alm,
   const vmav<T,3> &map,
   size_t spin,
