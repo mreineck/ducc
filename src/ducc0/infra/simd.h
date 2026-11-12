@@ -202,10 +202,8 @@ namespace DUCC0_NAMESPACE {
 namespace detail_simd {
 
 /// true iff SIMD support is provided for \a T.
-#if (!defined(DUCC0_NO_SIMD))
-#if defined(__SSE2__) || defined (DUCC0_USE_SVE) || defined (DUCC0_USE_NEON)
+#if (!defined(DUCC0_NO_SIMD)) && (defined(__SSE2__) || defined (DUCC0_USE_SVE) || defined (DUCC0_USE_NEON))
 template<typename T> concept vectorizable = std::same_as<T,float> || std::same_as<T,double>;
-#endif
 #else
 template<typename T> concept vectorizable = false;
 #endif
