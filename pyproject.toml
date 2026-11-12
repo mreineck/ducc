@@ -66,6 +66,7 @@ sdist.include = [
     "src/ducc0/infra/threading.cc",
     "src/ducc0/infra/threading.h",
     "src/ducc0/infra/timers.h",
+    "src/ducc0/infra/type_concepts.h",
     "src/ducc0/infra/useful_macros.h",
     "src/ducc0/bindings/pybind_utils.h",
     "src/ducc0/math/cmplx.h",
