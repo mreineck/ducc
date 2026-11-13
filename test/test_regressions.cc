@@ -69,7 +69,7 @@ static int test_slice_wraparound()
   bool ok = true;
   try
     {
-    auto sub = arr.subarray<2>({slice(5, 2), slice(0, 4)});  // beg > end
+    auto sub = arr.sub(slice(5, 2), slice(0, 4));  // beg > end
     cout << "slice(5, 2) was accepted, sub shape: "
          << sub.shape(0) << " x " << sub.shape(1) << "\n";
     ok = false;
@@ -78,7 +78,7 @@ static int test_slice_wraparound()
     { cout << "slice(5, 2) rejected as expected\n"; }
   try
     {
-    auto sub = arr.subarray<2>({slice(2, 5, -1), slice(0, 4)});  // end > beg, step < 0
+    auto sub = arr.sub(slice(2, 5, -1), slice(0, 4));  // end > beg, step < 0
     cout << "slice(2, 5, -1) was accepted, sub shape: "
          << sub.shape(0) << " x " << sub.shape(1) << "\n";
     ok = false;
@@ -223,12 +223,12 @@ static int test_subarray_empty_axis()
   bool ok=true;
   double dummy=0;
   vmav<double,2> fixed(&dummy, {2,0}, {100,1});
-  auto fixed_sub=fixed.subarray<1>({slice(1), slice()});
+  auto fixed_sub=fixed.sub(1, slice());
   if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0))
     ok=false;
   fmav_info info({2,0}, {100,1});
   vfmav<double> dynamic(&dummy, info);
-  auto dynamic_sub=dynamic.subarray({slice(1), slice()});
+  auto dynamic_sub=dynamic.sub(1, slice());
   if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0))
     ok=false;
 
@@ -240,13 +240,13 @@ static int test_subarray_empty_axis()
 static int test_null_backed_empty_subarrays()
   {
   vmav<double,1> fixed(static_cast<double *>(nullptr), {0}, {1});
-  auto fixed_sub=fixed.subarray<1>({slice()});
+  auto fixed_sub=fixed.sub(slice());
   if ((fixed_sub.shape(0)!=0) || (fixed_sub.size()!=0))
     return 1;
 
   fmav_info info({0}, {1});
   vfmav<double> dynamic(static_cast<double *>(nullptr), info);
-  auto dynamic_sub=dynamic.subarray({slice()});
+  auto dynamic_sub=dynamic.sub(slice());
   if ((dynamic_sub.shape(0)!=0) || (dynamic_sub.size()!=0))
     return 1;
 
@@ -292,6 +292,56 @@ static int test_build_noncritical_empty()
   return ok ? 0 : 1;
   }
 
+/* Conversions between fixed and dynamic rank must keep shape and strides
+   and reject a dimensionality mismatch. */
+static int test_rank_conversion()
+  {
+  bool ok=true;
+  mav_info<2> a({2, 3}, {1, 2});
+  fmav_info f = a;
+  mav_info<2> b(f);
+  ok &= (f.ndim()==2) && (b.shape()==a.shape()) && (b.stride()==a.stride());
+  try
+    {
+    mav_info<3> c(f);
+    cout << "fmav_info of rank 2 was converted to mav_info<3>\n";
+    ok=false;
+    }
+  catch (const exception &) {}
+  if (ok) cout << "PASS rank_conversion\n";
+  else cout << "FAIL rank_conversion\n";
+  return ok ? 0 : 1;
+  }
+
+/* sub() must select the same entries as subarray(), deduce the result rank
+   for fixed-rank arrays, and reject a wrong number of slices for
+   dynamic-rank arrays. */
+static int test_sub()
+  {
+  bool ok=true;
+  vmav<double, 3> a({4, 5, 6});
+  for (size_t i=0; i<a.size(); ++i) a.data()[i]=double(i);
+  auto s = a.sub(2, slice(1, 4), slice(5, 0, -2));   // vmav<double, 2>
+  auto r = a.subarray<2>({{2}, {1, 4}, {5, 0, -2}});
+  ok &= (s.shape()==r.shape()) && (s.stride()==r.stride()) && (s.data()==r.data());
+  s(0, 0) = -1.;
+  ok &= (a(2, 1, 5)==-1.);
+  vfmav<double> f(a);
+  auto fs = f.sub(slice(), 3, slice(0, 2));          // vfmav<double>, 2D
+  ok &= (fs.ndim()==2) && (fs.shape(0)==4) && (fs.shape(1)==2)
+     && (&fs(1, 1)==&a(1, 3, 1));
+  try
+    {
+    (void)f.sub(1, 2);
+    cout << "sub() with too few slices was accepted\n";
+    ok=false;
+    }
+  catch (const exception &) {}
+  if (ok) cout << "PASS sub\n";
+  else cout << "FAIL sub\n";
+  return ok ? 0 : 1;
+  }
+
 struct RegressionTest { const char *name; int (*run)(); };
 
 static constexpr RegressionTest regression_tests[] =
@@ -305,6 +355,8 @@ static constexpr RegressionTest regression_tests[] =
   {"subarray_empty_axis", test_subarray_empty_axis},
   {"null_backed_empty_subarrays", test_null_backed_empty_subarrays},
   {"build_noncritical_empty", test_build_noncritical_empty},
+  {"rank_conversion", test_rank_conversion},
+  {"sub", test_sub},
   };
 
 int main(int argc, char **argv)

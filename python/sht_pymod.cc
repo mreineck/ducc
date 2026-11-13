@@ -782,8 +782,8 @@ template<typename T> static NpArr Py2_synthesis(const CNpArr &alm_,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        synthesis(subarray<2>(alm, {{itrans},{},{}}),
-          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta, nphi,
+        synthesis(alm.sub(itrans, slice(), slice()),
+          map.sub(itrans, slice(), slice()), spin, lmax, mstart, lstride, theta, nphi,
           phi0, ringstart, ringfactor, pixstride, nthreads, mode, theta_interpol);
     });
   }
@@ -1257,8 +1257,8 @@ template<typename T> static NpArr Py2_adjoint_synthesis(const OptNpArr &alm__,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        adjoint_synthesis(subarray<2>(alm, {{itrans},{},{}}),
-          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta,
+        adjoint_synthesis(alm.sub(itrans, slice(), slice()),
+          map.sub(itrans, slice(), slice()), spin, lmax, mstart, lstride, theta,
           nphi, phi0, ringstart, ringfactor, pixstride, nthreads, mode, theta_interpol);
     });
   }
@@ -1572,7 +1572,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
         {
         auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(
-          subarray<2>(alm, {{itrans},{},{}}), subarray<2>(map, {{itrans},{},{}}),
+          alm.sub(itrans, slice(), slice()), map.sub(itrans, slice(), slice()),
           spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, ringfactor, pixstride,
           nthreads, maxiter, epsilon, theta_interpol, alm_contains_initial_guess);
         itn[itrans] = xitn;

@@ -22,6 +22,7 @@
 
 #include <complex>
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/type_concepts.h"
 
 namespace DUCC0_NAMESPACE {
 
@@ -29,14 +30,14 @@ namespace detail_gridder {
 
 using namespace std;
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,2>, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in=cmav<complex<Tms>,2>, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
   bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
   double sigma_max, double center_x, double center_y, bool allow_nshift);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<complex<Tms>,1>, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in=cmav<complex<Tms>,1>, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void ms2dirty_bda(
     const cmav<double,2> &uvw,                        // (nrows,3)
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
@@ -50,14 +51,14 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in=cmav<compl
     bool flip_u, bool flip_v, bool flip_w, bool divide_by_n, double sigma_min,
     double sigma_max, double center_x, double center_y, bool allow_nshift);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,
   size_t verbosity, bool flip_u, bool flip_v, bool flip_w, bool divide_by_n,
   double sigma_min, double sigma_max, double center_x, double center_y, bool allow_nshift);
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void dirty2ms_bda(
     const cmav<double,2> &uvw,
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
