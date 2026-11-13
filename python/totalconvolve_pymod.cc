@@ -21,7 +21,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/totalconvolve.h"
 
 namespace DUCC0_NAMESPACE {
@@ -882,8 +881,4 @@ void add_totalconvolve(py::module_ &msup)
     .def ("getSlm", &inter_f::Py_getSlm, getSlm_DS, "beam"_a);
   }
 
-}
-
-using detail_pymodule_totalconvolve::add_totalconvolve;
-
-}
+}}

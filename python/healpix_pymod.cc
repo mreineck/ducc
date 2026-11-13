@@ -29,7 +29,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/healpix/healpix_base.h"
 #include "ducc0/math/constants.h"
 #include "ducc0/infra/string_utils.h"
@@ -573,8 +572,4 @@ void add_healpix(py::module_ &msup)
   m.def("v_angle",&local_v_angle, v_angle_DS, "v1"_a, "v2"_a, "nthreads"_a=1, "out"_a=None);
   }
 
-}
-
-using detail_pymodule_healpix::add_healpix;
-
-}
+}}

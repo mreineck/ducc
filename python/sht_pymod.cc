@@ -27,7 +27,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/sht/sht.h"
 #include "ducc0/sht/alm.h"
 #include "ducc0/healpix/healpix_base.h"
@@ -2380,9 +2379,4 @@ void add_sht(py::module_ &msup)
   m2.def("flm2alm", &Py_flm2alm, "flm"_a, "spin"_a, "alm"_a=None, "real"_a=false);
   }
 
-}
-
-using detail_pymodule_sht::add_sht;
-
-}
-
+}}

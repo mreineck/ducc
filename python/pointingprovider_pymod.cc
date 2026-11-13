@@ -21,7 +21,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/threading.h"
 #include "ducc0/math/quaternion.h"
 
@@ -312,8 +311,4 @@ void add_pointingprovider(py::module_ &msup)
        "rot_left"_a=true, "out"_a);
   }
 
-}
-
-using detail_pymodule_pointingprovider::add_pointingprovider;
-
-}
+}}

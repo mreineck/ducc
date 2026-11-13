@@ -19,7 +19,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/nufft/nufft.h"
 
 namespace DUCC0_NAMESPACE {
@@ -1090,8 +1089,4 @@ void add_nufft(py::module_ &msup)
       "points_in"_a, "points_out"_a=None);
   }
 
-}
-
-using detail_pymodule_nufft::add_nufft;
-
-}
+}}

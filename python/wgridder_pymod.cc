@@ -21,7 +21,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/wgridder/wgridder.h"
 
 namespace DUCC0_NAMESPACE {
@@ -653,8 +652,4 @@ void add_wgridder(py::module_ &msup)
     "sigma_max"_a=2.6, "center_x"_a=0., "center_y"_a=0., "allow_nshift"_a=true);
   }
 
-}
-
-using detail_pymodule_wgridder::add_wgridder;
-
-}
+}}

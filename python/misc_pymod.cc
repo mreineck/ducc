@@ -27,7 +27,6 @@
 
 // IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
-#include "ducc0/../../python/module_adders.h"
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/math/constants.h"
@@ -1871,8 +1870,4 @@ void add_misc(py::module_ &msup)
   m.def("native_vector_lengths", native_vector_lengths, native_vector_lengths_DS);
   }
 
-}
-
-using detail_pymodule_misc::add_misc;
-
-}
+}}
