@@ -429,7 +429,7 @@ template<typename T2, typename T, typename T0> class TmpStorage2
     size_t data_stride() const { return stg.data_stride(); }
   };
 
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> *DUCC0_RESTRICT dst)
   {
   constexpr auto vlen=Tsimd::size();
@@ -454,7 +454,7 @@ template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const T
 #endif
   }
 
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<typename Tsimd::value_type> &src, Tsimd *DUCC0_RESTRICT dst)
   {
   constexpr auto vlen=Tsimd::size();
@@ -482,7 +482,7 @@ template <typename Titer, typename T> DUCC0_NOINLINE void copy_input(const Titer
     dst[i] = ptr[it.iofs(i)];
   }
 
-template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Cmplx<Tsimd> *DUCC0_RESTRICT src, const vfmav<Cmplx<typename Tsimd::value_type>> &dst)
   {
   constexpr auto vlen=Tsimd::size();
@@ -500,7 +500,7 @@ template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const T
 #endif
   }
 
-template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd *DUCC0_RESTRICT src, const vfmav<typename Tsimd::value_type> &dst)
   {
   constexpr auto vlen=Tsimd::size();
@@ -526,7 +526,7 @@ template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer
   for (size_t i=0; i<it.length_out(); ++i)
     ptr[it.oofs(i)] = src[i];
   }
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> * DUCC0_RESTRICT dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -562,7 +562,7 @@ template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer
       dst[j0*vstr+i] = ptr[it.iofs(j0,i)];
   }
 
-template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<typename Tsimd::value_type> &src, Tsimd * DUCC0_RESTRICT dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -591,7 +591,7 @@ template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer
       dst[j0*vstr+i] = ptr[it.iofs(j0,i)];
   }
 
-template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Cmplx<Tsimd> * DUCC0_RESTRICT src, const vfmav<Cmplx<typename Tsimd::value_type>> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -618,7 +618,7 @@ template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer
     for (size_t j0=0; j0<nvec; ++j0)
       ptr[it.oofs(j0,i)] = src[j0*vstr+i];
   }
-template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd * DUCC0_RESTRICT src, const vfmav<typename Tsimd::value_type> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -1646,13 +1646,13 @@ template<typename T> [[maybe_unused]] void oscarize(const vfmav<T> &data, size_t
   vector<slice> slc(data.ndim());
   slc[ax0] = slice(1,(nu+1)/2);
   slc[ax1] = slice(1,(nv+1)/2);
-  auto all = subarray(data, slc);
+  auto all = data.subarray(slc);
   slc[ax0] = slice(nu-1,nu/2,-1);
-  auto ahl = subarray(data, slc);
+  auto ahl = data.subarray(slc);
   slc[ax1] = slice(nv-1,nv/2,-1);
-  auto ahh = subarray(data, slc);
+  auto ahh = data.subarray(slc);
   slc[ax0] = slice(1,(nu+1)/2);
-  auto alh = subarray(data, slc);
+  auto alh = data.subarray(slc);
   mav_apply([](T &ll, T &hl, T &hh, T &lh)
     {
     T tll=ll, thl=hl, tlh=lh, thh=hh;

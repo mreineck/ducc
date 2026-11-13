@@ -30,6 +30,7 @@
 
 #include <vector>
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/simd.h"
 
 namespace DUCC0_NAMESPACE {
 
@@ -47,7 +48,7 @@ void wigner3j (double l2, double l3, double m2, double m3, vector<double> &res);
 void wigner3j (double l2, double l3, double m2, double m3, const vmav<double,1> &res);
 
 void flexible_wigner3j (double l2, double l3, double m2, double m3, double l1min, const vmav<double,1> &res);
-template<typename Tsimd> void flexible_wigner3j_vec
+template<simd_like Tsimd> void flexible_wigner3j_vec
   (Tsimd l2, Tsimd l3, double m2, double m3, Tsimd l1min, const vmav<Tsimd,1> &res);
 #endif
 
@@ -65,7 +66,7 @@ int wigner3j_ncoef_int(int l2, int l3, int m2, int m3);
 // following https://arxiv.org/abs/2602.15605
 // NOTE: compared to the paper, this tabulates the square root of the
 // values, to save a sqrt() call in a few places.
-template<typename Tsimd> class Wigner3j_direct_tables
+template<simd_like Tsimd> class Wigner3j_direct_tables
   {
   private:
     // The value for g[i] is stored at gshift[i+1], which allows us
@@ -91,7 +92,7 @@ template<typename Tsimd> class Wigner3j_direct_tables
     const double *Fct() const { return fct.data(); }
   };
 
-template<typename Tsimd> class Wigner3j_direct
+template<simd_like Tsimd> class Wigner3j_direct
   {
   private:
     const double *g;

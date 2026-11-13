@@ -142,20 +142,20 @@ template<typename T> class Py_Interpolator
       if (separate)
         for (size_t i=0; i<vslm.shape(0); ++i)
           {
-          auto vslmi = subarray<2>(vslm, {{i,i+1},{}});
-          auto vblmi = subarray<2>(vblm, {{i,i+1},{}});
-          conv.getPlane(vslmi, vblmi, 0, subarray<3>(cube, {{i},{0,1},{},{}}));
+          auto vslmi = vslm.sub(slice(i, i+1), slice());
+          auto vblmi = vblm.sub(slice(i, i+1), slice());
+          conv.getPlane(vslmi, vblmi, 0, cube.sub(i, slice(0, 1), slice(), slice()));
           for (size_t k=1; k<kmax+1; ++k)
-            conv.getPlane(vslmi, vblmi, k, subarray<3>(cube, {{i},{2*k-1, 2*k+1},{},{}}));
+            conv.getPlane(vslmi, vblmi, k, cube.sub(i, slice(2*k-1, 2*k+1), slice(), slice()));
           }
       else
         {
-        conv.getPlane(vslm, vblm, 0, subarray<3>(cube, {{0},{0,1},{},{}}));
+        conv.getPlane(vslm, vblm, 0, cube.sub(0, slice(0, 1), slice(), slice()));
         for (size_t k=1; k<kmax+1; ++k)
-          conv.getPlane(vslm, vblm, k, subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}}));
+          conv.getPlane(vslm, vblm, k, cube.sub(0, slice(2*k-1, 2*k+1), slice(), slice()));
         }
       for (size_t i=0; i<cube.shape(0); ++i)
-        conv.prepPsi(subarray<3>(cube, {{i},{},{},{}}));
+        conv.prepPsi(cube.sub(i, slice(), slice(), slice()));
       }
       }
     Py_Interpolator(size_t lmax, size_t kmax, size_t ncomp_, size_t npoints, double sigma_min, double sigma_max, double epsilon, int nthreads)
@@ -174,16 +174,16 @@ template<typename T> class Py_Interpolator
     template<typename Tloc> NpArr Py_Interpol2(const CNpArr &ptg) const
       {
       auto ptg2 = to_cmav<Tloc,2>(ptg);
-      auto ptheta = subarray<1>(ptg2, {{},{0}});
-      auto pphi = subarray<1>(ptg2, {{},{1}});
-      auto ppsi = subarray<1>(ptg2, {{},{2}});
+      auto ptheta = ptg2.sub(slice(), 0);
+      auto pphi = ptg2.sub(slice(), 1);
+      auto ppsi = ptg2.sub(slice(), 2);
       size_t ncomp = cube.shape(0);
       auto [res_, res] = make_Pyarr_and_vmav<T,2>({ncomp,ptg2.shape(0)}, false, conv.Nthreads());
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
-        conv.interpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
-          ptheta, pphi, ppsi, subarray<1>(res, {{i},{}}));
+        conv.interpol(cube.sub(i, slice(), slice(), slice()), 0, 0,
+          ptheta, pphi, ppsi, res.sub(i, slice()));
       }
       return res_;
       }
@@ -199,16 +199,16 @@ template<typename T> class Py_Interpolator
     template<typename Tloc> void Py_deinterpol2(const CNpArr &ptg, const CNpArr &data)
       {
       auto ptg2 = to_cmav<Tloc,2>(ptg);
-      auto ptheta = subarray<1>(ptg2, {{},{0}});
-      auto pphi = subarray<1>(ptg2, {{},{1}});
-      auto ppsi = subarray<1>(ptg2, {{},{2}});
+      auto ptheta = ptg2.sub(slice(), 0);
+      auto pphi = ptg2.sub(slice(), 1);
+      auto ppsi = ptg2.sub(slice(), 2);
       size_t ncomp = cube.shape(0);
       auto data2 = to_cmav<T,2>(data);
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<ncomp; ++i)
-        conv.deinterpol(subarray<3>(cube, {{i},{},{},{}}), 0, 0,
-          ptheta, pphi, ppsi, subarray<1>(data2, {{i},{}}));
+        conv.deinterpol(cube.sub(i, slice(), slice(), slice()), 0, 0,
+          ptheta, pphi, ppsi, data2.sub(i, slice()));
       }
       }
     void Py_deinterpol(const CNpArr &ptg, const CNpArr &data)
@@ -229,7 +229,7 @@ template<typename T> class Py_Interpolator
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<cube.shape(0); ++i)
-        conv.deprepPsi(subarray<3>(cube, {{i},{},{},{}}));
+        conv.deprepPsi(cube.sub(i, slice(), slice(), slice()));
       }
       auto [vslm_, vslm] = make_Pyarr_and_vmav<complex<T>,2>({ncomp, Alm_Base::Num_Alms(lmax, lmax)}, false, conv.Nthreads());
       {
@@ -238,17 +238,17 @@ template<typename T> class Py_Interpolator
       if (separate)
         for (size_t i=0; i<ncomp; ++i)
           {
-          auto vslmi = subarray<2>(vslm, {{i,i+1},{}});
-          auto vblmi = subarray<2>(vblm, {{i,i+1},{}});
-          conv.updateSlm(vslmi, vblmi, 0, subarray<3>(cube, {{i},{0,1},{},{}}));
+          auto vslmi = vslm.sub(slice(i, i+1), slice());
+          auto vblmi = vblm.sub(slice(i, i+1), slice());
+          conv.updateSlm(vslmi, vblmi, 0, cube.sub(i, slice(0, 1), slice(), slice()));
           for (size_t k=1; k<kmax+1; ++k)
-            conv.updateSlm(vslmi, vblmi, k, subarray<3>(cube, {{i},{2*k-1,2*k+1},{},{}}));
+            conv.updateSlm(vslmi, vblmi, k, cube.sub(i, slice(2*k-1, 2*k+1), slice(), slice()));
           }
       else
         {
-        conv.updateSlm(vslm, vblm, 0, subarray<3>(cube, {{0},{0,1},{},{}}));
+        conv.updateSlm(vslm, vblm, 0, cube.sub(0, slice(0, 1), slice(), slice()));
         for (size_t k=1; k<kmax+1; ++k)
-          conv.updateSlm(vslm, vblm, k, subarray<3>(cube, {{0},{2*k-1,2*k+1},{},{}}));
+          conv.updateSlm(vslm, vblm, k, cube.sub(0, slice(2*k-1, 2*k+1), slice(), slice()));
         }
       }
       return vslm_;

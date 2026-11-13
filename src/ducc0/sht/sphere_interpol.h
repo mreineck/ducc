@@ -460,7 +460,7 @@ template<typename T> class SphereInterpol
       size_t nplanes=1+(spin>0);
       MR_assert(planes.conformable({nplanes, Ntheta(), Nphi()}), "bad planes shape");
 
-      auto subplanes=subarray<3>(planes,{{}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
 
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
@@ -492,7 +492,7 @@ template<typename T> class SphereInterpol
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -589,7 +589,7 @@ template<typename T> class SphereInterpol
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane}, {nbtheta, nbtheta+ntheta_b}, {nbphi,nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -605,7 +605,7 @@ template<typename T> class SphereInterpol
           });
         }
       timers.poppush("theta resampling and deconvolution");
-      auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(0, nplanes), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
 
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");

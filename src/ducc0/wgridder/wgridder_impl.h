@@ -159,9 +159,9 @@ template<typename T> void hartley2_2D(const vmav<T,2> &arr, size_t vlim,
     {
     if (!first_fast)
       r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
-    auto flo = subarray(farr, {{}, {0,vlim}});
+    auto flo = farr.sub(slice(), slice(0, vlim));
     r2r_separable_fht(flo, flo, {0}, T(1), nthreads);
-    auto fhi = subarray(farr, {{}, {farr.shape(1)-vlim, MAXIDX}});
+    auto fhi = farr.sub(slice(), slice(farr.shape(1)-vlim, MAXIDX));
     r2r_separable_fht(fhi, fhi, {0}, T(1), nthreads);
     if (first_fast)
       r2r_separable_fht(farr, farr, {1}, T(1), nthreads);
@@ -502,9 +502,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         });
       timers.poppush("zeroing grid");
       // only zero the parts of the grid that have not been zeroed before
-      { auto a0 = subarray<2>(tmav, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(tmav, {{nxdirty/2, nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(tmav, {{nu-nxdirty/2,MAXIDX}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = tmav.sub(slice(0, nxdirty/2), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
+      { auto a0 = tmav.sub(slice(nxdirty/2, nu-nxdirty/2), slice()); quickzero(a0, nthreads); }
+      { auto a0 = tmav.sub(slice(nu-nxdirty/2, MAXIDX), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
       timers.pop();
       }
 
@@ -533,24 +533,24 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
         {
         for (size_t i=0; i<rsv.nranges(); ++i)
           {
-          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
+          auto inout_tmp = inout.sub(slice(), slice(size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))));
           c2c(inout_tmp, inout_tmp, {0}, BACKWARD, Tcalc(1), nthreads);
           }
-        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
+        auto inout_lo = inout.sub(slice(0, nxdirty/2), slice());
         c2c(inout_lo, inout_lo, {1}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
+        auto inout_hi = inout.sub(slice(inout.shape(0)-nxdirty/2, MAXIDX), slice());
         c2c(inout_hi, inout_hi, {1}, BACKWARD, Tcalc(1), nthreads);
         }
       else
         {
         for (size_t i=0; i<rsu.nranges(); ++i)
           {
-          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
+          auto inout_tmp = inout.sub(slice(size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))), slice());
           c2c(inout_tmp, inout_tmp, {1}, BACKWARD, Tcalc(1), nthreads);
           }
-        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
+        auto inout_lo = inout.sub(slice(), slice(0, nydirty/2));
         c2c(inout_lo, inout_lo, {0}, BACKWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
+        auto inout_hi = inout.sub(slice(), slice(inout.shape(1)-nydirty/2, MAXIDX));
         c2c(inout_hi, inout_hi, {0}, BACKWARD, Tcalc(1), nthreads);
         }
 
@@ -563,9 +563,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       timers.push("zeroing grid");
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxdirty/2, nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2,MAXIDX}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(0, nxdirty/2), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(nxdirty/2, nu-nxdirty/2), slice()); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(nu-nxdirty/2, MAXIDX), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
       timers.poppush("grid correction");
       checkShape(dirty.shape(), {nxdirty, nydirty});
       auto cfu = krn->corfunc(nxdirty/2+1, 1./nu, nthreads);
@@ -594,9 +594,9 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       checkShape(dirty.shape(), {nxdirty, nydirty});
       checkShape(grid.shape(), {nu, nv});
       // only zero the parts of the grid that are not filled afterwards anyway
-      { auto a0 = subarray<2>(grid, {{0,nxdirty/2}, {nydirty/2, nv-nydirty/2}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nxdirty/2,nu-nxdirty/2}, {}}); quickzero(a0, nthreads); }
-      { auto a0 = subarray<2>(grid, {{nu-nxdirty/2,MAXIDX}, {nydirty/2,nv-nydirty/2}}); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(0, nxdirty/2), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(nxdirty/2, nu-nxdirty/2), slice()); quickzero(a0, nthreads); }
+      { auto a0 = grid.sub(slice(nu-nxdirty/2, MAXIDX), slice(nydirty/2, nv-nydirty/2)); quickzero(a0, nthreads); }
       timers.poppush("wscreen+grid correction");
       double x0 = lshift-0.5*nxdirty*pixsize_x,
              y0 = mshift-0.5*nydirty*pixsize_y;
@@ -657,25 +657,25 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg,
       auto cost_vfirst = nxdirty*log(nv)*nv + rsv.nval()*log(nu)*nu;
       if (cost_ufirst<cost_vfirst)
         {
-        auto inout_lo = inout.subarray({{}, {0,nydirty/2}});
+        auto inout_lo = inout.sub(slice(), slice(0, nydirty/2));
         c2c(inout_lo, inout_lo, {0}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{},{inout.shape(1)-nydirty/2, MAXIDX}});
+        auto inout_hi = inout.sub(slice(), slice(inout.shape(1)-nydirty/2, MAXIDX));
         c2c(inout_hi, inout_hi, {0}, FORWARD, Tcalc(1), nthreads);
         for (size_t i=0; i<rsu.nranges(); ++i)
           {
-          auto inout_tmp = inout.subarray({{size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))}, {}});
+          auto inout_tmp = inout.sub(slice(size_t(rsu.ivbegin(i)), size_t(rsu.ivend(i))), slice());
           c2c(inout_tmp, inout_tmp, {1}, FORWARD, Tcalc(1), nthreads);
           }
         }
       else
         {
-        auto inout_lo = inout.subarray({{0,nxdirty/2},{}});
+        auto inout_lo = inout.sub(slice(0, nxdirty/2), slice());
         c2c(inout_lo, inout_lo, {1}, FORWARD, Tcalc(1), nthreads);
-        auto inout_hi = inout.subarray({{inout.shape(0)-nxdirty/2, MAXIDX},{}});
+        auto inout_hi = inout.sub(slice(inout.shape(0)-nxdirty/2, MAXIDX), slice());
         c2c(inout_hi, inout_hi, {1}, FORWARD, Tcalc(1), nthreads);
         for (size_t i=0; i<rsv.nranges(); ++i)
           {
-          auto inout_tmp = inout.subarray({{},{size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))}});
+          auto inout_tmp = inout.sub(slice(), slice(size_t(rsv.ivbegin(i)), size_t(rsv.ivend(i))));
           c2c(inout_tmp, inout_tmp, {0}, FORWARD, Tcalc(1), nthreads);
           }
         }
@@ -1815,7 +1815,7 @@ timers.pop();
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void ms2dirty_bda(
     const cmav<double,2> &uvw,                        // (nrows,3)
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
@@ -1836,7 +1836,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
-template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename Timg> void ms2dirty(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, typename Tms_in, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void ms2dirty(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const Tms_in &ms,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y, double epsilon,
   bool do_wgridding, size_t nthreads, const vmav<Timg,2> &dirty, size_t verbosity,
@@ -1853,7 +1853,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Tms_in, typename 
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
 
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void dirty2ms_bda(
     const cmav<double,2> &uvw,
     const cmav<uint64_t,1> &freqlist_id,              // (nrows),
@@ -1873,7 +1873,7 @@ template<typename Tcalc, typename Tacc, typename Tms, typename Timg>
     pixsize_y, epsilon, do_wgridding, nthreads, verbosity, flip_u, flip_v, flip_w,
     divide_by_n, sigma_min, sigma_max, center_x, center_y, allow_nshift);
   }
-template<typename Tcalc, typename Tacc, typename Tms, typename Timg> void dirty2ms(const cmav<double,2> &uvw,
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tms, fp_scalar Timg> requires (sizeof(Tacc)>=sizeof(Tcalc)) void dirty2ms(const cmav<double,2> &uvw,
   const cmav<double,1> &freq, const cmav<Timg,2> &dirty,
   const cmav<Tms,2> &wgt_, const cmav<uint8_t,2> &mask_, double pixsize_x, double pixsize_y,
   double epsilon, bool do_wgridding, size_t nthreads, const vmav<complex<Tms>,2> &ms,

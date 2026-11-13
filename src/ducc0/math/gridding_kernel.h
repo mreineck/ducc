@@ -310,7 +310,7 @@ class PolynomialKernel: public GriddingKernel
 
 /*! This class is initialized with a \a PolynomialKernel object and provides
     low level methods for extremely fast kernel evaluations. */
-template<size_t W, typename Tsimd> class TemplateKernel
+template<size_t W, simd_like Tsimd> class TemplateKernel
   {
   private:
     static constexpr auto D=W+3+(W&1);
