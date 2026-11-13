@@ -33,9 +33,9 @@
 #include <cmath>
 #include <limits>
 #include <iostream>
-#include <complex>
 #include "ducc0/infra/mav.h"
 #include "ducc0/infra/aligned_array.h"
+#include "ducc0/infra/type_concepts.h"
 
 namespace DUCC0_NAMESPACE {
 
@@ -58,24 +58,17 @@ template<typename T> auto sym_ortho(T a, T b, T &c, T &s, T &r)
    equations and least-squares problems, TOMS 8(2), 195--209 (1982).
 */
 /* NOTE: "x" must contain an initial guess (if in doubt, use a zero vector) */
-template <typename Tx, typename Tb, size_t xdim, size_t bdim,
+template <fp_or_complex Tx, fp_or_complex Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
+  requires same_as<real_type_t<Tx>, real_type_t<Tb>>
+    && invocable<Top&,     const vmav<Tx,xdim>&, const vmav<Tb,bdim>&>
+    && invocable<Top_adj&, const vmav<Tb,bdim>&, const vmav<Tx,xdim>&>
   auto lsqr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
             const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
-  static_assert(is_same<Tx,float >::value || is_same<Tx,complex<float >>::value
-              ||is_same<Tx,double>::value || is_same<Tx,complex<double>>::value,
-                "bad type for x");
-  static_assert(is_same<Tb,float >::value || is_same<Tb,complex<float >>::value
-              ||is_same<Tb,double>::value || is_same<Tb,complex<double>>::value,
-                "bad type for b");
-  using Tfx = typename conditional<is_same<Tx,float>::value
-                                 ||is_same<Tx,complex<float>>::value, float, double>::type;
-  using Tfb = typename conditional<is_same<Tb,float>::value
-                                 ||is_same<Tb,complex<float>>::value, float, double>::type;
-  static_assert(is_same<Tfx,Tfb>::value, "mixed single/double precision detected");
+  using Tf = real_type_t<Tx>;
   vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto bnorm = fnormb(b);
@@ -92,7 +85,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   double alpha = 0;
   if (beta>0)
     {
-    mav_apply([xbeta=Tfb(1./beta)](auto &v1) { v1*=xbeta; }, nthreads, u);
+    mav_apply([xbeta=Tf(1./beta)](auto &v1) { v1*=xbeta; }, nthreads, u);
     op_adj(u,v);
     alpha = fnormx(v);
     }
@@ -100,7 +93,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, v, x);
 
   if (alpha>0)
-    mav_apply([xalpha=Tfx(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
+    mav_apply([xalpha=Tf(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
 
   vmav<Tx, xdim> w(x.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, w, v);
@@ -137,7 +130,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     //     alpha*v  =  A'@u  -  beta*v.
 
     op(v, btmp);
-    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-Tfb(alpha)*v1;}, nthreads, u, btmp);
+    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-Tf(alpha)*v1;}, nthreads, u, btmp);
     beta = fnormb(u);
 
     if (beta>0)
@@ -145,10 +138,10 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
       mav_apply([xbeta=Tb(1./beta)](auto &v1) {v1 *= xbeta;}, nthreads, u);
       anorm = sqrt(anorm*anorm + alpha*alpha + beta*beta + dampsq);
       op_adj(u, xtmp);
-      mav_apply([beta](auto &v1, const auto &v2) {v1 = v2-Tfx(beta)*v1;}, nthreads, v, xtmp);
+      mav_apply([beta](auto &v1, const auto &v2) {v1 = v2-Tf(beta)*v1;}, nthreads, v, xtmp);
       alpha = fnormx(v);
       if (alpha>0)
-        mav_apply([xalpha=Tfx(1./alpha)](auto &v1) {v1 *= xalpha;}, nthreads, v);
+        mav_apply([xalpha=Tf(1./alpha)](auto &v1) {v1 *= xalpha;}, nthreads, v);
       }
 
     // Use a plane rotation to eliminate the damping parameter.
@@ -189,7 +182,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     ddnorm += tmp*tmp;
     }
 
-    mav_apply([t1=Tfx(t1),t2=Tfx(t2)](auto &v1, auto &v2, const auto &v3)
+    mav_apply([t1=Tf(t1),t2=Tf(t2)](auto &v1, auto &v2, const auto &v3)
       {
       v1 += t1*v2;
       v2 = v3+t2*v2;
@@ -283,24 +276,17 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
    Systems Optimization Laboratory
    Dept of MS&E, Stanford University. */
 /* NOTE: "x" must contain an initial guess (if in doubt, use a zero vector) */
-template <typename Tx, typename Tb, size_t xdim, size_t bdim,
+template <fp_or_complex Tx, fp_or_complex Tb, size_t xdim, size_t bdim,
   typename Top, typename Top_adj, typename Tnormx, typename Tnormb>
+  requires same_as<real_type_t<Tx>, real_type_t<Tb>>
+    && invocable<Top&,     const vmav<Tx,xdim>&, const vmav<Tb,bdim>&>
+    && invocable<Top_adj&, const vmav<Tb,bdim>&, const vmav<Tx,xdim>&>
   auto lsmr(Top op, Top_adj op_adj, Tnormx fnormx, Tnormb fnormb,
             const cmav<Tb,bdim> &b, const vmav<Tx,xdim> &x,
             double damp, double atol, double btol, double conlim,
             size_t maxiter, bool verbose, size_t nthreads)
   {
-  static_assert(is_same<Tx,float >::value || is_same<Tx,complex<float >>::value
-              ||is_same<Tx,double>::value || is_same<Tx,complex<double>>::value,
-                "bad type for x");
-  static_assert(is_same<Tb,float >::value || is_same<Tb,complex<float >>::value
-              ||is_same<Tb,double>::value || is_same<Tb,complex<double>>::value,
-                "bad type for b");
-  using Tfx = typename conditional<is_same<Tx,float>::value
-                                 ||is_same<Tx,complex<float>>::value, float, double>::type;
-  using Tfb = typename conditional<is_same<Tb,float>::value
-                                 ||is_same<Tb,complex<float>>::value, float, double>::type;
-  static_assert(is_same<Tfx,Tfb>::value, "mixed single/double precision detected");
+  using Tf = real_type_t<Tx>;
   vmav<Tb, bdim> u(b.shape(), UNINITIALIZED);
   mav_apply([](auto &v1, const auto &v2) { v1=v2; }, nthreads, u, b);
   auto normb = fnormb(b);
@@ -321,7 +307,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
   double alpha = 0;
   if (beta>0)
     {
-    mav_apply([xbeta=Tfb(1./beta)](auto &v1) { v1*=xbeta; }, nthreads, u);
+    mav_apply([xbeta=Tf(1./beta)](auto &v1) { v1*=xbeta; }, nthreads, u);
     op_adj(u,v);
     alpha = fnormx(v);
     }
@@ -329,7 +315,7 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     mav_apply([](auto &v1) { v1=0; }, nthreads, v);
 
   if (alpha>0)
-    mav_apply([xalpha=Tfx(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
+    mav_apply([xalpha=Tf(1./alpha)](auto &v1) { v1*=xalpha; }, nthreads, v);
 
   // Initialize variables for 1st iteration.
   size_t itn = 0;
@@ -389,17 +375,17 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
     //     alpha*v  =  A'@u  -  beta*v.
 
     op(v, btmp);
-    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-Tfb(alpha)*v1;}, nthreads, u, btmp);
+    mav_apply([alpha](auto &v1, const auto &v2) {v1 = v2-Tf(alpha)*v1;}, nthreads, u, btmp);
     beta = fnormb(u);
 
     if (beta>0)
       {
       mav_apply([xbeta=Tb(1./beta)](auto &v1) {v1 *= xbeta;}, nthreads, u);
       op_adj(u, xtmp);
-      mav_apply([beta](auto &v1, const auto &v2) {v1 = v2-Tfx(beta)*v1;}, nthreads, v, xtmp);
+      mav_apply([beta](auto &v1, const auto &v2) {v1 = v2-Tf(beta)*v1;}, nthreads, v, xtmp);
       alpha = fnormx(v);
       if (alpha>0)
-        mav_apply([xalpha=Tfx(1./alpha)](auto &v1) {v1 *= xalpha;}, nthreads, v);
+        mav_apply([xalpha=Tf(1./alpha)](auto &v1) {v1 *= xalpha;}, nthreads, v);
       }
 
     // At this point, beta = beta_{k+1}, alpha = alpha_{k+1}.
@@ -426,9 +412,9 @@ template <typename Tx, typename Tb, size_t xdim, size_t bdim,
 
     // Update h, h_hat, x.
     {
-    auto fct = Tfx(- thetabar * rho / (rhoold * rhobarold));
-    auto fct2 = Tfx(zeta / (rho * rhobar));
-    auto fct3 = Tfx(-thetanew/rho);
+    auto fct = Tf(- thetabar * rho / (rhoold * rhobarold));
+    auto fct2 = Tf(zeta / (rho * rhobar));
+    auto fct3 = Tf(-thetanew/rho);
     mav_apply([fct, fct2, fct3](auto &vhbar, auto &vx, auto &vh, const auto &vv)
       {
       vhbar = vhbar*fct + vh;

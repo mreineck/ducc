@@ -782,8 +782,8 @@ template<typename T> static NpArr Py2_synthesis(const CNpArr &alm_,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        synthesis(subarray<2>(alm, {{itrans},{},{}}),
-          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta, nphi,
+        synthesis(alm.sub(itrans, slice(), slice()),
+          map.sub(itrans, slice(), slice()), spin, lmax, mstart, lstride, theta, nphi,
           phi0, ringstart, ringfactor, pixstride, nthreads, mode, theta_interpol);
     });
   }
@@ -1257,8 +1257,8 @@ template<typename T> static NpArr Py2_adjoint_synthesis(const OptNpArr &alm__,
     {
     while (auto rng=sched.getNext())
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
-        adjoint_synthesis(subarray<2>(alm, {{itrans},{},{}}),
-          subarray<2>(map, {{itrans},{},{}}), spin, lmax, mstart, lstride, theta,
+        adjoint_synthesis(alm.sub(itrans, slice(), slice()),
+          map.sub(itrans, slice(), slice()), spin, lmax, mstart, lstride, theta,
           nphi, phi0, ringstart, ringfactor, pixstride, nthreads, mode, theta_interpol);
     });
   }
@@ -1572,7 +1572,7 @@ template<typename T> static py::tuple Py2_pseudo_analysis(const OptNpArr &alm__,
       for(auto itrans=rng.lo; itrans<rng.hi; ++itrans)
         {
         auto [xistop, xitn, xrnorm, xsqnorm] = pseudo_analysis(
-          subarray<2>(alm, {{itrans},{},{}}), subarray<2>(map, {{itrans},{},{}}),
+          alm.sub(itrans, slice(), slice()), map.sub(itrans, slice(), slice()),
           spin, lmax, mstart, lstride, theta, nphi, phi0, ringstart, ringfactor, pixstride,
           nthreads, maxiter, epsilon, theta_interpol, alm_contains_initial_guess);
         itn[itrans] = xitn;
@@ -2003,6 +2003,39 @@ template<typename T> class Py_sharpjob
     string geom;
     size_t nthreads;
 
+    void set_2D_geometry(string name,size_t ntheta, size_t nphi)
+      {
+      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
+      geom = name;
+      ntheta_ = ntheta;
+      nphi_ = nphi;
+      npix_ = ntheta*nphi;
+      }
+
+    auto get_healpix_data() const
+      {
+      auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
+      Healpix_Base2 base(nside_, RING, SET_NSIDE);
+      auto nrings = size_t(4*nside_-1);
+      vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
+      vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
+      for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
+        {
+        int64_t startpix, ringpix;
+        double ringtheta;
+        bool shifted;
+        base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
+        theta(r) = ringtheta;
+        theta(rs) = pi-ringtheta;
+        nphi(r) = nphi(rs) = size_t(ringpix);
+        phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
+        ringstart(r) = size_t(startpix);
+        ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
+        }
+      return make_tuple(mstart, theta, phi0, nphi, ringstart,
+                        cmav<double,1>::build_uniform({size_t(nrings)},1.));
+      }
+
   public:
     Py_sharpjob () : lmax_(0), mmax_(0), ntheta_(0), nphi_(0), nside_(0),
       npix_(0), nthreads(1) {}
@@ -2016,13 +2049,7 @@ template<typename T> class Py_sharpjob
     void set_nthreads(size_t nthreads_)
       { nthreads = nthreads_; }
     void set_gauss_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "GL";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("GL", ntheta, nphi); }
     void set_healpix_geometry(size_t nside)
       {
       MR_assert(nside>0,"bad Nside value");
@@ -2031,45 +2058,15 @@ template<typename T> class Py_sharpjob
       npix_ = 12*nside*nside;
       }
     void set_fejer1_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "F1";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("F1", ntheta, nphi); }
     void set_fejer2_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "F2";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("F2", ntheta, nphi); }
     void set_cc_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "CC";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("CC", ntheta, nphi); }
     void set_dh_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "DH";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("DH", ntheta, nphi); }
     void set_mw_geometry(size_t ntheta, size_t nphi)
-      {
-      MR_assert((ntheta>0)&&(nphi>0),"bad grid dimensions");
-      geom = "MW";
-      ntheta_ = ntheta;
-      nphi_ = nphi;
-      npix_ = ntheta*nphi;
-      }
+      { set_2D_geometry ("MW", ntheta, nphi); }
     void set_triangular_alm_info (size_t lmax, size_t mmax)
       {
       MR_assert(mmax<=lmax,"mmax must not be larger than lmax");
@@ -2089,27 +2086,9 @@ template<typename T> class Py_sharpjob
       auto ar(alm.prepend_1());
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
-        Healpix_Base2 base(nside_, RING, SET_NSIDE);
-        auto nrings = size_t(4*nside_-1);
-        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
-        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
-        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
-          {
-          int64_t startpix, ringpix;
-          double ringtheta;
-          bool shifted;
-          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
-          theta(r) = ringtheta;
-          theta(rs) = pi-ringtheta;
-          nphi(r) = nphi(rs) = size_t(ringpix);
-          phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
-          ringstart(r) = size_t(startpix);
-          ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
-          }
+        auto [mstart, theta, phi0, nphi, ringstart, wgt] = get_healpix_data();
         auto mr(map.prepend_1());
-        synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart,
-          cmav<double,1>::build_uniform({nrings},1.), 1, nthreads, STANDARD);
+        synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, wgt, 1, nthreads, STANDARD);
         }
       else
         {
@@ -2130,28 +2109,9 @@ template<typename T> class Py_sharpjob
       auto map=to_cmav<double,1>(CNpArr(map_));
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
-        Healpix_Base2 base(nside_, RING, SET_NSIDE);
-        auto nrings = size_t(4*nside_-1);
-        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
-        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
-        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
-          {
-          int64_t startpix, ringpix;
-          double ringtheta;
-          bool shifted;
-          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
-          theta(r) = ringtheta;
-          theta(rs) = pi-ringtheta;
-          nphi(r) = nphi(rs) = size_t(ringpix);
-          phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
-          ringstart(r) = size_t(startpix);
-          ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
-          }
+        auto [mstart, theta, phi0, nphi, ringstart, wgt] = get_healpix_data();
         auto mr(map.prepend_1());
-        adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0,
-          ringstart, cmav<double,1>::build_uniform({nrings},1.), 1, nthreads,
-          STANDARD);
+        adjoint_synthesis(ar, mr, 0, lmax_, mstart, 1, theta, nphi, phi0, ringstart, wgt, 1, nthreads, STANDARD);
         }
       else
         {
@@ -2186,27 +2146,8 @@ template<typename T> class Py_sharpjob
         "incorrect size of a_lm array");
       if (geom=="HP")
         {
-        auto mstart = get_mstart(lmax_, mmax_, OptCNpArr());
-        Healpix_Base2 base(nside_, RING, SET_NSIDE);
-        auto nrings = size_t(4*nside_-1);
-        vmav<double,1> theta({nrings}, UNINITIALIZED), phi0({nrings}, UNINITIALIZED);
-        vmav<size_t,1> nphi({nrings}, UNINITIALIZED), ringstart({nrings}, UNINITIALIZED);
-        for (size_t r=0, rs=nrings-1; r<=rs; ++r, --rs)
-          {
-          int64_t startpix, ringpix;
-          double ringtheta;
-          bool shifted;
-          base.get_ring_info2 (r+1, startpix, ringpix, ringtheta, shifted);
-          theta(r) = ringtheta;
-          theta(rs) = pi-ringtheta;
-          nphi(r) = nphi(rs) = size_t(ringpix);
-          phi0(r) = phi0(rs) = shifted ? (pi/ringpix) : 0.;
-          ringstart(r) = size_t(startpix);
-          ringstart(rs) = size_t(base.Npix() - startpix - ringpix);
-          }
-        synthesis(alm, map, spin, lmax_, mstart, 1, theta, nphi, phi0,
-          ringstart, cmav<double,1>::build_uniform({size_t(nrings)},1.), 1,
-          nthreads, STANDARD);
+        auto [mstart, theta, phi0, nphi, ringstart, wgt] = get_healpix_data();
+        synthesis(alm, map, spin, lmax_, mstart, 1, theta, nphi, phi0, ringstart, wgt, 1, nthreads, STANDARD);
         }
       else
         {

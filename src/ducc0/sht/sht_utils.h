@@ -76,8 +76,8 @@ template<typename T> void resample_theta(const cmav<complex<T>,3> &legi, bool np
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
+        auto llegi(legi.sub(n, slice(), slice(2*rng.lo, MAXIDX)));
+        auto llego(lego.sub(n, slice(), slice(2*rng.lo, MAXIDX)));
 // FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
@@ -170,8 +170,8 @@ template<typename T> void resample_and_convolve_theta(const cmav<complex<T>,3> &
       {
       for (size_t n=0; n<legi.shape(0); ++n)
         {
-        auto llegi(subarray<2>(legi, {{n},{},{2*rng.lo,MAXIDX}}));
-        auto llego(subarray<2>(lego, {{n},{},{2*rng.lo,MAXIDX}}));
+        auto llegi(legi.sub(n, slice(), slice(2*rng.lo, MAXIDX)));
+        auto llego(lego.sub(n, slice(), slice(2*rng.lo, MAXIDX)));
 // FIXME: this may benefit from blocking
         for (size_t j=0; j+rng.lo<rng.hi; ++j)
           {
@@ -279,9 +279,9 @@ template<typename T> void resample_leg_CC_to_irregular(const cmav<complex<T>,3> 
     vmav<complex<double>,1> vbuf({blksz}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
-      auto legitmp = subarray<3>(legi, {{}, {}, {rng.lo, rng.hi}});
-      auto legtmp = subarray<3>(tbuf, {{}, {}, {0, rng.hi-rng.lo}});
-      auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
+      auto legitmp = legi.sub(slice(), slice(), slice(rng.lo, rng.hi));
+      auto legtmp = tbuf.sub(slice(), slice(), slice(0, rng.hi-rng.lo));
+      auto legsub = legtmp.sub(slice(), slice(nborder, ntheta_b+nborder), slice());
       resample_and_convolve_theta(legitmp, true, true, legsub, true, true, kernfunc, spin, 1, false);
 
       // fill borders
@@ -361,8 +361,8 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
     vmav<complex<double>,1> vbuf({blksz}, UNINITIALIZED);
     while (auto rng=sched.getNext())
       {
-      auto legtmp = subarray<3>(tbuf, {{}, {}, {0, rng.hi-rng.lo}});
-      auto legsub = subarray<3>(legtmp, {{}, {nborder, ntheta_b+nborder}, {}});
+      auto legtmp = tbuf.sub(slice(), slice(), slice(0, rng.hi-rng.lo));
+      auto legsub = legtmp.sub(slice(), slice(nborder, ntheta_b+nborder), slice());
 
       mav_apply([](auto &v){v=0;}, 1, legtmp);
 
@@ -394,7 +394,7 @@ template<typename T> void resample_leg_irregular_to_CC(const cmav<complex<T>,3> 
             }
           }
 
-      auto legotmp = subarray<3>(lego, {{}, {}, {rng.lo, rng.hi}});
+      auto legotmp = lego.sub(slice(), slice(), slice(rng.lo, rng.hi));
       resample_and_convolve_theta(legsub, true, true, legotmp, true, true, kernfunc, spin, 1, true);
       }
     });

@@ -44,6 +44,7 @@
 #include "ducc0/infra/misc_utils.h"
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/type_concepts.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/timers.h"
 #include "ducc0/infra/bucket_sort.h"
@@ -326,7 +327,7 @@ size_t krn_id;
   };
 
 
-template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tcoord> requires (sizeof(Tacc)>=sizeof(Tcalc)) class Nufft:
   public Nufft_ancestor<Tcalc, Tacc>
   {
   private:
@@ -360,7 +361,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
         spreadinterp(npoints_, nover, krn_id, nthreads, periodicity, corigin)
       {}
 
-    template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
+    template<fp_scalar Tpoints, fp_scalar Tgrid> void nu2u(bool forward, size_t verbosity,
       const cmav<complex<Tpoints>,1> &points, const vfmav<complex<Tgrid>> &uniform)
       {
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
@@ -374,7 +375,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       nonuni2uni(forward, dummy, points, uniform);
       if (verbosity>0) timers.report(cout);
       }
-    template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity,
+    template<fp_scalar Tpoints, fp_scalar Tgrid> void u2nu(bool forward, size_t verbosity,
       const cfmav<complex<Tgrid>> &uniform, const vmav<complex<Tpoints>,1> &points)
       {
       MR_assert(uniform.shape()==nuni, "uniform grid dimensions mismatch");
@@ -384,7 +385,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       uni2nonuni(forward, uniform, dummy, points);
       if (verbosity>0) timers.report(cout);
       }
-    template<typename Tpoints, typename Tgrid> void nu2u(bool forward, size_t verbosity,
+    template<fp_scalar Tpoints, fp_scalar Tgrid> void nu2u(bool forward, size_t verbosity,
       const cmav<Tcoord,2> &coords, const cmav<complex<Tpoints>,1> &points,
       const vfmav<complex<Tgrid>> &uniform)
       {
@@ -398,7 +399,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       nonuni2uni(forward, coords, points, uniform);
       if (verbosity>0) timers.report(cout);
       }
-    template<typename Tpoints, typename Tgrid> void u2nu(bool forward, size_t verbosity,
+    template<fp_scalar Tpoints, fp_scalar Tgrid> void u2nu(bool forward, size_t verbosity,
       const cfmav<complex<Tgrid>> &uniform, const cmav<Tcoord,2> &coords,
       const vmav<complex<Tpoints>,1> &points)
       {
@@ -500,7 +501,7 @@ template<typename Tcalc, typename Tacc, typename Tcoord> class Nufft:
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tpoints, fp_scalar Tgrid, fp_scalar Tcoord> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void nu2u(const cmav<Tcoord,2> &coord, const cmav<complex<Tpoints>,1> &points,
     bool forward, double epsilon, size_t nthreads,
     const vfmav<complex<Tgrid>> &uniform, size_t verbosity,
@@ -513,7 +514,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typena
     epsilon, nthreads, sigma_min, sigma_max, periodicity, fft_order);
   nufft.nu2u(forward, verbosity, coord, points, uniform);
   }
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tgrid, typename Tcoord>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tpoints, fp_scalar Tgrid, fp_scalar Tcoord> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void u2nu(const cmav<Tcoord,2> &coord, const cfmav<complex<Tgrid>> &uniform,
     bool forward, double epsilon, size_t nthreads,
     const vmav<complex<Tpoints>,1> &points, size_t verbosity,
@@ -566,7 +567,7 @@ template<typename T> auto get_mid_hdelta (const cmav<T,2> &v, size_t nthreads)
   return make_tuple(v1,v2);
   }
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class Nufft3
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tpoints, fp_scalar Tcoord> requires (sizeof(Tacc)>=sizeof(Tcalc)) class Nufft3
   {
   private:
     vmav<complex<Tpoints>,1> fact_in, fact_out;
@@ -659,7 +660,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       // try to use points_out for temporary points_in_2 storage
       auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
         points_in.shape(0)<=points_out.shape(0) ?
-        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        points_out.sub(slice(0, points_in.shape(0))) :
         vmav<complex<Tpoints>,1>(points_in.shape()));
 
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
@@ -690,7 +691,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       // try to use points_out for temporary points_in_2 storage
       auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
         points_in.shape(0)<=points_out.shape(0) ?
-        subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+        points_out.sub(slice(0, points_in.shape(0))) :
         vmav<complex<Tpoints>,1>(points_in.shape()));
 
       execStatic(points_in.shape(0), nthreads, 0, [&](auto &sched)
@@ -712,7 +713,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord> class
       }
   };
 
-template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
+template<fp_scalar Tcalc, fp_scalar Tacc, fp_scalar Tpoints, fp_scalar Tcoord> requires (sizeof(Tacc)>=sizeof(Tcalc))
   void nu2nu(const cmav<Tcoord,2> &coord_in, const cmav<complex<Tpoints>,1> &points_in,
     bool forward, double epsilon, size_t nthreads,
     const cmav<Tcoord,2> &coord_out, const vmav<complex<Tpoints>,1> &points_out, size_t verbosity,
@@ -757,7 +758,7 @@ template<typename Tcalc, typename Tacc, typename Tpoints, typename Tcoord>
   // try to use points_out for temporary points_in_2 storage
   auto points_in_2 = make_unique<vmav<complex<Tpoints>,1>>(
     points_in.shape(0)<=points_out.shape(0) ?
-    subarray<1>(points_out, {{0,points_in.shape(0)}}) :
+    points_out.sub(slice(0, points_in.shape(0))) :
     vmav<complex<Tpoints>,1>(points_in.shape()));
   // prephase input values
   execStatic(points_in.shape(0), nthreads, 0, [&,mid_in=mid_in,mid_out=mid_out](auto &sched)

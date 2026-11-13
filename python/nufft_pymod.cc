@@ -65,8 +65,8 @@ template<typename Tgrid, typename Tcoord> static NpArr Py2_u2nu(const CNpArr &gr
   if (grid.shape(0)==1)
     {
     slices[0] = slice(0);
-    u2nu<Tgrid,Tgrid>(coord,subarray(grid,slices),forward,epsilon,nthreads,
-                      subarray<1>(out,{{0},{}}),verbosity,
+    u2nu<Tgrid,Tgrid>(coord,grid.subarray(slices),forward,epsilon,nthreads,
+                      out.sub(0, slice()),verbosity,
                       sigma_min,sigma_max, periodicity, fft_order);
     }
   else
@@ -77,7 +77,7 @@ template<typename Tgrid, typename Tcoord> static NpArr Py2_u2nu(const CNpArr &gr
     for (size_t i=0; i<grid.shape(0); ++i)
       {
       slices[0] = slice(i);
-      nufft.u2nu(forward, verbosity, subarray(grid,slices), subarray<1>(out,{{i},{}}));
+      nufft.u2nu(forward, verbosity, grid.subarray(slices), out.sub(i, slice()));
       }
     }
   }
@@ -126,8 +126,8 @@ template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2u(const CNpArr &
   if (points.shape(0)==1)
     {
     slices[0] = slice(0);
-    nu2u<Tgrid,Tgrid>(coord,subarray<1>(points, {{0},{}}),forward,epsilon,
-                      nthreads,subarray(out,slices),verbosity,
+    nu2u<Tgrid,Tgrid>(coord,points.sub(0, slice()),forward,epsilon,
+                      nthreads,out.subarray(slices),verbosity,
                       sigma_min,sigma_max, periodicity, fft_order);
     }
   else
@@ -138,7 +138,7 @@ template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2u(const CNpArr &
     for (size_t i=0; i<points.shape(0); ++i)
       {
       slices[0] = slice(i);
-      nufft.nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(out,slices));
+      nufft.nu2u(forward, verbosity, points.sub(i, slice()), out.subarray(slices));
       }
     }
   }
@@ -185,15 +185,15 @@ template<typename Tpoints, typename Tcoord> static NpArr Py2_nu2nu(const CNpArr 
   {
   py::gil_scoped_release release;
   if (points_in.shape(0)==1)
-    nu2nu<Tgrid, Tgrid>(coord_in,subarray<1>(points_in,{{0},{}}),forward,
-      epsilon,nthreads,coord_out,subarray<1>(points_out,{{0},{}}),verbosity,
+    nu2nu<Tgrid, Tgrid>(coord_in,points_in.sub(0, slice()),forward,
+      epsilon,nthreads,coord_out,points_out.sub(0, slice()),verbosity,
       sigma_min,sigma_max);
   else
     {
     Nufft3<Tpoints, Tpoints, Tpoints, Tcoord> nufft(coord_in, epsilon, nthreads,
       coord_out, verbosity, sigma_min, sigma_max);
     for (size_t i=0; i<points_in.shape(0); ++i)
-      nufft.exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+      nufft.exec(points_in.sub(i, slice()), points_out.sub(i, slice()), forward);
     }
   return points_out_;
   }
@@ -269,7 +269,7 @@ class Py_Nufftplan
       for (size_t i=0; i<points.shape(0); ++i)
         {
         slices[0] = slice(i);
-        ptr->nu2u(forward, verbosity, subarray<1>(points,{{i},{}}), subarray(uniform, slices));
+        ptr->nu2u(forward, verbosity, points.sub(i, slice()), uniform.subarray(slices));
         }
       }
       return uniform_;
@@ -290,7 +290,7 @@ class Py_Nufftplan
       for (size_t i=0; i<points.shape(0); ++i)
         {
         slices[0] = slice(i);
-        ptr->u2nu(forward, verbosity, subarray(uniform, slices), subarray<1>(points,{{i},{}}));
+        ptr->u2nu(forward, verbosity, uniform.subarray(slices), points.sub(i, slice()));
         }
       }
       return points_;
@@ -535,7 +535,7 @@ class Py_Nufft3plan
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<points_in.shape(0); ++i)
-        ptr->exec(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+        ptr->exec(points_in.sub(i, slice()), points_out.sub(i, slice()), forward);
       }
       return points_out_;
       }
@@ -552,7 +552,7 @@ class Py_Nufft3plan
       {
       py::gil_scoped_release release;
       for (size_t i=0; i<points_in.shape(0); ++i)
-        ptr->exec_adjoint(subarray<1>(points_in,{{i},{}}), subarray<1>(points_out,{{i},{}}), forward);
+        ptr->exec_adjoint(points_in.sub(i, slice()), points_out.sub(i, slice()), forward);
       }
       return points_out_;
       }

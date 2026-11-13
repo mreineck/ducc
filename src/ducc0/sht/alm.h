@@ -212,7 +212,7 @@ struct ft_partial_sph_isometry_plan
       int n;
 
     private:
-      template<typename Tv, size_t N, size_t Ncomp> DUCC0_NOINLINE int eval_helper
+      template<simd_like Tv, size_t N, size_t Ncomp> DUCC0_NOINLINE int eval_helper
         (int jmin, int limit_in, int limit_out, const vector<double> &c, vector<double> &f) const
         {
         constexpr double eps = 0x1p-52;
@@ -651,8 +651,8 @@ template<typename T> void rotate_alm (const Alm_Base &base_in, const cmav<comple
     for (size_t istart=0; istart<ncomp; istart+=bunchsize)
       {
       size_t istop=min(ncomp, istart+bunchsize);
-      auto subalm_in = alm_in.template subarray<2>({{istart,istop},{}});
-      auto subalm_out = alm_out.template subarray<2>({{istart,istop},{}});
+      auto subalm_in = alm_in.sub(slice(istart, istop), slice());
+      auto subalm_out = alm_out.sub(slice(istart, istop), slice());
       auto ntrans = istop-istart;
       if (ntrans==1)
         rothelper<1>(base_in, subalm_in, base_out, subalm_out, nthreads, epsi, etheta, ephi);

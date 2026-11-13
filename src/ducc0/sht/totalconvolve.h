@@ -36,6 +36,7 @@
 #include "ducc0/math/constants.h"
 #include "ducc0/math/gridding_kernel.h"
 #include "ducc0/infra/mav.h"
+#include "ducc0/infra/type_concepts.h"
 #include "ducc0/infra/simd.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/useful_macros.h"
@@ -53,7 +54,7 @@ namespace detail_totalconvolve {
 
 using namespace std;
 
-template<typename T> class ConvolverPlan
+template<fp_scalar T> class ConvolverPlan
   {
   protected:
     constexpr static auto vlen = min<size_t>(8, native_simd<T>::size());
@@ -82,7 +83,7 @@ template<typename T> class ConvolverPlan
       return fct;
       }
 
-    template<typename Tloc> quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta,
+    template<fp_scalar Tloc> quick_array<uint32_t> getIdx(const cmav<Tloc,1> &theta,
       const cmav<Tloc,1> &phi, const cmav<Tloc,1> &psi,
       size_t patch_ntheta, size_t patch_nphi, size_t itheta0, size_t iphi0, size_t supp) const
       {
@@ -443,7 +444,7 @@ template<typename T> class ConvolverPlan
             }
           }
 
-      auto subplanes=subarray<3>(planes,{{}, {nbtheta, nbtheta+ntheta_s}, {nbphi, nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
       MR_assert((planes.stride(0)&1)==0, "stride must be even");
@@ -478,7 +479,7 @@ template<typename T> class ConvolverPlan
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane},{nbtheta, nbtheta+ntheta_b}, {nbphi, nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -528,7 +529,7 @@ template<typename T> class ConvolverPlan
       getPlane(vslm, vblm, mbeam, planes);
       }
 
-    template<typename Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
+    template<fp_scalar Tloc> void interpol(const cmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<Tloc,1> &psi, const vmav<T,1> &signal) const
       {
@@ -536,7 +537,7 @@ template<typename T> class ConvolverPlan
       interpolx<maxsupp>(kernel->support(), cube, itheta0, iphi0, theta, phi, psi, signal);
       }
 
-    template<typename Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
+    template<fp_scalar Tloc> void deinterpol(const vmav<T,3> &cube, size_t itheta0,
       size_t iphi0, const cmav<Tloc,1> &theta, const cmav<Tloc,1> &phi,
       const cmav<Tloc,1> &psi, const cmav<T,1> &signal) const
       {
@@ -586,7 +587,7 @@ template<typename T> class ConvolverPlan
       pocketfft_r<T> rplan(nphi_b);
       for (size_t iplane=0; iplane<nplanes; ++iplane)
         {
-        auto arr = subarray<2>(planes, {{iplane}, {nbtheta, nbtheta+ntheta_b}, {nbphi,nbphi+nphi_b}});
+        auto arr = planes.sub(iplane, slice(nbtheta, nbtheta+ntheta_b), slice(nbphi, nbphi+nphi_b));
         execParallel(ntheta_b, nthreads, [&](size_t lo, size_t hi)
           {
           vmav<T,1> buf({rplan.bufsize()});
@@ -601,7 +602,7 @@ template<typename T> class ConvolverPlan
             }
           });
         }
-      auto subplanes=subarray<3>(planes, {{0, nplanes}, {nbtheta, nbtheta+ntheta_s}, {nbphi,nbphi+nphi_s}});
+      auto subplanes=planes.sub(slice(0, nplanes), slice(nbtheta, nbtheta+ntheta_s), slice(nbphi, nbphi+nphi_s));
 
       MR_assert(planes.stride(2)==1, "last axis must have stride 1");
       MR_assert((planes.stride(1)&1)==0, "stride must be even");
@@ -658,7 +659,7 @@ template<typename T> class ConvolverPlan
     void prepPsi(const vmav<T,3> &subcube) const
       {
       MR_assert(subcube.shape(0)==npsi_b, "bad psi dimension");
-      auto newpart = subarray<3>(subcube, {{npsi_s, MAXIDX}, {}, {}});
+      auto newpart = subcube.sub(slice(npsi_s, MAXIDX), slice(), slice());
       mav_apply([](T &v){v=T(0);}, nthreads, newpart);
       auto fct = kernel->corfunc(npsi_s/2+1, 1./npsi_b, nthreads);
       for (size_t k=0; k<npsi_s; ++k)

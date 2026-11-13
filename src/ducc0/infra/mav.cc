@@ -120,7 +120,7 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
         str[j].push_back(info[j].stride(i));
       }
   opt_shp_str(shp, str);
-  return make_tuple(shp, str);
+  return make_tuple(std::move(shp), std::move(str));
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, size_t>
@@ -132,14 +132,14 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
 
   bool transpose=false;
   size_t ndim=shp.size();
-  if (ndim<2) return make_tuple(shp, str, 0, 0);
+  if (ndim<2) return make_tuple(std::move(shp), std::move(str), 0, 0);
 
   for (size_t j=0; j<narr; ++j)
     // No blocking necessary for zero strides on one of the two last axes
     if ((str[j][ndim-2]!=0) && (str[j][ndim-1]!=0)
      && (abs(str[j][ndim-2])<abs(str[j][ndim-1])))
       transpose=true;
-  if (!transpose) return make_tuple(shp, str, 0, 0);
+  if (!transpose) return make_tuple(std::move(shp), std::move(str), 0, 0);
   bool crit0=false, crit1=false;
   for (size_t j=0; j<narr; ++j)
     {
@@ -148,17 +148,17 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
     if ((str0!=0) && (((tsizes[j]*str0)%4096)==0)) crit0=true;
     if ((str1!=0) && (((tsizes[j]*str1)%4096)==0)) crit1=true;
     }
-  if (crit0 && crit1) return make_tuple(shp, str, 4, 4);
+  if (crit0 && crit1) return make_tuple(std::move(shp), std::move(str), 4, 4);
   size_t load=0;
   for (size_t i=0; i<narr; ++i)
     {
     auto tmp = tsizes[i]*min<size_t>(abs(str[i][ndim-2]), abs(str[i][ndim-1]));
     load += min<size_t>(tmp, 64);
     }
-  if (crit0) return make_tuple(shp, str, 4, max<size_t>(8, 16384/(4*load)));
-  if (crit1) return make_tuple(shp, str, max<size_t>(8, 16384/(4*load)), 4);
+  if (crit0) return make_tuple(std::move(shp), std::move(str), 4, max<size_t>(8, 16384/(4*load)));
+  if (crit1) return make_tuple(std::move(shp), std::move(str), max<size_t>(8, 16384/(4*load)), 4);
   size_t blk = max<size_t>(8, size_t(sqrt(16384./load)));
-  return make_tuple(shp, str, blk, blk);
+  return make_tuple(std::move(shp), std::move(str), blk, blk);
   }
 
 }}
