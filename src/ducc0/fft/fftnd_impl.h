@@ -510,9 +510,14 @@ template <typename T, typename Titer> DUCC0_NOINLINE void copy_input(const Titer
   {
   const T * DUCC0_RESTRICT ptr = src.data();
   if ((nvec==1) && (dst == &src.raw(it.iofs(0)))) return;  // in-place
-  for (size_t i=0; i<it.length_in(); ++i)
+  const size_t len = it.length_in();
+  if (it.stride_in()==1)  // line by line, so that the copies vectorize
     for (size_t j0=0; j0<nvec; ++j0)
-      dst[j0*vstr+i] = ptr[it.iofs(j0,i)];
+      std::copy_n(ptr+it.iofs(j0,0), len, dst+j0*vstr);
+  else
+    for (size_t i=0; i<len; ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        dst[j0*vstr+i] = ptr[it.iofs(j0,i)];
   }
 template <typename Tbuf, typename Titer, typename T> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<T> &src, Tbuf * DUCC0_RESTRICT dst)
@@ -579,9 +584,14 @@ template<typename T, typename Titer> DUCC0_NOINLINE void copy_output(const Titer
   {
   T * DUCC0_RESTRICT ptr = dst.data();
   if ((nvec==1) && (src == &dst.raw(it.oofs(0)))) return;  // in-place
-  for (size_t i=0; i<it.length_out(); ++i)
+  const size_t len = it.length_out();
+  if (it.stride_out()==1)  // line by line, so that the copies vectorize
     for (size_t j0=0; j0<nvec; ++j0)
-      ptr[it.oofs(j0,i)] = src[j0*vstr+i];
+      std::copy_n(src+j0*vstr, len, ptr+it.oofs(j0,0));
+  else
+    for (size_t i=0; i<len; ++i)
+      for (size_t j0=0; j0<nvec; ++j0)
+        ptr[it.oofs(j0,i)] = src[j0*vstr+i];
   }
 template<typename Tbuf, typename Titer, typename T> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tbuf * DUCC0_RESTRICT src, const vfmav<T> &dst)
@@ -1020,270 +1030,110 @@ struct ExecDcst
     }
   };
 
-template<typename T> DUCC0_NOINLINE void general_r2c(
-  const cfmav<T> &in, const vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
+/* r2c and c2r along one axis. Lines are gathered into buffers as in
+   general_nd (SIMD over lv lines, at a critical stride in L2-sized tiles),
+   and the halfcomplex <-> complex repacking happens in the buffers, so that
+   the copies use the fast paths of copy_input/copy_output. The data buffer of
+   a group holds the real line (len) followed by the complex line (lenc). */
+template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void general_r2c_c2r(
+  const cfmav<Tin> &in, const vfmav<Tout> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
   {
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = get_plan<pocketfft_r<T>>(in.shape(axis), in.ndim()==1);
-  size_t len=in.shape(axis);
+  size_t len = r2c ? in.shape(axis) : out.shape(axis), lenc=len/2+1;
+  auto plan = get_plan<pocketfft_r<T>>(len, in.ndim()==1);
   execParallel(
     util::thread_count(nthreads, in, axis, native_simd<T>::size()),
     [&](Scheduler &sched) {
     constexpr auto vlen = native_simd<T>::size();
-    TmpStorage<T,T> storage(in.size()/len, len, plan->bufsize(), 1, false);
-    multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-    if constexpr (vlen>1)
+    constexpr size_t nmax = 64, l2cache=size_t(1)<<20, l3cache=size_t(16)<<20;
+    size_t blen = len+(len&1)+2*lenc;  // even, so that the complex part has an integral stride
+    bool critstride = (((in.stride(axis)*sizeof(Tin))&4095)==0)
+                   || (((out.stride(axis)*sizeof(Tout))&4095)==0);
+    size_t arraybytes = sizeof(Tin)*in.size() + sizeof(Tout)*out.size();
+    size_t tile = ((sched.num_threads()>1) && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
+    size_t n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/vlen*vlen : vlen;
+    TmpStorage<T,T> storage(in.size()/in.shape(axis), blen, plan->bufsize(), (n_bunch+vlen-1)/vlen, false);
+    multi_iter<nmax> it(in, out, axis, sched.num_threads(), sched.thread_num());
+    // one bunch of n_bunch lines, or one group of lv lines (lv=1: a single line)
+    auto lines = [&](auto lvc) -> bool
       {
-      TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
-      auto dbuf = storage2.dataBuf();
-      auto tbuf = storage2.transformBuf();
-      while (it.remaining()>=vlen)
+      constexpr size_t lv = decltype(lvc)::value;
+      if constexpr ((lv==0) || ((lv>1) && !simd_exists<T,lv>)) return false;
+      else
         {
-        it.advance(vlen);
-        copy_input(it, in, dbuf);
-        auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-        auto vout = out.data();
-        for (size_t j=0; j<vlen; ++j)
-          vout[it.oofs(j,0)].Set(res[0][j]);
-        size_t i=1, ii=1;
-        if (forward)
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
+        using T2 = typename conditional_t<(lv>1), add_vec<T,lv>, type_identity<T>>::type;
+        if ((lv>1) && (it.remaining()<lv)) return false;
+        TmpStorage2<T2,T,T> st(storage);
+        T2 *dbuf=st.dataBuf(), *tbuf=st.transformBuf();
+        size_t dstr=st.data_stride(), n = ((lv==vlen) && (it.remaining()>=n_bunch)) ? n_bunch : lv, nvec=n/lv;
+        auto cbuf = reinterpret_cast<Cmplx<T2> *>(dbuf+len+(len&1));
+        it.advance(n);
+        if constexpr (r2c)
+          {
+          if constexpr (lv==1)  // a single contiguous line: repack straight into the array
+            if (it.stride_out()==1) cbuf = &out.raw(it.oofs(0));
+          copy_input(it, in, dbuf, nvec, dstr);
+          for (size_t k=0; k<nvec; ++k)
+            {
+            auto res = plan->exec(dbuf+k*dstr, tbuf, fct, true, nth1d);
+            auto cb = cbuf+k*(dstr/2);
+            cb[0].Set(res[0], T2(0));
+            size_t i=1, ii=1;
+            if (forward)
+              for (; i<len-1; i+=2, ++ii) cb[ii].Set(res[i], res[i+1]);
+            else
+              for (; i<len-1; i+=2, ++ii) cb[ii].Set(res[i], -res[i+1]);
+            if (i<len) cb[ii].Set(res[i], T2(0));
+            }
+          copy_output(it, cbuf, out, nvec, dstr/2);
+          }
         else
-          for (; i<len-1; i+=2, ++ii)
-            for (size_t j=0; j<vlen; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-        if (i<len)
-          for (size_t j=0; j<vlen; ++j)
-            vout[it.oofs(j,ii)].Set(res[i][j]);
+          {
+          const Cmplx<T2> *cin = cbuf;  // a single contiguous line: repack straight from the array
+          if constexpr (lv==1)
+            if (it.stride_in()==1) cin = &in.raw(it.iofs(0));
+          if (cin==cbuf) copy_input(it, in, cbuf, nvec, dstr/2);
+          for (size_t k=0; k<nvec; ++k)
+            {
+            auto cb = cin+k*(dstr/2);
+            auto db = dbuf+k*dstr;
+            db[0] = cb[0].r;
+            size_t i=1, ii=1;
+            if (forward)
+              for (; i<len-1; i+=2, ++ii) { db[i]=cb[ii].r; db[i+1]=-cb[ii].i; }
+            else
+              for (; i<len-1; i+=2, ++ii) { db[i]=cb[ii].r; db[i+1]=cb[ii].i; }
+            if (i<len) db[i] = cb[ii].r;
+            if (nvec==1)  // copy the result out from wherever the plan left it
+              dbuf = plan->exec(db, tbuf, fct, false, nth1d);
+            else
+              plan->exec_copyback(db, tbuf, fct, false, nth1d);
+            }
+          copy_output(it, dbuf, out, nvec, dstr);
+          }
+        return true;
         }
-      }
-    if constexpr (vlen>2)
-      if constexpr (simd_exists<T,vlen/2>)
-        if (it.remaining()>=vlen/2)
-          {
-          TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
-          auto dbuf = storage2.dataBuf();
-          auto tbuf = storage2.transformBuf();
-          it.advance(vlen/2);
-          copy_input(it, in, dbuf);
-          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-          auto vout = out.data();
-          for (size_t j=0; j<vlen/2; ++j)
-            vout[it.oofs(j,0)].Set(res[0][j]);
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/2; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-          if (i<len)
-            for (size_t j=0; j<vlen/2; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j]);
-          }
-    if constexpr (vlen>4)
-      if constexpr( simd_exists<T,vlen/4>)
-        if (it.remaining()>=vlen/4)
-          {
-          TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
-          auto dbuf = storage2.dataBuf();
-          auto tbuf = storage2.transformBuf();
-          it.advance(vlen/4);
-          copy_input(it, in, dbuf);
-          auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-          auto vout = out.data();
-          for (size_t j=0; j<vlen/4; ++j)
-            vout[it.oofs(j,0)].Set(res[0][j]);
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], res[i+1][j]);
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen/4; ++j)
-                vout[it.oofs(j,ii)].Set(res[i][j], -res[i+1][j]);
-          if (i<len)
-            for (size_t j=0; j<vlen/4; ++j)
-              vout[it.oofs(j,ii)].Set(res[i][j]);
-          }
-#endif
-    {
-    TmpStorage2<T,T,T> storage2(storage);
-    auto dbuf = storage2.dataBuf();
-    auto tbuf = storage2.transformBuf();
+      };
     while (it.remaining()>0)
       {
-      it.advance(1);
-      copy_input(it, in, dbuf);
-      auto res = plan->exec(dbuf, tbuf, fct, true, nth1d);
-      auto vout = out.data();
-      vout[it.oofs(0)].Set(res[0]);
-      size_t i=1, ii=1;
-      if (forward)
-        for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(res[i], res[i+1]);
-      else
-        for (; i<len-1; i+=2, ++ii)
-          vout[it.oofs(ii)].Set(res[i], -res[i+1]);
-      if (i<len)
-        vout[it.oofs(ii)].Set(res[i]);
+#ifndef DUCC0_NO_SIMD
+      if (lines(integral_constant<size_t,vlen>())) continue;
+      if (lines(integral_constant<size_t,vlen/2>())) continue;
+      if (lines(integral_constant<size_t,vlen/4>())) continue;
+#endif
+      lines(integral_constant<size_t,1>());
       }
-    }
     });  // end of parallel region
   }
+template<typename T> DUCC0_NOINLINE void general_r2c(
+  const cfmav<T> &in, const vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
+  size_t nthreads)
+  { general_r2c_c2r<true,T>(in, out, axis, forward, fct, nthreads); }
 template<typename T> DUCC0_NOINLINE void general_c2r(
   const cfmav<Cmplx<T>> &in, const vfmav<T> &out, size_t axis, bool forward, T fct,
   size_t nthreads)
-  {
-  size_t nth1d = (in.ndim()==1) ? nthreads : 1;
-  auto plan = get_plan<pocketfft_r<T>>(out.shape(axis), in.ndim()==1);
-  size_t len=out.shape(axis);
-  execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
-    [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T>::size();
-      TmpStorage<T,T> storage(out.size()/len, len, plan->bufsize(), 1, false);
-      multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
-#ifndef DUCC0_NO_SIMD
-      if constexpr (vlen>1)
-        {
-        TmpStorage2<add_vec_t<T, vlen>,T,T> storage2(storage);
-        auto dbuf = storage2.dataBuf();
-        auto tbuf = storage2.transformBuf();
-        while (it.remaining()>=vlen)
-          {
-          it.advance(vlen);
-          for (size_t j=0; j<vlen; ++j)
-            dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-          {
-          size_t i=1, ii=1;
-          if (forward)
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen; ++j)
-                {
-                dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                }
-          else
-            for (; i<len-1; i+=2, ++ii)
-              for (size_t j=0; j<vlen; ++j)
-                {
-                dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                }
-          if (i<len)
-            for (size_t j=0; j<vlen; ++j)
-              dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-          }
-          auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-          copy_output(it, res, out);
-          }
-        }
-      if constexpr (vlen>2)
-        if constexpr (simd_exists<T,vlen/2>)
-          if (it.remaining()>=vlen/2)
-            {
-            TmpStorage2<add_vec_t<T, vlen/2>,T,T> storage2(storage);
-            auto dbuf = storage2.dataBuf();
-            auto tbuf = storage2.transformBuf();
-            it.advance(vlen/2);
-            for (size_t j=0; j<vlen/2; ++j)
-              dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-            {
-            size_t i=1, ii=1;
-            if (forward)
-              for (; i<len-1; i+=2, ++ii)
-                for (size_t j=0; j<vlen/2; ++j)
-                  {
-                  dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                  }
-            else
-              for (; i<len-1; i+=2, ++ii)
-                for (size_t j=0; j<vlen/2; ++j)
-                  {
-                  dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                  }
-            if (i<len)
-              for (size_t j=0; j<vlen/2; ++j)
-                dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-            }
-            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-            copy_output(it, res, out);
-            }
-      if constexpr (vlen>4)
-        if constexpr(simd_exists<T,vlen/4>)
-          if (it.remaining()>=vlen/4)
-            {
-            TmpStorage2<add_vec_t<T, vlen/4>,T,T> storage2(storage);
-            auto dbuf = storage2.dataBuf();
-            auto tbuf = storage2.transformBuf();
-            it.advance(vlen/4);
-            for (size_t j=0; j<vlen/4; ++j)
-              dbuf[0][j]=in.raw(it.iofs(j,0)).r;
-            {
-            size_t i=1, ii=1;
-            if (forward)
-              for (; i<len-1; i+=2, ++ii)
-                for (size_t j=0; j<vlen/4; ++j)
-                  {
-                  dbuf[i  ][j] =  in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = -in.raw(it.iofs(j,ii)).i;
-                  }
-            else
-              for (; i<len-1; i+=2, ++ii)
-                for (size_t j=0; j<vlen/4; ++j)
-                  {
-                  dbuf[i  ][j] = in.raw(it.iofs(j,ii)).r;
-                  dbuf[i+1][j] = in.raw(it.iofs(j,ii)).i;
-                  }
-            if (i<len)
-              for (size_t j=0; j<vlen/4; ++j)
-                dbuf[i][j] = in.raw(it.iofs(j,ii)).r;
-            }
-            auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-            copy_output(it, res, out);
-            }
-#endif
-      {
-      TmpStorage2<T,T,T> storage2(storage);
-      auto dbuf = storage2.dataBuf();
-      auto tbuf = storage2.transformBuf();
-      while (it.remaining()>0)
-        {
-        it.advance(1);
-        dbuf[0]=in.raw(it.iofs(0)).r;
-        {
-        size_t i=1, ii=1;
-        if (forward)
-          for (; i<len-1; i+=2, ++ii)
-            {
-            dbuf[i  ] =  in.raw(it.iofs(ii)).r;
-            dbuf[i+1] = -in.raw(it.iofs(ii)).i;
-            }
-        else
-          for (; i<len-1; i+=2, ++ii)
-            {
-            dbuf[i  ] = in.raw(it.iofs(ii)).r;
-            dbuf[i+1] = in.raw(it.iofs(ii)).i;
-            }
-        if (i<len)
-          dbuf[i] = in.raw(it.iofs(ii)).r;
-        }
-        auto res = plan->exec(dbuf, tbuf, fct, false, nth1d);
-        copy_output(it, res, out);
-        }
-      }
-    });  // end of parallel region
-  }
+  { general_r2c_c2r<false,T>(in, out, axis, forward, fct, nthreads); }
 
 struct ExecR2R
   {
