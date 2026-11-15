@@ -1582,6 +1582,8 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
         return make_shared<cfftpR<9,Tfs>>(l1, ido, roots);
       case 11:
         return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
+      case 13:
+        return make_shared<cfftpR<13,Tfs>>(l1, ido, roots);
       default:
         /* Primes up to about 100 inside a composite length: the generic
            O(ip^2) pass is fastest (it vectorizes along ido). A prime as the
