@@ -620,7 +620,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
       [&](Scheduler &sched)
       {
       constexpr auto vlen = native_simd<T0>::size();
-      constexpr size_t nmax = 16;
+      constexpr size_t nmax = 64;
       const auto &tin(iax==0? in : out);
       multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
 
@@ -664,19 +664,16 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
           }
         else
           n_simul = vlen;
-        if (critstride)  // make bunch large to reduce overall copy cost
-          {
-          n_bunch=n_simul;
-          while ((n_bunch<nmax) /*&& (sizeof(T)*n_bunch<2*cacheline)*/) n_bunch*=2;
-          }
-        else if (nostride)
-          n_bunch=n_simul;
-        else
-          {
-          n_bunch=n_simul;
-          if (n_simul==1)
-            while ((n_bunch<nmax) && (sizeof(T)*n_bunch<cacheline)) n_bunch*=2;
-          }
+        // lines at a critical stride (a multiple of 4 KB apart): gather as many
+        // as fill a tile of the L2 size (at least 16), so that the input is
+        // read in long contiguous pieces; with several threads and an array
+        // that fits into L3, a quarter of that, so that the tiles do not push
+        // the array out. At other strides larger bunches were slower.
+        constexpr size_t l3cache=size_t(16)<<20;
+        size_t arraybytes = sizeof(T)*in.size()*((tin.data()==out.data()) ? 1 : 2);
+        size_t tile = ((sched.num_threads()>1) && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
+        n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/n_simul*n_simul
+                             : n_simul;
         }
 
       // Contiguous complex lines that have a SIMD single-transform plan (length a
