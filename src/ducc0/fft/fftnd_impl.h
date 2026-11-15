@@ -252,23 +252,24 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
 template<size_t N> class multi_iter
   {
   private:
-    shape_t shp, pos;
-    stride_t str_i, str_o;
+    // the dimensions other than the active one, all in one allocation
+    struct dim_t { size_t shp, pos; ptrdiff_t str_i, str_o; };
+    vector<dim_t> d;
     size_t cshp_i, cshp_o, rem;
     ptrdiff_t cstr_i, cstr_o, sstr_i, sstr_o, p_ii, p_i[N], p_oi, p_o[N];
     bool uni_i, uni_o;
 
     void advance_i()
       {
-      for (size_t i=0; i<pos.size(); ++i)
+      for (auto &x: d)
         {
-        p_ii += str_i[i];
-        p_oi += str_o[i];
-        if (++pos[i] < shp[i])
+        p_ii += x.str_i;
+        p_oi += x.str_o;
+        if (++x.pos < x.shp)
           return;
-        pos[i] = 0;
-        p_ii -= ptrdiff_t(shp[i])*str_i[i];
-        p_oi -= ptrdiff_t(shp[i])*str_o[i];
+        x.pos = 0;
+        p_ii -= ptrdiff_t(x.shp)*x.str_i;
+        p_oi -= ptrdiff_t(x.shp)*x.str_o;
         }
       }
 
@@ -279,49 +280,37 @@ template<size_t N> class multi_iter
       {
       MR_assert(oarr.ndim()==iarr.ndim(), "dimension mismatch");
       MR_assert(iarr.ndim()>=1, "not enough dimensions");
+      MR_assert(idim<iarr.ndim(), "bad active dimension");
+      d.reserve(iarr.ndim());
+      for (size_t i=0; i<iarr.ndim(); ++i)
+        if (i!=idim)
+          {
+          MR_assert(iarr.shape(i)==oarr.shape(i), "shape mismatch");
+          d.push_back({iarr.shape(i), 0, iarr.stride(i), oarr.stride(i)});
+          }
       // Sort the extraneous dimensions in order of ascending output stride;
       // this should improve overall cache re-use and avoid clashes between
       // threads as much as possible.
-      shape_t idx(iarr.ndim());
-      iota(idx.begin(), idx.end(), 0);
-      sort(idx.begin(), idx.end(),
-        [&oarr](size_t i1, size_t i2) {return oarr.stride(i1) < oarr.stride(i2);});
-      for (auto i: idx)
-        if (i!=idim)
-          {
-          pos.push_back(0);
-          MR_assert(iarr.shape(i)==oarr.shape(i), "shape mismatch");
-          shp.push_back(iarr.shape(i));
-          str_i.push_back(iarr.stride(i));
-          str_o.push_back(oarr.stride(i));
-          }
-      MR_assert(idim<iarr.ndim(), "bad active dimension");
+      sort(d.begin(), d.end(), [](const dim_t &a, const dim_t &b) { return a.str_o<b.str_o; });
       cstr_i = iarr.stride(idim);
       cstr_o = oarr.stride(idim);
       cshp_i = iarr.shape(idim);
       cshp_o = oarr.shape(idim);
 
-// collapse unneeded dimensions
-      bool done = false;
-      while(!done)
+      // collapse unneeded dimensions
+      for (size_t i=1; i<d.size();)
+        if ((d[i].str_i == d[i-1].str_i*ptrdiff_t(d[i-1].shp))
+         && (d[i].str_o == d[i-1].str_o*ptrdiff_t(d[i-1].shp)))
+          {
+          d[i-1].shp *= d[i].shp;
+          d.erase(d.begin()+ptrdiff_t(i));
+          }
+        else
+          ++i;
+      if (!d.empty())
         {
-        done=true;
-        for (size_t i=1; i<shp.size(); ++i)
-          if ((str_i[i] == str_i[i-1]*ptrdiff_t(shp[i-1]))
-           && (str_o[i] == str_o[i-1]*ptrdiff_t(shp[i-1])))
-            {
-            shp[i-1] *= shp[i];
-            str_i.erase(str_i.begin()+ptrdiff_t(i));
-            str_o.erase(str_o.begin()+ptrdiff_t(i));
-            shp.erase(shp.begin()+ptrdiff_t(i));
-            pos.pop_back();
-            done=false;
-            }
-        }
-      if (pos.size()>0)
-        {
-        sstr_i = str_i[0];
-        sstr_o = str_o[0];
+        sstr_i = d[0].str_i;
+        sstr_o = d[0].str_o;
         }
 
       if (nshares==1) return;
@@ -335,13 +324,13 @@ template<size_t N> class multi_iter
         { rem=0; return; }
 
       size_t chunk = rem;
-      for (size_t i2=0, i=pos.size()-1; i2<pos.size(); ++i2,--i)
+      for (size_t i2=0, i=d.size()-1; i2<d.size(); ++i2,--i)
         {
-        chunk /= shp[i];
+        chunk /= d[i].shp;
         size_t n_advance = lo/chunk;
-        pos[i] += n_advance;
-        p_ii += ptrdiff_t(n_advance)*str_i[i];
-        p_oi += ptrdiff_t(n_advance)*str_o[i];
+        d[i].pos += n_advance;
+        p_ii += ptrdiff_t(n_advance)*d[i].str_i;
+        p_oi += ptrdiff_t(n_advance)*d[i].str_o;
         lo -= n_advance*chunk;
         }
       MR_assert(lo==0, "must not happen");
@@ -626,8 +615,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
       vplan = (in.ndim()==1) ? plan : get_plan<Tplan>(len, true);
       }
 
-    execParallel(util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
-      [&](Scheduler &sched)
+    auto work = [&](Scheduler &sched)
       {
       constexpr auto vlen = native_simd<T0>::size();
       constexpr size_t nmax = 64;
@@ -802,7 +790,9 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
           exec(it, tin, out, storage2, *vplan, fct, nth1d, inplace);
           }
         }
-      });  // end of parallel region
+      };
+    // passed by reference: the closure is too big for std::function's inline storage
+    execParallel(util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()), std::ref(work));
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
   }
@@ -1042,9 +1032,7 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
   size_t nth1d = (in.ndim()==1) ? nthreads : 1;
   size_t len = r2c ? in.shape(axis) : out.shape(axis), lenc=len/2+1;
   auto plan = get_plan<pocketfft_r<T>>(len, in.ndim()==1);
-  execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T>::size()),
-    [&](Scheduler &sched) {
+  auto work = [&](Scheduler &sched) {
     constexpr auto vlen = native_simd<T>::size();
     constexpr size_t nmax = 64, l2cache=size_t(1)<<20, l3cache=size_t(16)<<20;
     size_t blen = len+(len&1)+2*lenc;  // even, so that the complex part has an integral stride
@@ -1124,7 +1112,8 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
 #endif
       lines(integral_constant<size_t,1>());
       }
-    });  // end of parallel region
+    };
+  execParallel(util::thread_count(nthreads, in, axis, native_simd<T>::size()), std::ref(work));
   }
 template<typename T> DUCC0_NOINLINE void general_r2c(
   const cfmav<T> &in, const vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
@@ -1528,9 +1517,7 @@ template<typename Tplan, typename T0, typename T, typename Exec>
     fkernel(i) = kernel(i);
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
 
-  execParallel(
-    util::thread_count(nthreads, in, axis, native_simd<T0>::size()),
-    [&](Scheduler &sched) {
+  auto work = [&](Scheduler &sched) {
       constexpr auto vlen = native_simd<T0>::size();
       TmpStorage<T,T0> storage(in.size()/l_in, l_in+l_out, bufsz, 1, false);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
@@ -1569,7 +1556,8 @@ template<typename Tplan, typename T0, typename T, typename Exec>
         exec(it, in, out, storage2, *plan1, *plan2, fkernel);
         }
       }
-    });  // end of parallel region
+    };
+  execParallel(util::thread_count(nthreads, in, axis, native_simd<T0>::size()), std::ref(work));
   }
 
 struct [[maybe_unused]] ExecConv1R
