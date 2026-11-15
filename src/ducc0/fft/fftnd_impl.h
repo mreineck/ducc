@@ -613,8 +613,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
     if ((!plan) || (len!=plan->length()))
       {
       plan = get_plan<Tplan>(len, in.ndim()==1);
-      vplan = ((in.ndim()==1)||(len<300)||((len&3)!=0)) ?
-        plan : get_plan<Tplan>(len, true);
+      vplan = (in.ndim()==1) ? plan : get_plan<Tplan>(len, true);
       }
 
     execParallel(util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()),
@@ -680,6 +679,12 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
           }
         }
 
+      // Contiguous complex lines that have a SIMD single-transform plan (length a
+      // multiple of the SIMD width, >=128) are transformed in place one at a time:
+      // faster than SIMD over lines, which needs register transposes here.
+      constexpr size_t vl1 = fft1d_simdlen<T0>;
+      if (nostride && is_same_v<T,Cmplx<T0>> && (len%vl1==0) && (len>=max<size_t>(128,vl1*vl1)))
+        n_simul = n_bunch = 1;
       bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
       MR_assert(n_bunch<=nmax, "must not happen");
       TmpStorage<T,T0> storage(in.size()/len, len, max(plan->bufsize(),vplan->bufsize()), (n_bunch+vlen-1)/vlen, inplace);
