@@ -63,109 +63,30 @@ namespace detail_unity_roots {
 
 using namespace std;
 
-template<typename T, typename Tc> class RootCalc
+template<typename Thigh, typename Tc> class RootCalc
   {
   private:
     static constexpr const auto pi = 3.141592653589793238462643383279502884197L; //std::numbers::pi_v<long double>;
-    using Thigh = typename conditional<(sizeof(T)>sizeof(double)), T, double>::type;
-    size_t n;
+    int64_t n;
     Thigh ang;
 
   public:
-    RootCalc(size_t n_) : n(n_), ang(Thigh(0.25L*pi/n)) {}
-#if 1
-    Tc calc(size_t x) const
+    RootCalc(size_t n_) : n(int64_t(n_)), ang(Thigh(0.5L*pi/n)) {}
+    Tc calc(size_t num) const
       {
-      x<<=3;
-      if (x<4*n) // first half
-        {
-        if (x<2*n) // first quadrant
-          {
-          if (x<n) return {cos(Thigh(x)*ang), sin(Thigh(x)*ang)};
-          return {sin(Thigh(2*n-x)*ang), cos(Thigh(2*n-x)*ang)};
-          }
-        else // second quadrant
-          {
-          x-=2*n;
-          if (x<n) return {-sin(Thigh(x)*ang), cos(Thigh(x)*ang)};
-          return {-cos(Thigh(2*n-x)*ang), sin(Thigh(2*n-x)*ang)};
-          }
-        }
-      else
-        {
-        x=8*n-x;
-        if (x<2*n) // third quadrant
-          {
-          if (x<n) return {cos(Thigh(x)*ang), -sin(Thigh(x)*ang)};
-          return {sin(Thigh(2*n-x)*ang), -cos(Thigh(2*n-x)*ang)};
-          }
-        else // fourth quadrant
-          {
-          x-=2*n;
-          if (x<n) return {-sin(Thigh(x)*ang), -cos(Thigh(x)*ang)};
-          return {-cos(Thigh(2*n-x)*ang), -sin(Thigh(2*n-x)*ang)};
-          }
-        }
-      }
-#else
-    // alternative version, similar speed, but maybe a bit more accurate
-    Tc calc(size_t x) const
-      {
-      static constexpr Thigh pi = Thigh(3.141592653589793238462643383279502884197L); //std::numbers::pi_v<Thigh>;
-      Thigh n4 = Thigh(n<<2);
+      const int64_t four_num = 4 * int64_t(num);
+      const int64_t q = (four_num + n/2) / n;
+      const Thigh residual = ang *(four_num - q*n);
+      const auto sc = make_pair(cos(residual), sin(residual));
 
-      x<<=3;
-      if (x<4*n) // first half
+      switch (q & 3)
         {
-        if (x<2*n) // first quadrant
-          {
-          if (x<n)
-            {
-            auto ang = (x/n4)*pi;
-            return {cos(ang), sin(ang)};
-            }
-          auto ang = ((2*n-x)/n4)*pi;
-          return {sin(ang), cos(ang)};
-          }
-        else // second quadrant
-          {
-          x-=2*n;
-          if (x<n)
-            {
-            auto ang = (x/n4)*pi;
-            return {-sin(ang), cos(ang)};
-            }
-          auto ang = ((2*n-x)/n4)*pi;
-          return {-cos(ang), sin(ang)};
-          }
-        }
-      else
-        {
-        x=8*n-x;
-        if (x<2*n) // third quadrant
-          {
-          if (x<n)
-            {
-            auto ang = (x/n4)*pi;
-            return {cos(ang), -sin(ang)};
-            }
-          auto ang = ((2*n-x)/n4)*pi;
-          return {sin(ang), -cos(ang)};
-          }
-        else // fourth quadrant
-          {
-          x-=2*n;
-          if (x<n)
-            {
-            auto ang = (x/n4)*pi;
-            return {-sin(ang), -cos(ang)};
-            }
-          auto ang = ((2*n-x)/n4)*pi;
-          return {-cos(ang), -sin(ang)};
-          }
+        case 0:  return {sc.first, sc.second};
+        case 1:  return {-sc.second, sc.first};
+        case 2:  return {-sc.first, -sc.second};
+        default: return {sc.second, -sc.first};
         }
       }
-#endif
   };
 
 template<typename T, typename Tc> class UnityRoots
@@ -180,7 +101,7 @@ template<typename T, typename Tc> class UnityRoots
     UnityRoots(size_t n)
       : N(n)
       {
-      RootCalc<T, cmplx_> rc(n);
+      RootCalc<Thigh, cmplx_> rc(n);
       size_t nval = (n+2)/2;
       shift = 1;
       while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;
@@ -289,7 +210,7 @@ template<typename T, typename Tc> class MultiExp
       auto ftden = frac*T(den), tnum = T(num);
       if ((tnum==ftden) || (nextafter(tnum,ftden)==ftden))
         {
-        RootCalc<T,cmplx_> rc(den);
+        RootCalc<Thigh,cmplx_> rc(den);
         size_t nval = n+2;
         shift = 1;
         while((size_t(1)<<shift)*(size_t(1)<<shift) < nval) ++shift;

@@ -1,3 +1,4 @@
+// IMPORTANT: always include "pybind_utils.h" first, even before standard headers
 #include "ducc0/bindings/pybind_utils.h"
 
 namespace DUCC0_NAMESPACE {
