@@ -1329,10 +1329,11 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
       constexpr size_t h=(R-1)/2;
       const size_t so=ido*l1;
       const Tfd zero(0);
+      // i=0: real values split into separate loop for vectorization over k
       for (size_t k=0; k<l1; ++k)
         {
         const size_t ck = ido*k*(fwd ? 1 : R), ok = ido*k*(fwd ? R : 1);
-        if constexpr (fwd)  // i=0: real values
+        if constexpr (fwd)
           {
           array<C,R> x;
           static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=C(cc[ck+so*j], zero); });
@@ -1351,6 +1352,11 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
           dft<R,false,Tfs>(x);
           static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ ch[ok+so*j]=x[j].r; });
           }
+        }
+      if (ido==1) return ch;
+      for (size_t k=0; k<l1; ++k)
+        {
+        const size_t ck = ido*k*(fwd ? 1 : R), ok = ido*k*(fwd ? R : 1);
         // complex values at (i-1,i), partners mirrored at (ido-i-1,ido-i)
         for (size_t i=2; i<ido; i+=2)
           {
