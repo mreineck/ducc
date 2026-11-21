@@ -91,82 +91,6 @@ namespace {
 template<typename T> constexpr inline size_t fft1d_simdlen
   = native_simd<T>::size();
 
-#define POCKETFFT_EXEC_DISPATCH \
-    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf, \
-      bool fwd, size_t nthreads=1) const \
-      { \
-      static const auto tics = tidx<Tcs *>(); \
-      if (ti==tics) \
-        { \
-        auto in1 = static_cast<Tcs *>(in); \
-        auto copy1 = static_cast<Tcs *>(copy); \
-        auto buf1 = static_cast<Tcs *>(buf); \
-        return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                   : exec_<false>(in1, copy1, buf1, nthreads); \
-        } \
-      if constexpr (fft1d_simdlen<Tfs> > 1) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
-          using Tcv = Cmplx<Tfv>; \
-          static const auto ticv = tidx<Tcv *>(); \
-          if (ti==ticv) \
-            {  \
-            auto in1 = static_cast<Tcv *>(in); \
-            auto copy1 = static_cast<Tcv *>(copy); \
-            auto buf1 = static_cast<Tcv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 2) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
-          using Tcv = Cmplx<Tfv>; \
-          static const auto ticv = tidx<Tcv *>(); \
-          if (ti==ticv) \
-            {  \
-            auto in1 = static_cast<Tcv *>(in); \
-            auto copy1 = static_cast<Tcv *>(copy); \
-            auto buf1 = static_cast<Tcv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 4) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
-          using Tcv = Cmplx<Tfv>; \
-          static const auto ticv = tidx<Tcv *>(); \
-          if (ti==ticv) \
-            {  \
-            auto in1 = static_cast<Tcv *>(in); \
-            auto copy1 = static_cast<Tcv *>(copy); \
-            auto buf1 = static_cast<Tcv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 8) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
-          using Tcv = Cmplx<Tfv>; \
-          static const auto ticv = tidx<Tcv *>(); \
-          if (ti==ticv) \
-            {  \
-            auto in1 = static_cast<Tcv *>(in); \
-            auto copy1 = static_cast<Tcv *>(copy); \
-            auto buf1 = static_cast<Tcv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      MR_fail("impossible vector length requested"); \
-      }
-
 template <typename Tfs> class cfftp1: public cfftpass<Tfs>
   {
   public:
@@ -205,6 +129,68 @@ template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f,
   { (f(integral_constant<size_t,I>()), ...); }
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
   { static_for_impl(f, make_index_sequence<N>()); }
+
+/* The virtual exec() of a pass class D (CRTP): calls D::exec_<fwd>() with the
+   pointers cast to the data type that ti names, the scalar type or the SIMD
+   type of one of the widths fft1d_simdlen<Tfs>>>s (W wraps them: Cmplx for
+   the complex passes). D declares this class a friend. */
+template<typename D, typename Tfs, typename Base, template<typename> class W> class pass_impl: public Base
+  {
+  private:
+    template<typename T> void *call(void *in, void *copy, void *buf, bool fwd, size_t nthreads) const
+      {
+      const D &self = static_cast<const D &>(*this);
+      auto in1 = static_cast<T *>(in), copy1 = static_cast<T *>(copy), buf1 = static_cast<T *>(buf);
+      return fwd ? self.template exec_<true>(in1, copy1, buf1, nthreads)
+                 : self.template exec_<false>(in1, copy1, buf1, nthreads);
+      }
+#if DUCC0_GCC142_ICE  // a static_for lambda in exec() crashes GCC 14.2
+    template<size_t s> void *exec_simd(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads) const
+      {
+      constexpr size_t v = fft1d_simdlen<Tfs> >> s;
+      if constexpr (v>1)
+        {
+        if constexpr (simd_exists<Tfs,v>)
+          {
+          using T = W<typename simd_select<Tfs,v>::type>;
+          static const auto tiv = tidx<T *>();
+          if (ti==tiv) return call<T>(in, copy, buf, fwd, nthreads);
+          }
+        return exec_simd<s+1>(ti, in, copy, buf, fwd, nthreads);
+        }
+      else
+        MR_fail("impossible vector length requested");
+      }
+#endif
+
+  public:
+    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
+      bool fwd, size_t nthreads) const
+      {
+      static const auto tis = tidx<W<Tfs> *>();
+      if (ti==tis) return call<W<Tfs>>(in, copy, buf, fwd, nthreads);
+#if DUCC0_GCC142_ICE
+      return exec_simd<0>(ti, in, copy, buf, fwd, nthreads);
+#else
+      void *res = nullptr;
+      static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE
+        {
+        constexpr size_t v = fft1d_simdlen<Tfs> >> decltype(s)::value;
+        if constexpr ((v>1) && simd_exists<Tfs,v>)
+          {
+          using T = W<typename simd_select<Tfs,v>::type>;
+          static const auto tiv = tidx<T *>();
+          if ((!res) && (ti==tiv)) res = call<T>(in, copy, buf, fwd, nthreads);
+          }
+        });
+      MR_assert(res, "impossible vector length requested");
+      return res;
+#endif
+      }
+  };
+template<typename D, typename Tfs> using cfftpass_impl = pass_impl<D, Tfs, cfftpass<Tfs>, Cmplx>;
+template<typename D, typename Tfs> using rfftpass_impl = pass_impl<D, Tfs, rfftpass<Tfs>, type_identity_t>;
 
 struct ct_cs { long double c, s; };
 // cos and sin of 2*pi*num/den, evaluated at compile time
@@ -431,7 +417,7 @@ template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Cmp
    interleaved complex data of any type, exec_planar on real and imaginary
    planes of scalar data, SIMD over vl consecutive butterflies (consecutive
    in memory, so without shuffles; the last pass, ido==1, gathers). */
-template <size_t R, typename Tfs> class cfftpR: public cfftpass<Tfs>
+template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -603,7 +589,7 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass<Tfs>
       else fwd ? exec_planar_<true,false,false>(in,out) : exec_planar_<false,false,false>(in,out);
       }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend cfftpass_impl<cfftpR<R,Tfs>,Tfs>;
   };
 
 /* Single 1-D transform of length N=vlen*M, SIMD over the whole transform:
@@ -680,7 +666,7 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       }
   };
 
-template <typename Tfs> class cfftpg: public cfftpass<Tfs>
+template <typename Tfs> class cfftpg: public cfftpass_impl<cfftpg<Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -819,10 +805,10 @@ template <typename Tfs> class cfftpg: public cfftpass<Tfs>
     virtual size_t footprint() const
       { return (wa.size()+csarr.size())*sizeof(Tcs); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend cfftpass_impl<cfftpg<Tfs>,Tfs>;
   };
 
-template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
+template <typename Tfs> class cfftpblue: public cfftpass_impl<cfftpblue<Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -962,13 +948,13 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
     virtual size_t footprint() const
       { return subplan->footprint() + (wa.size()+bk.size()+bkf.size())*sizeof(Tcs); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend cfftpass_impl<cfftpblue<Tfs>,Tfs>;
   };
 
 /* Rader's algorithm: a DFT of prime length p is a cyclic convolution of
    length p-1 (input and output indices permuted by the powers of a primitive
    root g modulo p), which is computed with FFTs of length p-1. */
-template <typename Tfs> class cfftprader: public cfftpass<Tfs>
+template <typename Tfs> class cfftprader: public cfftpass_impl<cfftprader<Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -1064,10 +1050,10 @@ template <typename Tfs> class cfftprader: public cfftpass<Tfs>
     virtual size_t footprint() const
       { return subplan->footprint() + (wa.size()+cf.size())*sizeof(Tcs) + 2*gin.size()*sizeof(size_t); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend cfftpass_impl<cfftprader<Tfs>,Tfs>;
   };
 
-template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
+template <typename Tfs> class cfft_multipass: public cfftpass_impl<cfft_multipass<Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
@@ -1517,10 +1503,9 @@ MR_fail("must not get here");
       return res;
       }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend cfftpass_impl<cfft_multipass<Tfs>,Tfs>;
   };
 
-#undef POCKETFFT_EXEC_DISPATCH
 
 } // unnamed namespace
 
@@ -1604,78 +1589,6 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
 
 namespace {
 
-#define POCKETFFT_EXEC_DISPATCH \
-    virtual void *exec(const type_index &ti, void *in, void *copy, void *buf, \
-      bool fwd, size_t nthreads) const \
-      { \
-      static const auto tifs=tidx<Tfs *>(); \
-      if (ti==tifs) \
-        { \
-        auto in1 = static_cast<Tfs *>(in); \
-        auto copy1 = static_cast<Tfs *>(copy); \
-        auto buf1 = static_cast<Tfs *>(buf); \
-        return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                   : exec_<false>(in1, copy1, buf1, nthreads); \
-        } \
-      if constexpr (fft1d_simdlen<Tfs> > 1) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>>::type; \
-          static const auto tifv=tidx<Tfv *>(); \
-          if (ti==tifv) \
-            {  \
-            auto in1 = static_cast<Tfv *>(in); \
-            auto copy1 = static_cast<Tfv *>(copy); \
-            auto buf1 = static_cast<Tfv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 2) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/2>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/2>::type; \
-          static const auto tifv=tidx<Tfv *>(); \
-          if (ti==tifv) \
-            {  \
-            auto in1 = static_cast<Tfv *>(in); \
-            auto copy1 = static_cast<Tfv *>(copy); \
-            auto buf1 = static_cast<Tfv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 4) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/4>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/4>::type; \
-          static const auto tifv=tidx<Tfv *>(); \
-          if (ti==tifv) \
-            {  \
-            auto in1 = static_cast<Tfv *>(in); \
-            auto copy1 = static_cast<Tfv *>(copy); \
-            auto buf1 = static_cast<Tfv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      if constexpr (fft1d_simdlen<Tfs> > 8) \
-        if constexpr (simd_exists<Tfs, fft1d_simdlen<Tfs>/8>) \
-          { \
-          using Tfv = typename simd_select<Tfs, fft1d_simdlen<Tfs>/8>::type; \
-          static const auto tifv=tidx<Tfv *>(); \
-          if (ti==tifv) \
-            {  \
-            auto in1 = static_cast<Tfv *>(in); \
-            auto copy1 = static_cast<Tfv *>(copy); \
-            auto buf1 = static_cast<Tfv *>(buf); \
-            return fwd ? exec_<true>(in1, copy1, buf1, nthreads) \
-                       : exec_<false>(in1, copy1, buf1, nthreads); \
-            } \
-          } \
-      MR_fail("impossible vector length requested"); \
-      }
-
 /* (a+ib) = conj(c+id) * (e+if) */
 template<typename T1, typename T2, typename T3> inline void MULPM
   (T1 &a, T1 &b, T2 c, T2 d, T3 e, T3 f)
@@ -1699,7 +1612,7 @@ template <typename Tfs> class rfftp1: public rfftpass<Tfs>
    ch[a+ido*(j+R*k)], backward the other way. Index i=0 holds real values,
    (i-1,i) for even i>0 a complex value whose conjugate partner is stored
    mirrored at ido-i; for even R and even ido, i=ido-1 is real again. */
-template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
+template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tfs>,Tfs>
   {
   private:
     using Tcs = Cmplx<Tfs>;
@@ -1892,10 +1805,10 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass<Tfs>
     virtual bool needs_copy() const { return true; }
     virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend rfftpass_impl<rfftpR<R,Tfs>,Tfs>;
   };
 
-template <typename Tfs> class rfftpg: public rfftpass<Tfs>
+template <typename Tfs> class rfftpg: public rfftpass_impl<rfftpg<Tfs>,Tfs>
   {
   private:
     size_t l1, ido;
@@ -2210,10 +2123,10 @@ template <typename Tfs> class rfftpg: public rfftpass<Tfs>
     virtual size_t footprint() const
       { return (wa.size()+csarr.size())*sizeof(Tfs); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend rfftpass_impl<rfftpg<Tfs>,Tfs>;
   };
 
-template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
+template <typename Tfs> class rfftpblue: public rfftpass_impl<rfftpblue<Tfs>,Tfs>
   {
   private:
     const size_t l1, ido, ip;
@@ -2352,10 +2265,10 @@ template <typename Tfs> class rfftpblue: public rfftpass<Tfs>
     virtual size_t footprint() const
       { return wa.size()*sizeof(Tfs) + cplan->footprint(); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend rfftpass_impl<rfftpblue<Tfs>,Tfs>;
   };
 
-template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
+template <typename Tfs> class rfft_multipass: public rfftpass_impl<rfft_multipass<Tfs>,Tfs>
   {
   private:
     const size_t l1, ido;
@@ -2441,13 +2354,13 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
       return res;
       }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend rfftpass_impl<rfft_multipass<Tfs>,Tfs>;
   };
 
 /* Real transform of even length N via a complex transform of length N/2
    and a pass that combines the outputs k and N/2-k with the twiddles
    tw[k]=exp(-2*pi*i*k/N), k<=N/4. */
-template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
+template <typename Tfs> class rfftp_complexify: public rfftpass_impl<rfftp_complexify<Tfs>,Tfs>
   {
   private:
     using Tcs = Cmplx<Tfs>;
@@ -2553,9 +2466,8 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
     virtual size_t footprint() const
       { return pass->footprint() + tw.size()*sizeof(Tcs); }
 
-    POCKETFFT_EXEC_DISPATCH
+    friend rfftpass_impl<rfftp_complexify<Tfs>,Tfs>;
   };
-#undef POCKETFFT_EXEC_DISPATCH
 
 } // unnamed namespace
 
