@@ -193,21 +193,21 @@ template<typename D, typename Tfs> using cfftpass_impl = pass_impl<D, Tfs, cfftp
 template<typename D, typename Tfs> using rfftpass_impl = pass_impl<D, Tfs, rfftpass<Tfs>, type_identity_t>;
 
 struct ct_cs { long double c, s; };
-// cos and sin of 2*pi*num/den, evaluated at compile time
+/* cos and sin of 2*pi*num/den, evaluated at compile time. long double may be
+   just double (e.g. on arm64 macOS), so the angle is reduced exactly, in
+   integers, to the nearest quarter turn q, and the Taylor series of the rest
+   (|x|<=pi/4) is summed from the smallest term: at most 1.6 ulp in double. */
 consteval ct_cs ct_sincos(size_t num, size_t den)
   {
-  constexpr long double pi = std::numbers::pi_v<long double>,
-                        r2 = std::numbers::sqrt2_v<long double>/2;
   num %= den;
-  long double a = 8.0L*num/den;   // angle in eighths of a turn
-  size_t k = size_t(a+0.5L);
-  long double x = (a-k)*(pi/4), x2 = x*x, c = 1, s = x, tc = 1, ts = x;
-  for (size_t n=1; n<16; ++n)
-    { tc *= -x2/((2*n-1)*(2*n)); c += tc; ts *= -x2/((2*n)*(2*n+1)); s += ts; }
-  constexpr long double kc[8] = {1, r2, 0, -r2, -1, -r2, 0, r2},
-                        ks[8] = {0, r2, 1, r2, 0, -r2, -1, -r2};
-  k &= 7;
-  return {c*kc[k]-s*ks[k], c*ks[k]+s*kc[k]};
+  size_t q = (8*num+den)/(2*den);
+  long double x = std::numbers::pi_v<long double>/2*(ptrdiff_t(4*num)-ptrdiff_t(q*den))/den,
+              x2 = x*x, c = 0, s = 0;
+  for (size_t n=15; n>0; --n)
+    { c = -x2/((2*n-1)*(2*n))*(1+c); s = -x2/((2*n)*(2*n+1))*(1+s); }
+  c += 1; s = x*(1+s);
+  const ct_cs res[4] = {{c,s}, {-s,c}, {-c,-s}, {s,-c}};
+  return res[q&3];
   }
 consteval bool ct_isprime(size_t n)
   {
