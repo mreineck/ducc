@@ -74,11 +74,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/math/cmplx.h"
 #include "ducc0/math/unity_roots.h"
 #include "ducc0/fft/fft1d_impl.h"
-#if defined(__APPLE__)
-#include <sys/sysctl.h>
-#elif defined(__unix__)
-#include <unistd.h>
-#endif
 
 /** \file fftnd_impl.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms
@@ -256,26 +251,17 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
 
 /* Lines at a critical stride (a multiple of 4 KB apart) are gathered in tiles,
    so that the input is read in long contiguous pieces. Returns the tile size
-   in bytes for lines of linebytes bytes: the L2 size (1 MB assumed); with
-   several threads and an array that fits into L3 (16 MB assumed) a quarter of
+   in bytes for lines of linebytes bytes: the L2 size (per core); with
+   several threads and an array that fits into the last-level cache a quarter of
    that, so that the tiles do not push the array out. With a large L1 (Apple M:
    128 KB) half of it, if that still holds 16 lines: the gathered lines then
    stay in L1 (measured on an M4: c2c f64 256^2 1.5x faster than with L2 tiles;
    with the 32 KB L1 of Zen 4 the L2 tiles were faster for all lengths). */
 size_t critstride_tile(size_t linebytes, bool multithreaded, size_t arraybytes)
   {
-  constexpr size_t l2cache=size_t(1)<<20, l3cache=size_t(16)<<20;
-  static const size_t l1cache = []{
-    size_t res = 0;
-#if defined(__APPLE__)
-    size_t len = sizeof(res);
-    if (sysctlbyname("hw.perflevel0.l1dcachesize", &res, &len, nullptr, 0)!=0) res = 0;
-#elif defined(_SC_LEVEL1_DCACHE_SIZE)
-    res = size_t(max<long>(0, sysconf(_SC_LEVEL1_DCACHE_SIZE)));
-#endif
-    return res; }();
-  if ((l1cache>=(size_t(128)<<10)) && (l1cache/2>=16*linebytes)) return l1cache/2;
-  return (multithreaded && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
+  const auto &c = cache_info();
+  if ((c.l1>=(size_t(128)<<10)) && (c.l1/2>=16*linebytes)) return c.l1/2;
+  return (multithreaded && (arraybytes<=c.llc)) ? c.l2/4 : c.l2;
   }
 
 template<size_t N> class multi_iter
@@ -658,7 +644,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
                      || (((out.stride(axes[iax])*sizeof(T))&4095)==0);
       bool nostride = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1);
 
-      constexpr size_t l2cache=size_t(1)<<20;
+      const size_t l2cache=cache_info().l2;
       constexpr size_t cacheline=64;
 
       // working set size
