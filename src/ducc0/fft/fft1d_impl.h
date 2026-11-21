@@ -196,8 +196,8 @@ struct ct_cs { long double c, s; };
 // cos and sin of 2*pi*num/den, evaluated at compile time
 consteval ct_cs ct_sincos(size_t num, size_t den)
   {
-  constexpr long double pi = 3.141592653589793238462643383279502884L,
-                        r2 = 0.7071067811865475244008443621048490393L;
+  constexpr long double pi = std::numbers::pi_v<long double>,
+                        r2 = std::numbers::sqrt2_v<long double>/2;
   num %= den;
   long double a = 8.0L*num/den;   // angle in eighths of a turn
   size_t k = size_t(a+0.5L);
@@ -249,7 +249,7 @@ template<size_t e, size_t R, bool fwd, typename Tfs, typename V>
     {
     constexpr auto cs = ct_sincos(m,R);
     constexpr bool pc = cs.c>0, ps = (fwd ? -cs.s : cs.s)>0;
-    constexpr Tfs h = Tfs(0.7071067811865475244008443621048490393L);
+    constexpr Tfs h = Tfs(std::numbers::sqrt2_v<long double>/2);
     V t1=x.r+x.i, t2=x.r-x.i;
     if constexpr (pc==ps) return C(t2*(pc ? h : -h), t1*(pc ? h : -h));
     else return C(t1*(pc ? h : -h), t2*(ps ? h : -h));
