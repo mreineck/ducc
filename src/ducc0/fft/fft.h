@@ -584,8 +584,8 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE explicit T_dct1(size_t length, bool /*vectorize*/=false)
-      : fftplan(2*(length-1)) {}
+    DUCC0_NOINLINE explicit T_dct1(size_t length, bool vectorize=false)
+      : fftplan(2*(length-1), vectorize) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
@@ -629,8 +629,8 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE explicit T_dst1(size_t length, bool /*vectorize*/=false)
-      : fftplan(2*(length+1)) {}
+    DUCC0_NOINLINE explicit T_dst1(size_t length, bool vectorize=false)
+      : fftplan(2*(length+1), vectorize) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads=1) const
@@ -669,8 +669,8 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
-    DUCC0_NOINLINE explicit T_dcst23(size_t length, bool /*vectorize*/=false)
-      : fftplan(length), twiddle(length)
+    DUCC0_NOINLINE explicit T_dcst23(size_t length, bool vectorize=false)
+      : fftplan(length, vectorize), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
       for (size_t i=0; i<length; ++i)
@@ -768,10 +768,10 @@ template<typename T0> class T_dcst4
     size_t bufsz;
 
   public:
-    DUCC0_NOINLINE explicit T_dcst4(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dcst4(size_t length, bool vectorize=false)
       : N(length),
-        fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
-        rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),
+        fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2, vectorize)),
+        rfft((N&1)? make_unique<pocketfft_r<T0>>(N, vectorize) : nullptr),
         C2((N&1) ? 0 : N/2),
         bufsz((N&1) ? (N+rfft->bufsize()) : (N+2*fft->bufsize()))
       {
