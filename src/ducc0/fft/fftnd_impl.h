@@ -842,6 +842,59 @@ struct ExecC2C
     }
   };
 
+/* ExecC2C, with output k of every line multiplied by tw[k] afterwards (the
+   twiddles of the first step of c2c_fourstep) */
+struct ExecC2CTw
+  {
+  bool forward;
+  const void *tw;  // const Cmplx<T0> *
+
+  template <typename T0, typename T> DUCC0_ALWAYS_INLINE void twiddle(T *p, size_t n) const
+    {
+    auto w = static_cast<const Cmplx<T0> *>(tw);
+    if (forward)
+      for (size_t k=0; k<n; ++k) p[k] = p[k].template special_mul<true>(w[k]);
+    else
+      for (size_t k=0; k<n; ++k) p[k] = p[k].template special_mul<false>(w[k]);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
+    const Titer &it, const cfmav<Cmplx<T0>> &in,
+    const vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct,
+    size_t nthreads, bool /*inplace*/=false) const
+    {
+    using T = typename Tstorage::datatype;
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2);
+    auto res = plan.exec(buf2, buf1, fct, forward, nthreads);
+    twiddle<T0>(res, it.length_out());
+    copy_output(it, res, out);
+    }
+  template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void exec_n (
+    const Titer &it, const cfmav<Cmplx<T0>> &in,
+    const vfmav<Cmplx<T0>> &out, Tstorage &storage, const pocketfft_c<T0> &plan, T0 fct, size_t nvec,
+    size_t nthreads) const
+    {
+    using T = typename Tstorage::datatype;
+    size_t dstr = storage.data_stride();
+    T *buf1=storage.transformBuf(), *buf2=storage.dataBuf();
+    copy_input(it, in, buf2, nvec, dstr);
+    for (size_t i=0; i<nvec; ++i)
+      {
+      plan.exec_copyback(buf2+i*dstr, buf1, fct, forward, nthreads);
+      twiddle<T0>(buf2+i*dstr, it.length_out());
+      }
+    copy_output(it, buf2, out, nvec, dstr);
+    }
+  template <typename T0> DUCC0_NOINLINE void exec_simple (
+    const Cmplx<T0> *in, Cmplx<T0> *out, const pocketfft_c<T0> &plan, T0 fct,
+    size_t nthreads) const
+    {
+    if (in!=out) copy_n(in, plan.length(), out);
+    plan.exec(out, fct, forward, nthreads);
+    twiddle<T0>(out, plan.length());
+    }
+  };
+
 struct [[maybe_unused]] ExecHartley
   {
   template <typename T0, typename Tstorage, typename Titer> DUCC0_NOINLINE void operator() (
@@ -1206,12 +1259,122 @@ template<typename T> class Long1dPlan: public UnityRoots<T,complex<T>>
       : UnityRoots<T,complex<T>>(length) {}
   };
 
+/* c2c along a strided axis as a four-step transform. Along an axis whose
+   elements are a multiple of 4 KB apart, each line is read in pieces of a few
+   cache lines, which makes the transform memory-bound far above the cost of
+   the same transform along a contiguous axis. With n = n1*n2 the transform is
+   done in two steps of short lengths, which fit many more lines into the L2
+   tiles of general_nd, so the rows are read in long contiguous pieces:
+     1. for each j2: transforms of length n1 over the elements j2, j2+n2, ...;
+        output k1 is multiplied by w_n^(k1*j2)
+     2. transforms of length n2 over consecutive elements
+     3. element k1*n2+k2 now holds output k2*n1+k1: the hyperplanes along the
+        axis are permuted in place, cycle by cycle
+   Measured on a Ryzen 7 7840U with 8 threads: worth it from n=4096 on, and
+   only with several threads (one thread is compute-bound and loses). */
+template<typename T> size_t fourstep_n1(const fmav_info &in, const fmav_info &out,
+  size_t axis, size_t nthreads)
+  {
+  size_t n = in.shape(axis);
+  if ((in.ndim()<2) || (n<4096)) return 0;
+  if (util::thread_count(nthreads, in, axis, native_simd<T>::size())<2) return 0;
+  auto crit = [](ptrdiff_t str) { return ((str*ptrdiff_t(sizeof(Cmplx<T>)))&4095)==0; };
+  if (!(crit(in.stride(axis)) || crit(out.stride(axis)))) return 0;
+  for (size_t d=size_t(std::sqrt(double(n))); d>=16; --d)  // the most balanced split
+    if (n%d==0) return (n/d>=16) ? d : 0;
+  return 0;
+  }
+template<typename T> void c2c_fourstep(const cfmav<Cmplx<T>> &in,
+  const vfmav<Cmplx<T>> &out, size_t axis, size_t n1, bool forward, T fct,
+  size_t nthreads)
+  {
+  const size_t n=in.shape(axis), n2=n/n1, nd=in.ndim();
+  const ptrdiff_t si=in.stride(axis), so=out.stride(axis);
+  // step 1
+  UnityRoots<T,Cmplx<T>> roots(n);
+  shape_t shp1(in.shape());
+  shp1[axis] = n1;
+  auto stri(in.stride()), stro(out.stride());
+  stri[axis] = si*ptrdiff_t(n2);
+  stro[axis] = so*ptrdiff_t(n2);
+  vector<Cmplx<T>> tw(n1);
+  for (size_t j2=0; j2<n2; ++j2)
+    {
+    for (size_t k1=0; k1<n1; ++k1) tw[k1] = roots[(k1*j2)%n];
+    cfmav<Cmplx<T>> sub_in(in.data()+ptrdiff_t(j2)*si, shp1, stri);
+    vfmav<Cmplx<T>> sub_out(out.data()+ptrdiff_t(j2)*so, shp1, stro);
+    general_nd<pocketfft_c<T>>(sub_in, sub_out, {axis}, fct, nthreads, ExecC2CTw{forward, tw.data()});
+    }
+  // step 2: the axis split into (n1, n2), transforms along the second part
+  shape_t shp2;
+  auto str2 = out.stride();
+  str2.clear();
+  for (size_t i=0; i<nd; ++i)
+    {
+    if (i==axis)
+      { shp2.push_back(n1); str2.push_back(so*ptrdiff_t(n2)); shp2.push_back(n2); str2.push_back(so); }
+    else
+      { shp2.push_back(out.shape(i)); str2.push_back(out.stride(i)); }
+    }
+  vfmav<Cmplx<T>> v2(out.data(), shp2, str2);
+  general_nd<pocketfft_c<T>>(cfmav<Cmplx<T>>(v2), v2, {axis+1}, T(1), nthreads, ExecC2C{forward});
+  // step 3: hyperplane j must receive the content of plane src(j)
+  auto src = [n1,n2](size_t j) { return (j%n1)*n2 + j/n1; };
+  vector<size_t> leaders;  // smallest index of every cycle of length > 1
+  for (size_t i=0; i<n; ++i)
+    {
+    size_t j=src(i);
+    while (j>i) j=src(j);
+    if ((j==i) && (src(i)!=i)) leaders.push_back(i);
+    }
+  shape_t shpp;
+  auto strp = out.stride();
+  strp.clear();
+  for (size_t i=0; i<nd; ++i)
+    if (i!=axis) { shpp.push_back(out.shape(i)); strp.push_back(out.stride(i)); }
+  auto plane = [&](size_t j) { return vfmav<Cmplx<T>>(out.data()+ptrdiff_t(j)*so, shpp, strp); };
+  auto assign = [](Cmplx<T> &a, const Cmplx<T> &b) { a=b; };
+  execDynamic(leaders.size(), nthreads, 1, [&](Scheduler &sched)
+    {
+    vfmav<Cmplx<T>> tmp(shpp);
+    while (auto rng=sched.getNext())
+      for (auto c=rng.lo; c<rng.hi; ++c)
+        {
+        size_t i0=leaders[c], j=i0;
+        mav_apply(assign, 1, tmp, plane(i0));
+        for (size_t s2=src(j); s2!=i0; j=s2, s2=src(j))
+          mav_apply(assign, 1, plane(j), plane(s2));
+        mav_apply(assign, 1, plane(j), tmp);
+        }
+    });
+  }
+
 template<typename T> DUCC0_NOINLINE void c2c(const cfmav<complex<T>> &in,
   const vfmav<complex<T>> &out, const shape_t &axes, bool forward,
   T fct, size_t nthreads)
   {
   util::sanity_check_onetype(in, out, in.data()==out.data(), axes);
   if (in.size()==0) return;
+
+  // strided axes of length >= 4096 at a critical stride: four-step (see
+  // c2c_fourstep); then all axes one by one, in the given order
+  for (auto ax: axes)
+    if (fourstep_n1<T>(in, out, ax, nthreads))
+      {
+      const auto &in2(reinterpret_cast<const cfmav<Cmplx<T> >&>(in));
+      const auto &out2(reinterpret_cast<const vfmav<Cmplx<T> >&>(out));
+      bool first = true;
+      for (auto a: axes)
+        {
+        const auto &src(first ? in2 : cfmav<Cmplx<T>>(out2));
+        if (size_t n1=fourstep_n1<T>(src, out2, a, nthreads))
+          c2c_fourstep<T>(src, out2, a, n1, forward, first ? fct : T(1), nthreads);
+        else
+          general_nd<pocketfft_c<T>>(src, out2, {a}, first ? fct : T(1), nthreads, ExecC2C{forward});
+        first = false;
+        }
+      return;
+      }
 
   // special treatment for long 1D transforms (Bailey's algorithm)
   // TODO:
