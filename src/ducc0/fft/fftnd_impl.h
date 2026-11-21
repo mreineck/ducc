@@ -74,6 +74,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ducc0/math/cmplx.h"
 #include "ducc0/math/unity_roots.h"
 #include "ducc0/fft/fft1d_impl.h"
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(__unix__)
+#include <unistd.h>
+#endif
 
 /** \file fftnd_impl.h
  *  Implementation of multi-dimensional Fast Fourier and related transforms
@@ -247,6 +252,30 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   }
   return plan;
 #endif
+  }
+
+/* Lines at a critical stride (a multiple of 4 KB apart) are gathered in tiles,
+   so that the input is read in long contiguous pieces. Returns the tile size
+   in bytes for lines of linebytes bytes: the L2 size (1 MB assumed); with
+   several threads and an array that fits into L3 (16 MB assumed) a quarter of
+   that, so that the tiles do not push the array out. With a large L1 (Apple M:
+   128 KB) half of it, if that still holds 16 lines: the gathered lines then
+   stay in L1 (measured on an M4: c2c f64 256^2 1.5x faster than with L2 tiles;
+   with the 32 KB L1 of Zen 4 the L2 tiles were faster for all lengths). */
+size_t critstride_tile(size_t linebytes, bool multithreaded, size_t arraybytes)
+  {
+  constexpr size_t l2cache=size_t(1)<<20, l3cache=size_t(16)<<20;
+  static const size_t l1cache = []{
+    size_t res = 0;
+#if defined(__APPLE__)
+    size_t len = sizeof(res);
+    if (sysctlbyname("hw.perflevel0.l1dcachesize", &res, &len, nullptr, 0)!=0) res = 0;
+#elif defined(_SC_LEVEL1_DCACHE_SIZE)
+    res = size_t(max<long>(0, sysconf(_SC_LEVEL1_DCACHE_SIZE)));
+#endif
+    return res; }();
+  if ((l1cache>=(size_t(128)<<10)) && (l1cache/2>=16*linebytes)) return l1cache/2;
+  return (multithreaded && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
   }
 
 template<size_t N> class multi_iter
@@ -662,16 +691,16 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
           }
         else
           n_simul = vlen;
-        // lines at a critical stride (a multiple of 4 KB apart): gather as many
-        // as fill a tile of the L2 size (at least 16), so that the input is
-        // read in long contiguous pieces; with several threads and an array
-        // that fits into L3, a quarter of that, so that the tiles do not push
-        // the array out. At other strides larger bunches were slower.
-        constexpr size_t l3cache=size_t(16)<<20;
+        // lines at a critical stride: as many as fill a tile (at least 16); other
+        // strided lines with 16-byte vectors (NEON, SSE2): at least a cache line
+        // per row (else a group reads only a quarter of it, and the next group
+        // reads it again). Larger bunches were slower otherwise (with AVX2
+        // f64 axis-0 FHT up to 1.3x).
         size_t arraybytes = sizeof(T)*in.size()*((tin.data()==out.data()) ? 1 : 2);
-        size_t tile = ((sched.num_threads()>1) && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
+        size_t tile = critstride_tile(sizeof(T)*len, sched.num_threads()>1, arraybytes);
         n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/n_simul*n_simul
-                             : n_simul;
+                : (nostride || (sizeof(T0)*vlen>16)) ? n_simul
+                : n_simul*max<size_t>(1, cacheline/(sizeof(T)*n_simul));
         }
 
       // Contiguous complex lines that have a SIMD single-transform plan (length a
@@ -1087,13 +1116,16 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
   auto plan = get_plan<pocketfft_r<T>>(len, in.ndim()==1);
   auto work = [&](Scheduler &sched) {
     constexpr auto vlen = native_simd<T>::size();
-    constexpr size_t nmax = 64, l2cache=size_t(1)<<20, l3cache=size_t(16)<<20;
+    constexpr size_t nmax = 64, cacheline = 64;
     size_t blen = len+(len&1)+2*lenc;  // even, so that the complex part has an integral stride
     bool critstride = (((in.stride(axis)*sizeof(Tin))&4095)==0)
                    || (((out.stride(axis)*sizeof(Tout))&4095)==0);
+    bool nostride = (in.stride(axis)==1) && (out.stride(axis)==1);
     size_t arraybytes = sizeof(Tin)*in.size() + sizeof(Tout)*out.size();
-    size_t tile = ((sched.num_threads()>1) && (arraybytes<=l3cache)) ? l2cache/4 : l2cache;
-    size_t n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/vlen*vlen : vlen;
+    size_t tile = critstride_tile(sizeof(T)*len, sched.num_threads()>1, arraybytes);
+    size_t n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/vlen*vlen
+                   : (nostride || (sizeof(T)*vlen>16)) ? vlen  // see general_nd
+                   : vlen*max<size_t>(1, cacheline/(sizeof(T)*vlen));
     TmpStorage<T,T> storage(in.size()/in.shape(axis), blen, plan->bufsize(), (n_bunch+vlen-1)/vlen, false);
     multi_iter<nmax> it(in, out, axis, sched.num_threads(), sched.thread_num());
     // one bunch of n_bunch lines, or one group of lv lines (lv=1: a single line)
