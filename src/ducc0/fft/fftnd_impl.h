@@ -257,10 +257,11 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
    128 KB) half of it, if that still holds 16 lines: the gathered lines then
    stay in L1 (measured on an M4: c2c f64 256^2 1.5x faster than with L2 tiles;
    with the 32 KB L1 of Zen 4 the L2 tiles were faster for all lengths). */
+bool large_l1() { return cache_info().l1>=(size_t(128)<<10); }
 size_t critstride_tile(size_t linebytes, bool multithreaded, size_t arraybytes)
   {
   const auto &c = cache_info();
-  if ((c.l1>=(size_t(128)<<10)) && (c.l1/2>=16*linebytes)) return c.l1/2;
+  if (large_l1() && (c.l1/2>=16*linebytes)) return c.l1/2;
   return (multithreaded && (arraybytes<=c.llc)) ? c.l2/4 : c.l2;
   }
 
@@ -678,14 +679,14 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
         else
           n_simul = vlen;
         // lines at a critical stride: as many as fill a tile (at least 16); other
-        // strided lines with 16-byte vectors (NEON, SSE2): at least a cache line
-        // per row (else a group reads only a quarter of it, and the next group
-        // reads it again). Larger bunches were slower otherwise (with AVX2
-        // f64 axis-0 FHT up to 1.3x).
+        // strided lines with 16-byte vectors and a large L1 (Apple M): at least a
+        // cache line per row (else a group reads only a quarter of it, and the
+        // next group reads it again). Larger bunches were slower otherwise (Ryzen
+        // 7840U, f64 axis-0 FHT: up to 1.3x with AVX2, 1.2x with SSE2).
         size_t arraybytes = sizeof(T)*in.size()*((tin.data()==out.data()) ? 1 : 2);
         size_t tile = critstride_tile(sizeof(T)*len, sched.num_threads()>1, arraybytes);
         n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/n_simul*n_simul
-                : (nostride || (sizeof(T0)*vlen>16)) ? n_simul
+                : (nostride || (sizeof(T0)*vlen>16) || !large_l1()) ? n_simul
                 : n_simul*max<size_t>(1, cacheline/(sizeof(T)*n_simul));
         }
 
@@ -1110,7 +1111,7 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
     size_t arraybytes = sizeof(Tin)*in.size() + sizeof(Tout)*out.size();
     size_t tile = critstride_tile(sizeof(T)*len, sched.num_threads()>1, arraybytes);
     size_t n_bunch = critstride ? max<size_t>(16, min(nmax, tile/(sizeof(T)*len)))/vlen*vlen
-                   : (nostride || (sizeof(T)*vlen>16)) ? vlen  // see general_nd
+                   : (nostride || (sizeof(T)*vlen>16) || !large_l1()) ? vlen  // see general_nd
                    : vlen*max<size_t>(1, cacheline/(sizeof(T)*vlen));
     TmpStorage<T,T> storage(in.size()/in.shape(axis), blen, plan->bufsize(), (n_bunch+vlen-1)/vlen, false);
     multi_iter<nmax> it(in, out, axis, sched.num_threads(), sched.thread_num());
