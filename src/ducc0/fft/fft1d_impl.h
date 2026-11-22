@@ -125,10 +125,18 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
 #else
 #define DUCC0_GCC142_ICE 0
 #endif
+#if 0
 template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f, index_sequence<I...>)
   { (f(integral_constant<size_t,I>()), ...); }
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
   { static_for_impl(f, make_index_sequence<N>()); }
+#else
+template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
+  {
+  [&]<size_t... Is>(index_sequence<Is...>) DUCC0_LAMBDA_INLINE {(f(integral_constant<size_t,Is>()), ...);}
+    (make_index_sequence<N>());
+  }
+#endif
 // f(j) for j<n: unrolled with compile-time j if N>0 (then N==n), else a loop
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void xfor(size_t n, F &&f)
   { if constexpr (N>0) static_for<N>(f); else for (size_t j=0; j<n; ++j) f(j); }
@@ -204,7 +212,8 @@ consteval ct_cs ct_sincos(size_t num, size_t den)
   {
   num %= den;
   size_t q = (8*num+den)/(2*den);
-  long double x = std::numbers::pi_v<long double>/2*(ptrdiff_t(4*num)-ptrdiff_t(q*den))/den,
+  constexpr long double pi = 3.141592653589793238462643383279502884197L; //std::numbers::pi_v<long double>
+  long double x = pi/2*(ptrdiff_t(4*num)-ptrdiff_t(q*den))/den,
               x2 = x*x, c = 0, s = 0;
   for (size_t n=15; n>0; --n)
     { c = -x2/((2*n-1)*(2*n))*(1+c); s = -x2/((2*n)*(2*n+1))*(1+s); }
@@ -229,12 +238,31 @@ template<size_t R, typename Tfs> struct SingletonTab
 template<size_t R, typename Tfs> consteval SingletonTab<R,Tfs> ct_singleton()
   {
   SingletonTab<R,Tfs> res{};
-  for (size_t j=0; j<(R-1)/2; ++j)
-    for (size_t k=0; k<(R-1)/2; ++k)
-      {
-      auto v = ct_sincos((j+1)*(k+1), R);
-      res.c[j][k] = Tfs(v.c); res.s[j][k] = Tfs(v.s);
-      }
+  if constexpr (R==3)
+    {
+    res.c[0][0] = Tfs(-0.5L);
+    res.s[0][0] = Tfs(0.8660254037844386467637231707529362L);
+    }
+  else if constexpr (R==5)
+    {
+    res.c[0][0] = Tfs(0.3090169943749474241022934171828191L);
+    res.s[0][0] = Tfs(0.9510565162951535721164393333793821L);
+    res.c[1][1] = Tfs(0.3090169943749474241022934171828191L);
+    res.s[1][1] = Tfs(-0.9510565162951535721164393333793821L);
+    res.c[0][1] = Tfs(-0.8090169943749474241022934171828191L);
+    res.s[0][1] = Tfs(0.5877852522924731291687059546390728L);
+    res.c[1][0] = Tfs(-0.8090169943749474241022934171828191L);
+    res.s[1][0] = Tfs(0.5877852522924731291687059546390728L);
+    }
+  else
+    {
+    for (size_t j=0; j<(R-1)/2; ++j)
+      for (size_t k=0; k<(R-1)/2; ++k)
+        {
+        auto v = ct_sincos((j+1)*(k+1), R);
+        res.c[j][k] = Tfs(v.c); res.s[j][k] = Tfs(v.s);
+        }
+    }
   return res;
   }
 
@@ -252,7 +280,7 @@ template<size_t e, size_t R, bool fwd, typename Tfs, typename V>
     {
     constexpr auto cs = ct_sincos(m,R);
     constexpr bool pc = cs.c>0, ps = (fwd ? -cs.s : cs.s)>0;
-    constexpr Tfs h = Tfs(std::numbers::sqrt2_v<long double>/2);
+    constexpr Tfs h = Tfs(1.414213562373095048801688724209698L/2); //Tfs(std::numbers::sqrt2_v<long double>/2);
     V t1=x.r+x.i, t2=x.r-x.i;
     if constexpr (pc==ps) return C(t2*(pc ? h : -h), t1*(pc ? h : -h));
     else return C(t1*(pc ? h : -h), t2*(ps ? h : -h));
