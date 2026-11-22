@@ -238,6 +238,7 @@ template<size_t R, typename Tfs> struct SingletonTab
 template<size_t R, typename Tfs> consteval SingletonTab<R,Tfs> ct_singleton()
   {
   SingletonTab<R,Tfs> res{};
+#if 0
   if constexpr (R==3)
     {
     res.c[0][0] = Tfs(-0.5L);
@@ -255,6 +256,7 @@ template<size_t R, typename Tfs> consteval SingletonTab<R,Tfs> ct_singleton()
     res.s[1][0] = Tfs(0.5877852522924731291687059546390728L);
     }
   else
+#endif
     {
     for (size_t j=0; j<(R-1)/2; ++j)
       for (size_t k=0; k<(R-1)/2; ++k)
