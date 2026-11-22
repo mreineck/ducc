@@ -736,7 +736,7 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       for (size_t k=0; k<M; ++k)
         for (size_t l=0; l<vlen; ++l)
           {
-          auto w = (*roots)[rfct*((l*k)%N)];
+          auto w = (*roots)[rfct*l*k];  // l*k < N
           tw[k].r[l] = w.r; tw[k].i[l] = w.i;
           }
       bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen + 2*4096/sizeof(Tcs);  // in units of Tcs
