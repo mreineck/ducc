@@ -238,33 +238,12 @@ template<size_t R, typename Tfs> struct SingletonTab
 template<size_t R, typename Tfs> consteval SingletonTab<R,Tfs> ct_singleton()
   {
   SingletonTab<R,Tfs> res{};
-#if 0
-  if constexpr (R==3)
-    {
-    res.c[0][0] = Tfs(-0.5L);
-    res.s[0][0] = Tfs(0.8660254037844386467637231707529362L);
-    }
-  else if constexpr (R==5)
-    {
-    res.c[0][0] = Tfs(0.3090169943749474241022934171828191L);
-    res.s[0][0] = Tfs(0.9510565162951535721164393333793821L);
-    res.c[1][1] = Tfs(0.3090169943749474241022934171828191L);
-    res.s[1][1] = Tfs(-0.9510565162951535721164393333793821L);
-    res.c[0][1] = Tfs(-0.8090169943749474241022934171828191L);
-    res.s[0][1] = Tfs(0.5877852522924731291687059546390728L);
-    res.c[1][0] = Tfs(-0.8090169943749474241022934171828191L);
-    res.s[1][0] = Tfs(0.5877852522924731291687059546390728L);
-    }
-  else
-#endif
-    {
-    for (size_t j=0; j<(R-1)/2; ++j)
-      for (size_t k=0; k<(R-1)/2; ++k)
-        {
-        auto v = ct_sincos((j+1)*(k+1), R);
-        res.c[j][k] = Tfs(v.c); res.s[j][k] = Tfs(v.s);
-        }
-    }
+  for (size_t j=0; j<(R-1)/2; ++j)
+    for (size_t k=0; k<(R-1)/2; ++k)
+      {
+      auto v = ct_sincos((j+1)*(k+1), R);
+      res.c[j][k] = Tfs(v.c); res.s[j][k] = Tfs(v.s);
+      }
   return res;
   }
 
@@ -736,7 +715,7 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       for (size_t k=0; k<M; ++k)
         for (size_t l=0; l<vlen; ++l)
           {
-          auto w = (*roots)[rfct*l*k];  // l*k < N
+          auto w = (*roots)[(rfct*k)*l];  // l*k < N
           tw[k].r[l] = w.r; tw[k].i[l] = w.i;
           }
       bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen + 2*4096/sizeof(Tcs);  // in units of Tcs
@@ -912,6 +891,7 @@ template <typename Tfs> class cfftprader: public cfftpass_impl<cfftprader<Tfs>,T
     const size_t l1, ido, ip;
     const Tcpass<Tfs> subplan;
     aligned_array<Tcs> wa, cf;  // twiddles; FFT of the convolution kernel, scaled by 1/(ip-1)
+// FIXME: gout is just a reversed gin with exception of index 0. Perhaps something can be optimized here.
     aligned_array<size_t> gin, gout;  // gin[r]=g^r mod ip, gout[q]=g^-q mod ip
     size_t bufsz;
 
@@ -971,15 +951,15 @@ template <typename Tfs> class cfftprader: public cfftpass_impl<cfftprader<Tfs>,T
           wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
 
       size_t g=2;  // primitive root: smallest g whose powers run through all of 1..ip-1
+// MR FIXME: this looks slow! Perhaps there is a more efficient way to achieve this.
       for (;; ++g)
         {
         size_t x=g, cnt=1;
-        while (x!=1) { x=x*g%ip; ++cnt; }
+        while (x!=1) { x=(x*g)%ip; ++cnt; }
         if (cnt==n) break;
         }
-      gin[0]=1;
-      for (size_t r=1; r<n; ++r) gin[r] = gin[r-1]*g%ip;
-      for (size_t r=0; r<n; ++r) gout[(n-r)%n] = gin[r];
+      for (size_t r=0, rx=0, pos=1; r<n; ++r, rx=n-r, pos=(pos*g)%ip)
+        gin[r] = gout[rx] = pos;
 
       /* kernel c[m] = exp(-2 pi i g^-m/ip); store its forward FFT divided by n */
       auto rootsp = ((roots->size()%ip)==0) ?
