@@ -129,6 +129,9 @@ template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f,
   { (f(integral_constant<size_t,I>()), ...); }
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
   { static_for_impl(f, make_index_sequence<N>()); }
+// f(j) for j<n: unrolled with compile-time j if N>0 (then N==n), else a loop
+template<size_t N, typename F> DUCC0_ALWAYS_INLINE void xfor(size_t n, F &&f)
+  { if constexpr (N>0) static_for<N>(f); else for (size_t j=0; j<n; ++j) f(j); }
 
 /* The virtual exec() of a pass class D (CRTP): calls D::exec_<fwd>() with the
    pointers cast to the data type that ti names, the scalar type or the SIMD
@@ -310,6 +313,38 @@ template<size_t R, bool fwd, typename Tfs, typename V>
       });
     }
   }
+/* Singleton's algorithm for an odd length n known at run time, O(n^2): from
+   t[j]=x[j+1]+x[n-1-j] and t[h+j]=x[j+1]-x[n-1-j] (j<h=(n-1)/2) it passes to
+   f(k,a,b), k=1..h, a=x0+sum_j t[j]*cos(2pi(j+1)k/n) and b=sum_j t[h+j]*sin(..);
+   the outputs are a-+ib (k) and a+-ib (n-k). cs[m] = exp(2*pi*i*m/n). */
+template<typename Tfs, typename C, size_t M, typename F>
+  DUCC0_ALWAYS_INLINE void singleton_rt(const array<C,M> &t, const C &x0, size_t n, const Cmplx<Tfs> *cs, F &&f)
+  {
+  const size_t h=(n-1)/2;
+  for (size_t k=1; k<=h; ++k)
+    {
+    C a=x0+t[0]*cs[k].r, b=t[h]*cs[k].i;
+    for (size_t j=1, m=k; j<h; ++j)
+      { m+=k; m-=(m>=n) ? n : 0; a+=t[j]*cs[m].r; b+=t[h+j]*cs[m].i; }
+    f(k, a, b);
+    }
+  }
+// in-place DFT of an odd length n<=M known at run time
+template<bool fwd, typename Tfs, typename C, size_t M>
+  DUCC0_ALWAYS_INLINE void dft_rt(array<C,M> &x, size_t n, const Cmplx<Tfs> *cs)
+  {
+  const size_t h=(n-1)/2;
+  array<C,M> t;
+  for (size_t j=0; j<h; ++j) { t[j]=x[j+1]+x[n-1-j]; t[h+j]=x[j+1]-x[n-1-j]; }
+  const C x0=x[0];
+  for (size_t j=0; j<h; ++j) x[0]+=t[j];
+  singleton_rt(t, x0, n, cs, [&](size_t k, const C &a, const C &b) DUCC0_LAMBDA_INLINE
+    {
+    C ib(-b.i, b.r);
+    x[k] = fwd ? a-ib : a+ib;
+    x[n-k] = fwd ? a+ib : a-ib;
+    });
+  }
 
 /* Lane shuffles on SIMD types: lane P of the result is lane F(P) of the
    concatenation of a and b. The index patterns are constexpr functions, not
@@ -353,10 +388,18 @@ template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vstore(const Cmplx
   shuf<sh_zip_lo<vlen>>(x.r, x.i).copy_to(q, element_aligned_tag());
   shuf<sh_zip_hi<vlen>>(x.r, x.i).copy_to(q+vlen, element_aligned_tag());
   }
-// the R x vl block of reals at p, transposed: x[j] lane t = p[j+R*t]
-template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vgather(const Tfs *p, array<Tfv,R> &x)
+/* the R x vl block of reals at p, transposed: x[j] lane t = p[j+R*t]; for
+   R==0 the runtime size n, through a buffer */
+template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE void vgather(const Tfs *p, array<Tfv,L> &x, size_t n=R)
   {
   constexpr size_t vl = Tfv::size();
+  if constexpr (R==0)
+    {
+    array<Tfs,L*vl> b;
+    for (size_t t=0; t<vl; ++t) for (size_t j=0; j<n; ++j) b[j*vl+t] = p[j+n*t];
+    for (size_t j=0; j<n; ++j) x[j] = Tfv(&b[j*vl], element_aligned_tag());
+    return;
+    }
   array<Tfv,R> v;
   static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE{ v[m] = Tfv(p+m*vl, element_aligned_tag()); });
   static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
@@ -372,9 +415,16 @@ template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vgather(
 // the inverse: p[j+R*t] = x[j] lane t
 template<size_t J, size_t M, size_t R, size_t n> constexpr size_t sh_scatter(size_t p)
   { return ((M*n+p)%R==J) ? n+(M*n+p)/R : p; }
-template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vscatter(const array<Tfv,R> &x, Tfs *p)
+template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE void vscatter(const array<Tfv,L> &x, Tfs *p, size_t n=R)
   {
   constexpr size_t vl = Tfv::size();
+  if constexpr (R==0)
+    {
+    array<Tfs,L*vl> b;
+    for (size_t j=0; j<n; ++j) x[j].copy_to(&b[j*vl], element_aligned_tag());
+    for (size_t t=0; t<vl; ++t) for (size_t j=0; j<n; ++j) p[j+n*t] = b[j*vl+t];
+    return;
+    }
   static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE
     {
     constexpr size_t M = decltype(m)::value;
@@ -411,24 +461,32 @@ template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Cmp
   }
 
 
-/* Radix-R pass, with the DFT of length R generated at compile time. Indexing
-   as in FFTPACK: input cc[i+ido*(j+R*k)], output ch[i+ido*(k+l1*j)], where
-   output j>0 is multiplied by the twiddle w^(l1*i*j). exec works on
-   interleaved complex data of any type, exec_planar on real and imaginary
-   planes of scalar data, SIMD over vl consecutive butterflies (consecutive
-   in memory, so without shuffles; the last pass, ido==1, gathers). */
-template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tfs>,Tfs>
+/* Radix-R pass, with the DFT of length R generated at compile time, or, for
+   R0==0, of an odd length R known at run time (primes 17..109 inside
+   composite lengths: the O(R^2) dft_rt). Indexing as in FFTPACK: input
+   cc[i+ido*(j+R*k)], output ch[i+ido*(k+l1*j)], where output j>0 is
+   multiplied by the twiddle w^(l1*i*j). exec works on interleaved complex
+   data of any type, exec_planar on real and imaginary planes of scalar data,
+   SIMD over vl consecutive butterflies (consecutive in memory, so without
+   shuffles; the last pass, ido==1, gathers). */
+template <size_t R0, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R0,Tfs>,Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
-    static constexpr size_t vl = fft1d_simdlen<Tfs>;
-    size_t l1, ido;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>, L = R0 ? R0 : 109;  // L: capacity of the butterfly
+    // compile-time loop count n, or 0 (a runtime loop) if the radix is not known at compile time
+    static constexpr size_t ct(size_t n) { return R0 ? n : 0; }
+    size_t l1, ido, ip;  // ip: the runtime radix (R0==0)
     /* twiddles w^(l1*i*(j+1)), i<ido, j<R-1, in blocks of vl values of i:
        real parts at w[wi(i,j)], imaginary parts vl entries later. The 2(R-1)
        twiddles of one i then lie close together, and the vl consecutive ones
        of one j load as a vector. */
     aligned_array<Tfs> w;
-    size_t wi(size_t i, size_t j) const { return ((i/vl)*(R-1)+j)*2*vl + i%vl; }
+    aligned_array<Tcs> cs;  // only for R0==0: cs[m] = exp(2*pi*i*m/R)
+    size_t wi(size_t i, size_t j) const { return ((i/vl)*(rdx()-1)+j)*2*vl + i%vl; }
+    DUCC0_ALWAYS_INLINE size_t rdx() const { if constexpr (R0>0) return R0; else return ip; }
+    template<bool fwd, typename C> DUCC0_ALWAYS_INLINE void dftR(array<C,L> &x) const
+      { if constexpr (R0>0) dft<R0,fwd,Tfs>(x); else dft_rt<fwd,Tfs>(x, ip, cs.data()); }
 
     /* not inlined since GCC seem to drop the restrict qualifiers. Scalar data
        does not rely on the compiler's vectorization of the loop over i (it
@@ -437,6 +495,7 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
     template<bool fwd, typename Tcd> DUCC0_NOINLINE Tcd *exec_ (Tcd *cc, Tcd *ch,
       Tcd * /*buf*/, size_t /*nthreads*/) const
       {
+      const size_t R = rdx();
       if constexpr (is_same_v<Tcd,Tcs>)  // scalar data: explicit SIMD over i, as for planes
         {
         exec_planar_<fwd,true,true>(reinterpret_cast<const Tfs *>(cc), reinterpret_cast<Tfs *>(ch));
@@ -449,12 +508,12 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
           MR_assert(l1==1, "in-place pass needs l1==1");
           for (size_t i=0; i<ido; ++i)  // every butterfly reads and writes the same places
             {
-            array<Tcd,R> x;
-            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*j]; });
-            dft<R,fwd,Tfs>(x);
+            array<Tcd,L> x;
+            xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*j]; });
+            dftR<fwd>(x);
             cc[i]=x[0];
             const Tfs *wp = w.data()+wi(i,0);
-            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+            xfor<ct(R0-1)>(R-1, [&](auto j) DUCC0_LAMBDA_INLINE
               { cc[i+ido*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
             }
           return cc;
@@ -466,19 +525,19 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
           const Tcd * DUCC0_RESTRICT cck = cc+ido*R*k;
           Tcd * DUCC0_RESTRICT chk = ch+ido*k;
             {
-            array<Tcd,R> x;
-            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[ido*j]; });
-            dft<R,fwd,Tfs>(x);
-            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ chk[so*j]=x[j]; });
+            array<Tcd,L> x;
+            xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[ido*j]; });
+            dftR<fwd>(x);
+            xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ chk[so*j]=x[j]; });
             }
           for (size_t i=1; i<ido; ++i)
             {
-            array<Tcd,R> x;
-            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[i+ido*j]; });
-            dft<R,fwd,Tfs>(x);
+            array<Tcd,L> x;
+            xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[i+ido*j]; });
+            dftR<fwd>(x);
             chk[i]=x[0];
             const Tfs *wp = w.data()+wi(i,0);
-            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+            xfor<ct(R0-1)>(R-1, [&](auto j) DUCC0_LAMBDA_INLINE
               { chk[i+so*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
             }
           }
@@ -512,17 +571,17 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
     template<bool fwd, typename V, bool iin, bool iout> DUCC0_ALWAYS_INLINE void pstep(size_t i, size_t k,
       const Tfs *in, Tfs *out) const
       {
-      const size_t N=R*l1*ido;
-      array<Cmplx<V>,R> x;
-      static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=ld<V,iin>(in, N, i+ido*(j+R*k)); });
-      dft<R,fwd,Tfs>(x);
+      const size_t R=rdx(), N=R*l1*ido;
+      array<Cmplx<V>,L> x;
+      xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=ld<V,iin>(in, N, i+ido*(j+R*k)); });
+      dftR<fwd>(x);
       st<V,iout>(x[0], out, N, i+ido*k);
-      static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+      xfor<ct(R0-1)>(R-1, [&](auto j) DUCC0_LAMBDA_INLINE
         { st<V,iout>(x[j+1].template special_mul<fwd>(ld<V,false>(w.data(), vl, wi(i,j))), out, N, i+ido*(k+l1*(j+1))); });
       }
     template<bool fwd, bool iin, bool iout> void exec_planar_(const Tfs *in, Tfs *out) const
       {
-      const size_t N=R*l1*ido;
+      const size_t R=rdx(), N=R*l1*ido;
       // full SIMD width first, then narrower vectors for the rest, then scalars
       if constexpr (!iin)
         if (ido==1)  // inputs consecutive in j: transpose blocks of v transforms
@@ -536,13 +595,13 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
               using Tfv = typename simd_select<Tfs,v>::type;
               for (; k+v<=l1; k+=v)
                 {
-                array<Tfv,R> xr, xi;
-                vgather<R>(in+R*k, xr);
-                vgather<R>(in+N+R*k, xi);
-                array<Cmplx<Tfv>,R> x;
-                static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<Tfv>(xr[j], xi[j]); });
-                dft<R,fwd,Tfs>(x);
-                static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ st<Tfv,iout>(x[j], out, N, k+l1*j); });
+                array<Tfv,L> xr, xi;
+                vgather<R0>(in+R*k, xr, R);
+                vgather<R0>(in+N+R*k, xi, R);
+                array<Cmplx<Tfv>,L> x;
+                xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<Tfv>(xr[j], xi[j]); });
+                dftR<fwd>(x);
+                xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ st<Tfv,iout>(x[j], out, N, k+l1*j); });
                 }
               }
             });
@@ -563,9 +622,11 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
       }
 
   public:
-    cfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), w(((ido+vl-1)/vl)*(R-1)*2*vl)
+    cfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots, size_t ip_=R0)
+      : l1(l1_), ido(ido_), ip(ip_), w(((ido+vl-1)/vl)*(ip-1)*2*vl), cs(R0 ? 0 : ip)
       {
+      const size_t R=rdx();
+      MR_assert((R0>0) || ((R&1) && (R>=3) && (R<=L)), "bad runtime radix");
       size_t N=R*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
@@ -575,11 +636,12 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
           auto v = (*roots)[rfct*(j+1)*l1*i];
           w[wi(i,j)] = v.r; w[wi(i,j)+vl] = v.i;
           }
+      for (size_t m=0; m<cs.size(); ++m) cs[m] = (*roots)[rfct*l1*ido*m];
       }
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const { return w.size()*sizeof(Tfs); }
+    virtual size_t footprint() const { return w.size()*sizeof(Tfs)+cs.size()*sizeof(Tcs); }
     virtual bool planar() const { return true; }
     virtual void exec_planar(const Tfs *in, Tfs *out, bool fwd, bool iin, bool iout) const
       {
@@ -589,7 +651,7 @@ template <size_t R, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R,Tf
       else fwd ? exec_planar_<true,false,false>(in,out) : exec_planar_<false,false,false>(in,out);
       }
 
-    friend cfftpass_impl<cfftpR<R,Tfs>,Tfs>;
+    friend cfftpass_impl<cfftpR<R0,Tfs>,Tfs>;
   };
 
 /* Single 1-D transform of length N=vlen*M, SIMD over the whole transform:
@@ -664,148 +726,6 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       return fwd ? exec_<true>(in1, copy1, buf1, nthreads)
                  : exec_<false>(in1, copy1, buf1, nthreads);
       }
-  };
-
-template <typename Tfs> class cfftpg: public cfftpass_impl<cfftpg<Tfs>,Tfs>
-  {
-  private:
-    using typename cfftpass<Tfs>::Tcs;
-
-    size_t l1, ido;
-    size_t ip;
-    aligned_array<Tcs> wa;
-    aligned_array<Tcs> csarr;
-
-    auto WA(size_t x, size_t i) const
-      { return wa[i-1+x*(ido-1)]; }
-
-    template<bool fwd, typename Tcd> Tcd *exec_
-      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
-      {
-      size_t ipph = (ip+1)/2;
-      size_t idl1 = ido*l1;
-
-      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return ch[a+ido*(b+l1*c)]; };
-      auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tcd&
-        { return cc[a+ido*(b+ip*c)]; };
-      auto CX = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
-        { return cc[a+ido*(b+l1*c)]; };
-      auto CX2 = [cc, idl1](size_t a, size_t b) -> Tcd&
-        { return cc[a+idl1*b]; };
-      auto CH2 = [ch, idl1](size_t a, size_t b) -> const Tcd&
-        { return ch[a+idl1*b]; };
-
-      for (size_t k=0; k<l1; ++k)
-        for (size_t i=0; i<ido; ++i)
-          CH(i,k,0) = CC(i,0,k);
-      for (size_t j=1, jc=ip-1; j<ipph; ++j, --jc)
-        for (size_t k=0; k<l1; ++k)
-          for (size_t i=0; i<ido; ++i)
-            PM(CH(i,k,j),CH(i,k,jc),CC(i,j,k),CC(i,jc,k));
-      for (size_t k=0; k<l1; ++k)
-        for (size_t i=0; i<ido; ++i)
-          {
-          Tcd tmp = CH(i,k,0);
-          for (size_t j=1; j<ipph; ++j)
-            tmp+=CH(i,k,j);
-          CX(i,k,0) = tmp;
-          }
-      for (size_t l=1, lc=ip-1; l<ipph; ++l, --lc)
-        {
-        // j=0,1,2
-        {
-        auto wal  = fwd ? csarr[  l].conj() : csarr[  l];
-        auto wal2 = fwd ? csarr[2*l].conj() : csarr[2*l];
-        for (size_t ik=0; ik<idl1; ++ik)
-          {
-          CX2(ik,l ).r = CH2(ik,0).r+wal.r*CH2(ik,1).r+wal2.r*CH2(ik,2).r;
-          CX2(ik,l ).i = CH2(ik,0).i+wal.r*CH2(ik,1).i+wal2.r*CH2(ik,2).i;
-          CX2(ik,lc).r =-wal.i*CH2(ik,ip-1).i-wal2.i*CH2(ik,ip-2).i;
-          CX2(ik,lc).i = wal.i*CH2(ik,ip-1).r+wal2.i*CH2(ik,ip-2).r;
-          }
-        }
-
-        size_t iwal=2*l;
-        size_t j=3, jc=ip-3;
-        for (; j<ipph-1; j+=2, jc-=2)
-          {
-          iwal+=l; if (iwal>ip) iwal-=ip;
-          Tcs xwal=fwd ? csarr[iwal].conj() : csarr[iwal];
-          iwal+=l; if (iwal>ip) iwal-=ip;
-          Tcs xwal2=fwd ? csarr[iwal].conj() : csarr[iwal];
-          for (size_t ik=0; ik<idl1; ++ik)
-            {
-            CX2(ik,l).r += CH2(ik,j).r*xwal.r+CH2(ik,j+1).r*xwal2.r;
-            CX2(ik,l).i += CH2(ik,j).i*xwal.r+CH2(ik,j+1).i*xwal2.r;
-            CX2(ik,lc).r -= CH2(ik,jc).i*xwal.i+CH2(ik,jc-1).i*xwal2.i;
-            CX2(ik,lc).i += CH2(ik,jc).r*xwal.i+CH2(ik,jc-1).r*xwal2.i;
-            }
-          }
-        for (; j<ipph; ++j, --jc)
-          {
-          iwal+=l; if (iwal>ip) iwal-=ip;
-          Tcs xwal=fwd ? csarr[iwal].conj() : csarr[iwal];
-          for (size_t ik=0; ik<idl1; ++ik)
-            {
-            CX2(ik,l).r += CH2(ik,j).r*xwal.r;
-            CX2(ik,l).i += CH2(ik,j).i*xwal.r;
-            CX2(ik,lc).r -= CH2(ik,jc).i*xwal.i;
-            CX2(ik,lc).i += CH2(ik,jc).r*xwal.i;
-            }
-          }
-        }
-
-      // shuffling and twiddling
-      if (ido==1)
-        for (size_t j=1, jc=ip-1; j<ipph; ++j, --jc)
-          for (size_t ik=0; ik<idl1; ++ik)
-            {
-            Tcd t1=CX2(ik,j), t2=CX2(ik,jc);
-            PM(CX2(ik,j),CX2(ik,jc),t1,t2);
-            }
-      else
-        {
-        for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)
-          for (size_t k=0; k<l1; ++k)
-            {
-            Tcd t1=CX(0,k,j), t2=CX(0,k,jc);
-            PM(CX(0,k,j),CX(0,k,jc),t1,t2);
-            for (size_t i=1; i<ido; ++i)
-              {
-              Tcd x1, x2;
-              PM(x1,x2,CX(i,k,j),CX(i,k,jc));
-              size_t idij=(j-1)*(ido-1)+i-1;
-              special_mul<fwd>(x1,wa[idij],CX(i,k,j));
-              idij=(jc-1)*(ido-1)+i-1;
-              special_mul<fwd>(x2,wa[idij],CX(i,k,jc));
-              }
-            }
-        }
-      return cc;
-      }
-
-  public:
-    cfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(ip)
-      {
-      MR_assert((ip&1)&&(ip>=5), "need an odd number >=5");
-      size_t N=ip*l1*ido;
-      auto rfct = roots->size()/N;
-      MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<ido; ++i)
-          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
-      for (size_t i=0; i<ip; ++i)
-        csarr[i] = (*roots)[rfct*ido*l1*i];
-      }
-
-    virtual size_t bufsize() const { return 0; }
-    virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const
-      { return (wa.size()+csarr.size())*sizeof(Tcs); }
-
-    friend cfftpass_impl<cfftpg<Tfs>,Tfs>;
   };
 
 template <typename Tfs> class cfftpblue: public cfftpass_impl<cfftpblue<Tfs>,Tfs>
@@ -1577,7 +1497,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
            codelet passes and can use SIMD lanes (ip-1 divisible by 4),
            otherwise Bluestein's padded power-of-two-like length is faster. */
         if ((ip<110) && (l1*ido>1))
-          return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
+          return make_shared<cfftpR<0,Tfs>>(l1, ido, roots, ip);
         if (((ip-1)%4==0) && (util1d::prime_factors(ip-1).back()<=13))
           return make_shared<cfftprader<Tfs>>(l1, ido, ip, roots, vectorize);
         return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
@@ -1608,20 +1528,28 @@ template <typename Tfs> class rfftp1: public rfftpass<Tfs>
   };
 
 /* Real radix-R pass (FFTPACK halfcomplex layout) on top of the complex DFT
-   of length R generated at compile time. Forward: cc[a+ido*(k+l1*j)] ->
+   of length R generated at compile time, or, for R0==0, of an odd length R
+   known at run time (dft_rt, as in cfftpR). Forward: cc[a+ido*(k+l1*j)] ->
    ch[a+ido*(j+R*k)], backward the other way. Index i=0 holds real values,
    (i-1,i) for even i>0 a complex value whose conjugate partner is stored
    mirrored at ido-i; for even R and even ido, i=ido-1 is real again. */
-template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tfs>,Tfs>
+template <size_t R0, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R0,Tfs>,Tfs>
   {
   private:
     using Tcs = Cmplx<Tfs>;
-    static constexpr size_t vl = fft1d_simdlen<Tfs>;
-    size_t l1, ido;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>, L = R0 ? R0 : 134;  // L: capacity of the butterfly
+    static constexpr bool even = (R0>0) && ((R0&1)==0);
+    // compile-time loop count n, or 0 (a runtime loop) if the radix is not known at compile time
+    static constexpr size_t ct(size_t n) { return R0 ? n : 0; }
+    size_t l1, ido, ip;  // ip: the runtime radix (R0==0)
     /* twiddles w^(l1*j*i/2), i=2,4,..<ido, j=1..R-1, in blocks of vl values of
        i (as in cfftpR): real parts at wa[wi(i/2-1,j-1)], imaginary parts vl later */
     aligned_array<Tfs> wa;
-    size_t wi(size_t q, size_t j) const { return ((q/vl)*(R-1)+j)*2*vl + q%vl; }
+    aligned_array<Tcs> cs;  // only for R0==0: cs[m] = exp(2*pi*i*m/R)
+    size_t wi(size_t q, size_t j) const { return ((q/vl)*(rdx()-1)+j)*2*vl + q%vl; }
+    DUCC0_ALWAYS_INLINE size_t rdx() const { if constexpr (R0>0) return R0; else return ip; }
+    template<bool fwd, typename C> DUCC0_ALWAYS_INLINE void dftR(array<C,L> &x) const
+      { if constexpr (R0>0) dft<R0,fwd,Tfs>(x); else dft_rt<fwd,Tfs>(x, ip, cs.data()); }
 
     // one complex value at p (V==Tfd), or V::size() consecutive ones of scalar data, optionally reversed
     template<typename V, bool rev, typename Tfd> DUCC0_ALWAYS_INLINE static Cmplx<V> ld(const Tfd *p)
@@ -1653,27 +1581,73 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tf
     template<bool fwd, typename V, typename Tfd> DUCC0_ALWAYS_INLINE void bfly(const Tfd *c, Tfd *o, size_t i) const
       {
       constexpr size_t n = is_same_v<V,Tfd> ? 1 : sizeof(V)/sizeof(Tfs);
-      const size_t so=ido*l1, q=i/2-1, im=ido-i-1-2*(n-1);  // im: lowest index of the mirrored values
-      array<Cmplx<V>,R> x;
+      const size_t R=rdx(), so=ido*l1, q=i/2-1, im=ido-i-1-2*(n-1);  // im: lowest index of the mirrored values
+      array<Cmplx<V>,L> x;
       if constexpr (fwd)
         {
         x[0]=ld<V,false>(c+i-1);
-        static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+        xfor<ct(R0-1)>(R-1, [&](auto j) DUCC0_LAMBDA_INLINE
           { x[j+1]=ld<V,false>(c+i-1+so*(j+1)).template special_mul<true>(tw<V,Tfd>(q,j)); });
-        dft<R,true,Tfs>(x);
-        static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE{ st<V,false>(x[m], o+i-1+ido*2*m); });
-        static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
+        dftR<true>(x);
+        xfor<ct((R0+1)/2)>((R+1)/2, [&](auto m) DUCC0_LAMBDA_INLINE{ st<V,false>(x[m], o+i-1+ido*2*m); });
+        xfor<ct(R0/2)>(R/2, [&](auto m) DUCC0_LAMBDA_INLINE
           { st<V,true>(Cmplx<V>(x[R-1-m].r, -x[R-1-m].i), o+im+ido*(2*m+1)); });
         }
       else
         {
-        static_for<(R+1)/2>([&](auto m) DUCC0_LAMBDA_INLINE{ x[m]=ld<V,false>(c+i-1+ido*2*m); });
-        static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
+        xfor<ct((R0+1)/2)>((R+1)/2, [&](auto m) DUCC0_LAMBDA_INLINE{ x[m]=ld<V,false>(c+i-1+ido*2*m); });
+        xfor<ct(R0/2)>(R/2, [&](auto m) DUCC0_LAMBDA_INLINE
           { auto y=ld<V,true>(c+im+ido*(2*m+1)); x[R-1-m]=Cmplx<V>(y.r, -y.i); });
-        dft<R,false,Tfs>(x);
+        dftR<false>(x);
         st<V,false>(x[0], o+i-1);
-        static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+        xfor<ct(R0-1)>(R-1, [&](auto j) DUCC0_LAMBDA_INLINE
           { st<V,false>(x[j+1].template special_mul<false>(tw<V,Tfd>(q,j)), o+i-1+so*(j+1)); });
+        }
+      }
+
+    /* DFT of R reals y[j] in place, result in halfcomplex order: X0.r, X1.r,
+       X1.i, ..., (X(R/2).r for even R); backward the inverse (unnormalized).
+       For runtime R Singleton's algorithm on real data: half the work of the
+       complex DFT, whose zero imaginary parts the compiler can only fold
+       for compile-time R. */
+    template<bool fwd, typename V> DUCC0_ALWAYS_INLINE void redge(array<V,L> &y) const
+      {
+      const size_t R=rdx(), h=(R-1)/2;
+      const V zero(Tfs(0));
+      if constexpr (R0>0)
+        {
+        array<Cmplx<V>,L> x;
+        if constexpr (fwd)
+          {
+          static_for<R0>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<V>(y[j], zero); });
+          dftR<true>(x);
+          y[0]=x[0].r;
+          static_for<(R0-1)/2>([&](auto m) DUCC0_LAMBDA_INLINE{ y[2*m+1]=x[m+1].r; y[2*m+2]=x[m+1].i; });
+          if constexpr (even) y[R0-1]=x[R0/2].r;
+          }
+        else
+          {
+          x[0]=Cmplx<V>(y[0], zero);
+          static_for<(R0-1)/2>([&](auto m) DUCC0_LAMBDA_INLINE
+            { x[m+1]=Cmplx<V>(y[2*m+1], y[2*m+2]); x[R0-1-m]=Cmplx<V>(y[2*m+1], -y[2*m+2]); });
+          if constexpr (even) x[R0/2]=Cmplx<V>(y[R0-1], zero);
+          dftR<false>(x);
+          static_for<R0>([&](auto j) DUCC0_LAMBDA_INLINE{ y[j]=x[j].r; });
+          }
+        }
+      else
+        {
+        array<V,L> t;  // as in dft_rt; backward: 2*Re and 2*Im of the inputs
+        for (size_t j=0; j<h; ++j)
+          if constexpr (fwd) { t[j]=y[j+1]+y[R-1-j]; t[h+j]=y[j+1]-y[R-1-j]; }
+          else { t[j]=Tfs(2)*y[2*j+1]; t[h+j]=Tfs(2)*y[2*j+2]; }
+        const V x0=y[0];
+        for (size_t j=0; j<h; ++j) y[0]+=t[j];
+        singleton_rt(t, x0, R, cs.data(), [&](size_t k, const V &a, const V &b) DUCC0_LAMBDA_INLINE
+          {
+          if constexpr (fwd) { y[2*k-1]=a; y[2*k]=-b; }
+          else { y[k]=a-b; y[R-k]=a+b; }
+          });
         }
       }
 
@@ -1681,69 +1655,37 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tf
     template<bool fwd, typename Tfd> DUCC0_NOINLINE Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/, size_t /*nthreads*/) const
       {
-      using C = Cmplx<Tfd>;
-      constexpr size_t h=(R-1)/2;
-      const size_t so=ido*l1;
-      const Tfd zero(0);
+      const size_t R=rdx(), so=ido*l1;
+      // i=0, real values: own loops, SIMD over consecutive k for ido==1
       size_t k0=0;
       if constexpr (is_same_v<Tfd,Tfs>)
-        if (ido==1)  // scalar data, only the real butterflies at i=0: SIMD over consecutive k
+        if (ido==1)  // scalar data, only the real butterflies at i=0
           static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE  // full SIMD width, then narrower vectors
-          {
-          constexpr size_t v = vl>>decltype(s)::value;
-          if constexpr ((v>=2) && simd_exists<Tfs,v>)
-          {
-          using V = typename simd_select<Tfs,v>::type;
-          const V vzero(Tfs(0));
-          for (; k0+v<=l1; k0+=v)
             {
-            array<Cmplx<V>,R> x;
-            array<V,R> y;
-            if constexpr (fwd)
-              {
-              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<V>(V(cc+k0+l1*j, element_aligned_tag()), vzero); });
-              dft<R,true,Tfs>(x);
-              y[0]=x[0].r;
-              static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE{ y[2*m+1]=x[m+1].r; y[2*m+2]=x[m+1].i; });
-              if constexpr ((R&1)==0) y[R-1]=x[R/2].r;
-              vscatter<R>(y, ch+R*k0);
-              }
-            else
-              {
-              vgather<R>(cc+R*k0, y);
-              x[0]=Cmplx<V>(y[0], vzero);
-              static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE
-                { x[m+1]=Cmplx<V>(y[2*m+1], y[2*m+2]); x[R-1-m]=Cmplx<V>(y[2*m+1], -y[2*m+2]); });
-              if constexpr ((R&1)==0) x[R/2]=Cmplx<V>(y[R-1], vzero);
-              dft<R,false,Tfs>(x);
-              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j].r.copy_to(ch+k0+l1*j, element_aligned_tag()); });
-              }
-            }
-          }
-          });
-      // i=0: real values split into separate loop for vectorization over k
+            constexpr size_t v = vl>>decltype(s)::value;
+            if constexpr ((v>=2) && simd_exists<Tfs,v>)
+              for (; k0+v<=l1; k0+=v)
+                {
+                using V = typename simd_select<Tfs,v>::type;
+                array<V,L> y;
+                if constexpr (fwd)
+                  xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j]=V(cc+k0+l1*j, element_aligned_tag()); });
+                else vgather<R0>(cc+R*k0, y, R);
+                redge<fwd>(y);
+                if constexpr (fwd) vscatter<R0>(y, ch+R*k0, R);
+                else xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j].copy_to(ch+k0+l1*j, element_aligned_tag()); });
+                }
+            });
+      // offset of halfcomplex value p of a transform: 0, ido-1, ido, 3*ido-1, 3*ido, ...
+      auto hc = [this](size_t p) DUCC0_LAMBDA_INLINE { return (p&1) ? ido*(p+1)-1 : ido*p; };
       for (size_t k=k0; k<l1; ++k)
         {
-        const size_t ck = ido*k*(fwd ? 1 : R), ok = ido*k*(fwd ? R : 1);
-        if constexpr (fwd)
-          {
-          array<C,R> x;
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=C(cc[ck+so*j], zero); });
-          dft<R,true,Tfs>(x);
-          ch[ok+0]=x[0].r;
-          static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE{ ch[ok+ido*(2*m+2)-1]=x[m+1].r; ch[ok+ido*(2*m+2)]=x[m+1].i; });
-          if constexpr ((R&1)==0) ch[ok+ido*R-1]=x[R/2].r;
-          }
-        else
-          {
-          array<C,R> x;
-          x[0]=C(cc[ck+0], zero);
-          static_for<h>([&](auto m) DUCC0_LAMBDA_INLINE
-            { x[m+1]=C(cc[ck+ido*(2*m+2)-1], cc[ck+ido*(2*m+2)]); x[R-1-m]=C(x[m+1].r, -x[m+1].i); });
-          if constexpr ((R&1)==0) x[R/2]=C(cc[ck+ido*R-1], zero);
-          dft<R,false,Tfs>(x);
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ ch[ok+so*j]=x[j].r; });
-          }
+        const Tfd *c = cc+ido*k*(fwd ? 1 : R);
+        Tfd *o = ch+ido*k*(fwd ? R : 1);
+        array<Tfd,L> y;
+        xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j]=c[fwd ? so*j : hc(j)]; });
+        redge<fwd>(y);
+        xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ o[fwd ? hc(j) : so*j]=y[j]; });
         }
       if (ido==1) return ch;
       for (size_t k=0; k<l1; ++k)
@@ -1761,24 +1703,26 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tf
             });
         for (; i<ido; i+=2) bfly<fwd,Tfd,Tfd>(c, o, i);
         // even R, even ido: real values at i=ido-1, with half-step twiddles
-        if constexpr ((R&1)==0)
+        if constexpr (even)
           if ((ido&1)==0)
             {
-            array<C,R> x;
+            using C = Cmplx<Tfd>;
+            const Tfd zero(0);
+            array<C,L> x;
             if constexpr (fwd)
               {
-              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
-                { x[j]=twmul<decltype(j)::value,2*R,true,Tfs>(C(c[ido-1+so*j], zero)); });
-              dft<R,true,Tfs>(x);
-              static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE{ o[ido-1+ido*2*m]=x[m].r; o[ido*(2*m+1)]=x[m].i; });
+              xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE
+                { x[j]=twmul<decltype(j)::value,2*R0,true,Tfs>(C(c[ido-1+so*j], zero)); });
+              dftR<true>(x);
+              xfor<ct(R0/2)>(R/2, [&](auto m) DUCC0_LAMBDA_INLINE{ o[ido-1+ido*2*m]=x[m].r; o[ido*(2*m+1)]=x[m].i; });
               }
             else
               {
-              static_for<R/2>([&](auto m) DUCC0_LAMBDA_INLINE
+              xfor<ct(R0/2)>(R/2, [&](auto m) DUCC0_LAMBDA_INLINE
                 { x[m]=C(c[ido-1+ido*2*m], c[ido*(2*m+1)]); x[R-1-m]=C(x[m].r, -x[m].i); });
-              dft<R,false,Tfs>(x);
-              static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
-                { o[ido-1+so*j]=twmul<decltype(j)::value,2*R,false,Tfs>(x[j]).r; });
+              dftR<false>(x);
+              xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE
+                { o[ido-1+so*j]=twmul<decltype(j)::value,2*R0,false,Tfs>(x[j]).r; });
               }
             }
         }
@@ -1786,9 +1730,11 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tf
       }
 
   public:
-    rfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((((ido-1)/2+vl-1)/vl)*(R-1)*2*vl)
+    rfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots, size_t ip_=R0)
+      : l1(l1_), ido(ido_), ip(ip_), wa((((ido-1)/2+vl-1)/vl)*(ip-1)*2*vl), cs(R0 ? 0 : ip)
       {
+      const size_t R=rdx();
+      MR_assert((R0>0) || ((R&1) && (R>=3) && (R<=L)), "bad runtime radix");
       MR_assert((ido&1) || ((R&1)==0), "ido must be odd for odd radices");
       size_t N=R*l1*ido;
       size_t rfct = roots->size()/N;
@@ -1799,331 +1745,14 @@ template <size_t R, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R,Tf
           auto val = (*roots)[rfct*(j+1)*l1*(q+1)];
           wa[wi(q,j)] = val.r; wa[wi(q,j)+vl] = val.i;
           }
+      for (size_t m=0; m<cs.size(); ++m) cs[m] = (*roots)[rfct*l1*ido*m];
       }
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const { return wa.size()*sizeof(Tfs); }
+    virtual size_t footprint() const { return wa.size()*sizeof(Tfs)+cs.size()*sizeof(Tcs); }
 
-    friend rfftpass_impl<rfftpR<R,Tfs>,Tfs>;
-  };
-
-template <typename Tfs> class rfftpg: public rfftpass_impl<rfftpg<Tfs>,Tfs>
-  {
-  private:
-    size_t l1, ido;
-    size_t ip;
-    aligned_array<Tfs> wa, csarr;
-
-    template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
-      Tfd * DUCC0_RESTRICT ch, Tfd * /*buf*/, size_t /*nthreads*/) const
-      {
-      if constexpr(fwd)
-        {
-        size_t ipph=(ip+1)/2;
-        size_t idl1 = ido*l1;
-
-        auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tfd&
-          { return cc[a+ido*(b+ip*c)]; };
-        auto CH = [ch,this](size_t a, size_t b, size_t c) -> const Tfd&
-          { return ch[a+ido*(b+l1*c)]; };
-        auto C1 = [cc,this] (size_t a, size_t b, size_t c) -> Tfd&
-          { return cc[a+ido*(b+l1*c)]; };
-        auto C2 = [cc,idl1] (size_t a, size_t b) -> Tfd&
-          { return cc[a+idl1*b]; };
-        auto CH2 = [ch,idl1] (size_t a, size_t b) -> Tfd&
-          { return ch[a+idl1*b]; };
-
-        if (ido>1)
-          {
-          for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)              // 114
-            {
-            size_t is=(j-1)*(ido-1),
-                   is2=(jc-1)*(ido-1);
-            for (size_t k=0; k<l1; ++k)                            // 113
-              {
-              size_t idij=is;
-              size_t idij2=is2;
-              for (size_t i=1; i<=ido-2; i+=2)                      // 112
-                {
-                Tfd t1=C1(i,k,j ), t2=C1(i+1,k,j ),
-                    t3=C1(i,k,jc), t4=C1(i+1,k,jc);
-                Tfd x1=wa[idij]*t1 + wa[idij+1]*t2,
-                    x2=wa[idij]*t2 - wa[idij+1]*t1,
-                    x3=wa[idij2]*t3 + wa[idij2+1]*t4,
-                    x4=wa[idij2]*t4 - wa[idij2+1]*t3;
-                PM(C1(i,k,j),C1(i+1,k,jc),x3,x1);
-                PM(C1(i+1,k,j),C1(i,k,jc),x2,x4);
-                idij+=2;
-                idij2+=2;
-                }
-              }
-            }
-          }
-
-        for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)                // 123
-          for (size_t k=0; k<l1; ++k)                              // 122
-            MPINPLACE(C1(0,k,jc), C1(0,k,j));
-
-      //everything in C
-      //memset(ch,0,ip*l1*ido*sizeof(double));
-
-        for (size_t l=1,lc=ip-1; l<ipph; ++l,--lc)                 // 127
-          {
-          for (size_t ik=0; ik<idl1; ++ik)                         // 124
-            {
-            CH2(ik,l ) = C2(ik,0)+csarr[2*l]*C2(ik,1)+csarr[4*l]*C2(ik,2);
-            CH2(ik,lc) = csarr[2*l+1]*C2(ik,ip-1)+csarr[4*l+1]*C2(ik,ip-2);
-            }
-          size_t iang = 2*l;
-          size_t j=3, jc=ip-3;
-          for (; j<ipph-3; j+=4,jc-=4)              // 126
-            {
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar1=csarr[2*iang], ai1=csarr[2*iang+1];
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar2=csarr[2*iang], ai2=csarr[2*iang+1];
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar3=csarr[2*iang], ai3=csarr[2*iang+1];
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar4=csarr[2*iang], ai4=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)                       // 125
-              {
-              CH2(ik,l ) += ar1*C2(ik,j )+ar2*C2(ik,j +1)
-                           +ar3*C2(ik,j +2)+ar4*C2(ik,j +3);
-              CH2(ik,lc) += ai1*C2(ik,jc)+ai2*C2(ik,jc-1)
-                           +ai3*C2(ik,jc-2)+ai4*C2(ik,jc-3);
-              }
-            }
-          for (; j<ipph-1; j+=2,jc-=2)              // 126
-            {
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar1=csarr[2*iang], ai1=csarr[2*iang+1];
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar2=csarr[2*iang], ai2=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)                       // 125
-              {
-              CH2(ik,l ) += ar1*C2(ik,j )+ar2*C2(ik,j +1);
-              CH2(ik,lc) += ai1*C2(ik,jc)+ai2*C2(ik,jc-1);
-              }
-            }
-          for (; j<ipph; ++j,--jc)              // 126
-            {
-            iang+=l; if (iang>=ip) iang-=ip;
-            Tfs ar=csarr[2*iang], ai=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)                       // 125
-              {
-              CH2(ik,l ) += ar*C2(ik,j );
-              CH2(ik,lc) += ai*C2(ik,jc);
-              }
-            }
-          }
-        for (size_t ik=0; ik<idl1; ++ik)                         // 101
-          CH2(ik,0) = C2(ik,0);
-        for (size_t j=1; j<ipph; ++j)                              // 129
-          for (size_t ik=0; ik<idl1; ++ik)                         // 128
-            CH2(ik,0) += C2(ik,j);
-
-      // everything in CH at this point!
-      //memset(cc,0,ip*l1*ido*sizeof(double));
-
-        for (size_t k=0; k<l1; ++k)                                // 131
-          for (size_t i=0; i<ido; ++i)                             // 130
-            CC(i,0,k) = CH(i,k,0);
-
-        for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)                // 137
-          {
-          size_t j2=2*j-1;
-          for (size_t k=0; k<l1; ++k)                              // 136
-            {
-            CC(ido-1,j2,k) = CH(0,k,j);
-            CC(0,j2+1,k) = CH(0,k,jc);
-            }
-          }
-
-        if (ido==1) return cc;
-
-        for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)                // 140
-          {
-          size_t j2=2*j-1;
-          for(size_t k=0; k<l1; ++k)                               // 139
-            for(size_t i=1, ic=ido-i-2; i<=ido-2; i+=2, ic-=2)      // 138
-              {
-              CC(i   ,j2+1,k) = CH(i  ,k,j )+CH(i  ,k,jc);
-              CC(ic  ,j2  ,k) = CH(i  ,k,j )-CH(i  ,k,jc);
-              CC(i+1 ,j2+1,k) = CH(i+1,k,j )+CH(i+1,k,jc);
-              CC(ic+1,j2  ,k) = CH(i+1,k,jc)-CH(i+1,k,j );
-              }
-          }
-        return cc;
-        }
-      else
-        {
-        size_t ipph=(ip+1)/ 2;
-        size_t idl1 = ido*l1;
-
-        auto CC = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
-          { return cc[a+ido*(b+ip*c)]; };
-        auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tfd&
-          { return ch[a+ido*(b+l1*c)]; };
-        auto C1 = [cc,this](size_t a, size_t b, size_t c) -> const Tfd&
-          { return cc[a+ido*(b+l1*c)]; };
-        auto C2 = [cc,idl1](size_t a, size_t b) -> Tfd&
-          { return cc[a+idl1*b]; };
-        auto CH2 = [ch,idl1](size_t a, size_t b) -> Tfd&
-          { return ch[a+idl1*b]; };
-
-        for (size_t k=0; k<l1; ++k)        // 102
-          for (size_t i=0; i<ido; ++i)     // 101
-            CH(i,k,0) = CC(i,0,k);
-        for (size_t j=1, jc=ip-1; j<ipph; ++j, --jc)   // 108
-          {
-          size_t j2=2*j-1;
-          for (size_t k=0; k<l1; ++k)
-            {
-            CH(0,k,j ) = Tfs(2)*CC(ido-1,j2,k);
-            CH(0,k,jc) = Tfs(2)*CC(0,j2+1,k);
-            }
-          }
-
-        if (ido!=1)
-          {
-          for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)   // 111
-            {
-            size_t j2=2*j-1;
-            for (size_t k=0; k<l1; ++k)
-              for (size_t i=1, ic=ido-i-2; i<=ido-2; i+=2, ic-=2)      // 109
-                {
-                CH(i  ,k,j ) = CC(i  ,j2+1,k)+CC(ic  ,j2,k);
-                CH(i  ,k,jc) = CC(i  ,j2+1,k)-CC(ic  ,j2,k);
-                CH(i+1,k,j ) = CC(i+1,j2+1,k)-CC(ic+1,j2,k);
-                CH(i+1,k,jc) = CC(i+1,j2+1,k)+CC(ic+1,j2,k);
-                }
-            }
-          }
-        for (size_t l=1,lc=ip-1; l<ipph; ++l,--lc)
-          {
-          for (size_t ik=0; ik<idl1; ++ik)
-            {
-            C2(ik,l ) = CH2(ik,0)+csarr[2*l]*CH2(ik,1)+csarr[4*l]*CH2(ik,2);
-            C2(ik,lc) = csarr[2*l+1]*CH2(ik,ip-1)+csarr[4*l+1]*CH2(ik,ip-2);
-            }
-          size_t iang=2*l;
-          size_t j=3,jc=ip-3;
-          for(; j<ipph-3; j+=4,jc-=4)
-            {
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar1=csarr[2*iang], ai1=csarr[2*iang+1];
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar2=csarr[2*iang], ai2=csarr[2*iang+1];
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar3=csarr[2*iang], ai3=csarr[2*iang+1];
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar4=csarr[2*iang], ai4=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)
-              {
-              C2(ik,l ) += ar1*CH2(ik,j )+ar2*CH2(ik,j +1)
-                          +ar3*CH2(ik,j +2)+ar4*CH2(ik,j +3);
-              C2(ik,lc) += ai1*CH2(ik,jc)+ai2*CH2(ik,jc-1)
-                          +ai3*CH2(ik,jc-2)+ai4*CH2(ik,jc-3);
-              }
-            }
-          for(; j<ipph-1; j+=2,jc-=2)
-            {
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar1=csarr[2*iang], ai1=csarr[2*iang+1];
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs ar2=csarr[2*iang], ai2=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)
-              {
-              C2(ik,l ) += ar1*CH2(ik,j )+ar2*CH2(ik,j +1);
-              C2(ik,lc) += ai1*CH2(ik,jc)+ai2*CH2(ik,jc-1);
-              }
-            }
-          for(; j<ipph; ++j,--jc)
-            {
-            iang+=l; if(iang>ip) iang-=ip;
-            Tfs war=csarr[2*iang], wai=csarr[2*iang+1];
-            for (size_t ik=0; ik<idl1; ++ik)
-              {
-              C2(ik,l ) += war*CH2(ik,j );
-              C2(ik,lc) += wai*CH2(ik,jc);
-              }
-            }
-          }
-        for (size_t j=1; j<ipph; ++j)
-          for (size_t ik=0; ik<idl1; ++ik)
-            CH2(ik,0) += CH2(ik,j);
-        for (size_t j=1, jc=ip-1; j<ipph; ++j,--jc)   // 124
-          for (size_t k=0; k<l1; ++k)
-            PM(CH(0,k,jc),CH(0,k,j),C1(0,k,j),C1(0,k,jc));
-
-        if (ido==1) return ch;
-
-        for (size_t j=1, jc=ip-1; j<ipph; ++j, --jc)  // 127
-          for (size_t k=0; k<l1; ++k)
-            for (size_t i=1; i<=ido-2; i+=2)
-              {
-              CH(i  ,k,j ) = C1(i  ,k,j)-C1(i+1,k,jc);
-              CH(i  ,k,jc) = C1(i  ,k,j)+C1(i+1,k,jc);
-              CH(i+1,k,j ) = C1(i+1,k,j)+C1(i  ,k,jc);
-              CH(i+1,k,jc) = C1(i+1,k,j)-C1(i  ,k,jc);
-              }
-
-      // All in CH
-
-        for (size_t j=1; j<ip; ++j)
-          {
-          size_t is = (j-1)*(ido-1);
-          for (size_t k=0; k<l1; ++k)
-            {
-            size_t idij = is;
-            for (size_t i=1; i<=ido-2; i+=2)
-              {
-              Tfd t1=CH(i,k,j), t2=CH(i+1,k,j);
-              CH(i  ,k,j) = wa[idij]*t1-wa[idij+1]*t2;
-              CH(i+1,k,j) = wa[idij]*t2+wa[idij+1]*t1;
-              idij+=2;
-              }
-            }
-          }
-        return ch;
-        }
-      }
-
-  public:
-    rfftpg(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), ip(ip_), wa((ip-1)*(ido-1)), csarr(2*ip)
-      {
-      MR_assert(ido&1, "ido must be odd");
-      size_t N=ip*l1*ido;
-      size_t rfct = roots->size()/N;
-      MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t j=1; j<ip; ++j)
-        for (size_t i=1; i<=(ido-1)/2; ++i)
-          {
-          auto val = (*roots)[rfct*j*l1*i];
-          wa[(j-1)*(ido-1)+2*i-2] = val.r;
-          wa[(j-1)*(ido-1)+2*i-1] = val.i;
-          }
-      csarr[0] = Tfs(1);
-      csarr[1] = Tfs(0);
-      for (size_t i=2, ic=2*ip-2; i<=ic; i+=2, ic-=2)
-        {
-        auto val = (*roots)[i/2*rfct*(N/ip)];
-        csarr[i   ] = val.r;
-        csarr[i +1] = val.i;
-        csarr[ic  ] = val.r;
-        csarr[ic+1] = -val.i;
-        }
-      }
-
-    virtual size_t bufsize() const { return 0; }
-    virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const
-      { return (wa.size()+csarr.size())*sizeof(Tfs); }
-
-    friend rfftpass_impl<rfftpg<Tfs>,Tfs>;
+    friend rfftpass_impl<rfftpR<R0,Tfs>,Tfs>;
   };
 
 template <typename Tfs> class rfftpblue: public rfftpass_impl<rfftpblue<Tfs>,Tfs>
@@ -2517,7 +2146,7 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
         return make_shared<rfftpR<13,Tfs>>(l1, ido, roots);
       default:
         if (ip<135)
-          return make_shared<rfftpg<Tfs>>(l1, ido, ip, roots);
+          return make_shared<rfftpR<0,Tfs>>(l1, ido, roots, ip);
         else
           return make_shared<rfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
       }
