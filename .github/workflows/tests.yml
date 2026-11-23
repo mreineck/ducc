@@ -92,7 +92,9 @@ jobs:
         run: python -c "import ducc0; assert ducc0.__wrapper__ == '${{ matrix.binding }}'; print(ducc0.__wrapper__)"
 
       - name: Run tests
-        run: python -m pytest python/test -x
+        run: |
+          gcc -v
+          python -m pytest python/test -x
 
   test-multiarch:
     if: inputs.optimization == 'multiarch' || inputs.optimization == 'all'
