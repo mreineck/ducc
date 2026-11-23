@@ -193,6 +193,14 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
 #else
 #define DUCC0_LAMBDA_INLINE
 #endif
+/* GCC 14.2 (manylinux_2_28 image, compiler of the official wheels) crashes
+   on some static_for lambdas with -Wall -Wextra ("internal compiler error:
+   in cxx_eval_indirect_ref"); for it, the code avoids them. */
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__==14) && (__GNUC_MINOR__==2)
+#define DUCC0_GCC142_ICE 1
+#else
+#define DUCC0_GCC142_ICE 0
+#endif
 template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f, index_sequence<I...>)
   { (f(integral_constant<size_t,I>()), ...); }
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
@@ -1501,6 +1509,17 @@ MR_fail("must not get here");
 
 } // unnamed namespace
 
+#if DUCC0_GCC142_ICE
+// SIMD single-transform plan with vl lanes, if it exists and pays for length ip
+template<size_t vl, typename Tfs> Tcpass<Tfs> make_soa(size_t ip, const Troots<Tfs> &roots)
+  {
+  if constexpr ((vl>=2) && simd_exists<Tfs,vl>)
+    if ((ip%vl==0) && (ip>=max<size_t>(vl*vl,16)))  // below 16 the plain codelet is faster
+      return make_shared<cfftp_soa<vl,Tfs>>(ip, roots);
+  return {};
+  }
+#endif
+
 template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   size_t ido, size_t ip, const Troots<Tfs> &roots, bool vectorize)
   {
@@ -1508,8 +1527,14 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   // do we have an 1D vectorizable FFT?
   if (vectorize && (l1==1) && (ido==1))
     {
+#if DUCC0_GCC142_ICE  // the lambda below crashes GCC 14.2
+    constexpr size_t vl = fft1d_simdlen<Tfs>;  // try the full SIMD width first
+    if (auto res = make_soa<vl,Tfs>(ip, roots)) return res;
+    if (auto res = make_soa<vl/2,Tfs>(ip, roots)) return res;
+    if (auto res = make_soa<vl/4,Tfs>(ip, roots)) return res;
+#else
     Tcpass<Tfs> res;
-    static_for<3>([&](auto s) DUCC0_LAMBDA_INLINE
+    static_for<3>([&](auto s) DUCC0_LAMBDA_INLINE  // try the full SIMD width first
       {
       constexpr size_t vl = fft1d_simdlen<Tfs> >> decltype(s)::value;
       if constexpr ((vl>=2) && simd_exists<Tfs,vl>)
@@ -1517,6 +1542,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
           res = make_shared<cfftp_soa<vl,Tfs>>(ip, roots);
       });
     if (res) return res;
+#endif
     }
 
   if (ip==1) return make_shared<cfftp1<Tfs>>();
