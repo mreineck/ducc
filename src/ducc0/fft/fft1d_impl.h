@@ -339,8 +339,11 @@ constexpr size_t sh_even(size_t i) { return 2*i; }
 constexpr size_t sh_odd(size_t i) { return 2*i+1; }
 template<size_t n> constexpr size_t sh_zip_lo(size_t i) { return (i&1) ? n+i/2 : i/2; }
 template<size_t n> constexpr size_t sh_zip_hi(size_t i) { return (i&1) ? n+n/2+i/2 : n/2+i/2; }
+template<size_t n> constexpr size_t sh_rev(size_t i) { return n-1-i; }
 template<size_t b, size_t n> constexpr size_t sh_tr_lo(size_t p) { return (p&b) ? p-b+n : p; }
 template<size_t b, size_t n> constexpr size_t sh_tr_hi(size_t p) { return (p&b) ? p+n : p+b; }
+template<size_t J, size_t M, size_t R, size_t n> constexpr size_t sh_gather(size_t t)
+  { return ((J+R*t)/n==M) ? n+(J+R*t)%n : t; }
 // vlen consecutive complex numbers in memory <-> one SIMD complex number
 template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE Cmplx<Tfv> vload(const Cmplx<Tfs> *p)
   {
@@ -355,6 +358,22 @@ template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vstore(const Cmplx
   auto q = reinterpret_cast<Tfs *>(p);
   shuf<sh_zip_lo<vlen>>(x.r, x.i).copy_to(q, element_aligned_tag());
   shuf<sh_zip_hi<vlen>>(x.r, x.i).copy_to(q+vlen, element_aligned_tag());
+  }
+// the R x vl block of reals at p, transposed: x[j] lane t = p[j+R*t]
+template<size_t R, typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vgather(const Tfs *p, array<Tfv,R> &x)
+  {
+  constexpr size_t vl = Tfv::size();
+  array<Tfv,R> v;
+  static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE{ v[m] = Tfv(p+m*vl, element_aligned_tag()); });
+  static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
+    {
+    constexpr size_t J = decltype(j)::value;
+    static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE  // collect the lanes lying in v[m]
+      {
+      constexpr size_t M = decltype(m)::value;
+      x[j] = shuf<sh_gather<J,M,R,vl>>(M==0 ? v[0] : x[j], v[m]);
+      });
+    });
   }
 // transpose a vlen x vlen block of numbers held in vlen SIMD values (real or complex)
 template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Tfv,vlen> &v)
@@ -385,57 +404,181 @@ template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Cmp
 
 /* Radix-R pass, with the DFT of length R generated at compile time. Indexing
    as in FFTPACK: input cc[i+ido*(j+R*k)], output ch[i+ido*(k+l1*j)], where
-   output j>0 is multiplied by the twiddle w^(l1*i*j). */
+   output j>0 is multiplied by the twiddle w^(l1*i*j). exec works on
+   interleaved complex data of any type, exec_planar on real and imaginary
+   planes of scalar data, SIMD over vl consecutive butterflies (consecutive
+   in memory, so without shuffles; the last pass, ido==1, gathers). */
 template <size_t R, typename Tfs> class cfftpR: public cfftpass<Tfs>
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>;
     size_t l1, ido;
-    aligned_array<Tcs> wa;  // w^(l1*i*(j+1)) at wa[(R-1)*(i-1)+j], i>0
+    /* twiddles w^(l1*i*(j+1)), i<ido, j<R-1, in blocks of vl values of i:
+       real parts at w[wi(i,j)], imaginary parts vl entries later. The 2(R-1)
+       twiddles of one i then lie close together, and the vl consecutive ones
+       of one j load as a vector. */
+    aligned_array<Tfs> w;
+    size_t wi(size_t i, size_t j) const { return ((i/vl)*(R-1)+j)*2*vl + i%vl; }
 
-    /* not inlined since GCC seem to drop the restrict qualifiers; ultimately
-    the loop over i on scalar data remains unvectorized sometimes (seen for
-    radix 5) */
-    template<bool fwd, typename Tcd> DUCC0_NOINLINE Tcd *exec_ (const Tcd * DUCC0_RESTRICT cc,
-      Tcd * DUCC0_RESTRICT ch, Tcd * /*buf*/, size_t /*nthreads*/) const
+    /* not inlined since GCC seem to drop the restrict qualifiers. Scalar data
+       does not rely on the compiler's vectorization of the loop over i (it
+       failed for radix 5 and for the blocked twiddles), but takes the
+       explicit SIMD path of the planar passes with interleaved data. */
+    template<bool fwd, typename Tcd> DUCC0_NOINLINE Tcd *exec_ (Tcd *cc, Tcd *ch,
+      Tcd * /*buf*/, size_t /*nthreads*/) const
       {
-      const Tcs * DUCC0_RESTRICT w = wa.data();  // tells the compiler: ch does not alias wa
+      if constexpr (is_same_v<Tcd,Tcs>)  // scalar data: explicit SIMD over i, as for planes
+        {
+        exec_planar_<fwd,true,true>(reinterpret_cast<const Tfs *>(cc), reinterpret_cast<Tfs *>(ch));
+        return ch;
+        }
+      else
+        {
+        if (cc==ch)  // SIMD data, requested by the caller: in place, only possible for l1==1
+          {
+          MR_assert(l1==1, "in-place pass needs l1==1");
+          for (size_t i=0; i<ido; ++i)  // every butterfly reads and writes the same places
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            cc[i]=x[0];
+            const Tfs *wp = w.data()+wi(i,0);
+            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+              { cc[i+ido*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
+            }
+          return cc;
+          }
+        const size_t so = ido*l1;
+        for (size_t k=0; k<l1; ++k)
+          {
+          // few base pointers: otherwise the compiler runs out of registers for them
+          const Tcd * DUCC0_RESTRICT cck = cc+ido*R*k;
+          Tcd * DUCC0_RESTRICT chk = ch+ido*k;
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ chk[so*j]=x[j]; });
+            }
+          for (size_t i=1; i<ido; ++i)
+            {
+            array<Tcd,R> x;
+            static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cck[i+ido*j]; });
+            dft<R,fwd,Tfs>(x);
+            chk[i]=x[0];
+            const Tfs *wp = w.data()+wi(i,0);
+            static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+              { chk[i+so*(j+1)]=x[j+1].template special_mul<fwd>(Tcs(wp[2*vl*j], wp[2*vl*j+vl])); });
+            }
+          }
+        return ch;
+        }
+      }
+
+    // one (V=Tfs) or vl consecutive (V=SIMD) complex values at idx, from/to
+    // planes of N values (imaginary at p+N) or interleaved complex numbers (il)
+    template<typename V, bool il> DUCC0_ALWAYS_INLINE static Cmplx<V> ld(const Tfs *p, size_t N, size_t idx)
+      {
+      if constexpr (il)
+        {
+        auto c = reinterpret_cast<const Tcs *>(p);
+        if constexpr (is_same_v<V,Tfs>) return c[idx]; else return vload<V>(c+idx);
+        }
+      else if constexpr (is_same_v<V,Tfs>) return Cmplx<V>(p[idx], p[N+idx]);
+      else return Cmplx<V>(V(p+idx, element_aligned_tag()), V(p+N+idx, element_aligned_tag()));
+      }
+    template<typename V, bool il> DUCC0_ALWAYS_INLINE static void st(const Cmplx<V> &x, Tfs *p, size_t N, size_t idx)
+      {
+      if constexpr (il)
+        {
+        auto c = reinterpret_cast<Tcs *>(p);
+        if constexpr (is_same_v<V,Tfs>) c[idx]=x; else vstore(x, c+idx);
+        }
+      else if constexpr (is_same_v<V,Tfs>) { p[idx]=x.r; p[N+idx]=x.i; }
+      else { x.r.copy_to(p+idx, element_aligned_tag()); x.i.copy_to(p+N+idx, element_aligned_tag()); }
+      }
+    // one butterfly (V=Tfs) or vl consecutive ones (V=SIMD) at index i of transform k
+    template<bool fwd, typename V, bool iin, bool iout> DUCC0_ALWAYS_INLINE void pstep(size_t i, size_t k,
+      const Tfs *in, Tfs *out) const
+      {
+      const size_t N=R*l1*ido;
+      array<Cmplx<V>,R> x;
+      static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=ld<V,iin>(in, N, i+ido*(j+R*k)); });
+      dft<R,fwd,Tfs>(x);
+      st<V,iout>(x[0], out, N, i+ido*k);
+      static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
+        { st<V,iout>(x[j+1].template special_mul<fwd>(ld<V,false>(w.data(), vl, wi(i,j))), out, N, i+ido*(k+l1*(j+1))); });
+      }
+    template<bool fwd, bool iin, bool iout> void exec_planar_(const Tfs *in, Tfs *out) const
+      {
+      const size_t N=R*l1*ido;
+      // full SIMD width first, then narrower vectors for the rest, then scalars
+      if constexpr (!iin)
+        if (ido==1)  // inputs consecutive in j: transpose blocks of v transforms
+          {
+          size_t k=0;
+          static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE
+            {
+            constexpr size_t v = vl>>decltype(s)::value;
+            if constexpr ((v>=2) && simd_exists<Tfs,v>)
+              {
+              using Tfv = typename simd_select<Tfs,v>::type;
+              for (; k+v<=l1; k+=v)
+                {
+                array<Tfv,R> xr, xi;
+                vgather<R>(in+R*k, xr);
+                vgather<R>(in+N+R*k, xi);
+                array<Cmplx<Tfv>,R> x;
+                static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=Cmplx<Tfv>(xr[j], xi[j]); });
+                dft<R,fwd,Tfs>(x);
+                static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ st<Tfv,iout>(x[j], out, N, k+l1*j); });
+                }
+              }
+            });
+          for (; k<l1; ++k) pstep<fwd,Tfs,iin,iout>(0, k, in, out);
+          return;
+          }
       for (size_t k=0; k<l1; ++k)
         {
+        size_t i=0;
+        static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE
           {
-          array<Tcd,R> x;
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[ido*(j+R*k)]; });
-          dft<R,fwd,Tfs>(x);
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ ch[ido*(k+l1*j)]=x[j]; });
-          }
-        for (size_t i=1; i<ido; ++i)
-          {
-          array<Tcd,R> x;
-          static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE{ x[j]=cc[i+ido*(j+R*k)]; });
-          dft<R,fwd,Tfs>(x);
-          ch[i+ido*k]=x[0];
-          static_for<R-1>([&](auto j) DUCC0_LAMBDA_INLINE
-            { ch[i+ido*(k+l1*(j+1))]=x[j+1].template special_mul<fwd>(w[(R-1)*(i-1)+j]); });
-          }
+          constexpr size_t v = vl>>decltype(s)::value;
+          if constexpr ((v>=2) && simd_exists<Tfs,v>)
+            for (; i+v<=ido; i+=v) pstep<fwd,typename simd_select<Tfs,v>::type,iin,iout>(i, k, in, out);
+          });
+        for (; i<ido; ++i) pstep<fwd,Tfs,iin,iout>(i, k, in, out);
         }
-      return ch;
       }
 
   public:
     cfftpR(size_t l1_, size_t ido_, const Troots<Tfs> &roots)
-      : l1(l1_), ido(ido_), wa((R-1)*(ido-1))
+      : l1(l1_), ido(ido_), w(((ido+vl-1)/vl)*(R-1)*2*vl)
       {
       size_t N=R*l1*ido;
       size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
-      for (size_t i=1; i<ido; ++i)
+      for (size_t i=0; i<ido; ++i)
         for (size_t j=0; j<R-1; ++j)
-          wa[(R-1)*(i-1)+j] = (*roots)[rfct*(j+1)*l1*i];
+          {
+          auto v = (*roots)[rfct*(j+1)*l1*i];
+          w[wi(i,j)] = v.r; w[wi(i,j)+vl] = v.i;
+          }
       }
 
     virtual size_t bufsize() const { return 0; }
     virtual bool needs_copy() const { return true; }
-    virtual size_t footprint() const { return wa.size()*sizeof(Tcs); }
+    virtual size_t footprint() const { return w.size()*sizeof(Tfs); }
+    virtual bool planar() const { return true; }
+    virtual void exec_planar(const Tfs *in, Tfs *out, bool fwd, bool iin, bool iout) const
+      {
+      MR_assert(!(iin&&iout), "cannot convert input and output in one pass");
+      if (iin) fwd ? exec_planar_<true,true,false>(in,out) : exec_planar_<false,true,false>(in,out);
+      else if (iout) fwd ? exec_planar_<true,false,true>(in,out) : exec_planar_<false,false,true>(in,out);
+      else fwd ? exec_planar_<true,false,false>(in,out) : exec_planar_<false,false,false>(in,out);
+      }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -459,7 +602,11 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
       {
       auto xbuf = reinterpret_cast<uintptr_t>(sbuf);
       xbuf = (xbuf+alignof(Tcv)-1) & ~uintptr_t(alignof(Tcv)-1);
-      Tcv *cc2 = reinterpret_cast<Tcv *>(xbuf), *ch2 = cc2+M, *buf2 = ch2+M;
+      Tcv *cc2 = reinterpret_cast<Tcv *>(xbuf);
+      cc2 += skew(cc, cc2);
+      Tcv *ch2 = cc2+M;
+      ch2 += skew(cc2, ch2);
+      Tcv *buf2 = ch2+M;
       for (size_t i=0; i<M; ++i)
         cc2[i] = vload<Tfv>(cc+vlen*i);
       static const auto ticv = tidx<Tcv *>();
@@ -491,7 +638,7 @@ template <size_t vlen, typename Tfs> class cfftp_soa: public cfftpass<Tfs>
           auto w = (*roots)[rfct*((l*k)%N)];
           tw[k].r[l] = w.r; tw[k].i[l] = w.i;
           }
-      bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen;  // in units of Tcs
+      bufsz = (2*M+mpass->bufsize())*vlen + 2*vlen + 2*4096/sizeof(Tcs);  // in units of Tcs
       }
     virtual size_t bufsize() const { return bufsz; }
     virtual bool needs_copy() const { return false; }
@@ -742,7 +889,9 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
   public:
     cfftpblue(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots,
       bool vectorize=false)
-      : l1(l1_), ido(ido_), ip(ip_), ip2(util1d::good_size_cmplx(ip*2-1)),
+      : l1(l1_), ido(ido_), ip(ip_),
+        // a vectorized sub-transform wants a length divisible by 16 (cfftp_soa)
+        ip2(vectorize ? util1d::good_size_cmplx(ip*2-1, 16) : util1d::good_size_cmplx(ip*2-1)),
         subplan(cfftpass<Tfs>::make_pass(ip2, vectorize)), wa((ip-1)*(ido-1)),
         bk(ip), bkf(ip2/2+1)
       {
@@ -793,6 +942,108 @@ template <typename Tfs> class cfftpblue: public cfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
+/* Rader's algorithm: a DFT of prime length p is a cyclic convolution of
+   length p-1 (input and output indices permuted by the powers of a primitive
+   root g modulo p), which is computed with FFTs of length p-1. */
+template <typename Tfs> class cfftprader: public cfftpass<Tfs>
+  {
+  private:
+    using typename cfftpass<Tfs>::Tcs;
+
+    const size_t l1, ido, ip;
+    const Tcpass<Tfs> subplan;
+    aligned_array<Tcs> wa, cf;  // twiddles; FFT of the convolution kernel, scaled by 1/(ip-1)
+    aligned_array<size_t> gin, gout;  // gin[r]=g^r mod ip, gout[q]=g^-q mod ip
+    size_t bufsz;
+
+    auto WA(size_t x, size_t i) const
+      { return wa[i-1+x*(ido-1)]; }
+
+    template<bool fwd, typename Tcd> Tcd *exec_
+      (Tcd * DUCC0_RESTRICT cc, Tcd * DUCC0_RESTRICT ch,
+       Tcd * DUCC0_RESTRICT buf, size_t nthreads) const
+      {
+      static const auto ti=tidx<Tcd *>();
+      const size_t n = ip-1;
+      Tcd *akf = buf;
+      Tcd *akf2 = subplan->needs_copy() ? (buf+n) : akf;
+      Tcd *subbuf = akf2+n;
+
+      auto CH = [ch,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return ch[a+ido*(b+l1*c)]; };
+      auto CC = [cc,this](size_t a, size_t b, size_t c) -> Tcd&
+        { return cc[a+ido*(b+ip*c)]; };
+
+      for (size_t k=0; k<l1; ++k)
+        for (size_t i=0; i<ido; ++i)
+          {
+          auto x0 = CC(i,0,k);
+          for (size_t r=0; r<n; ++r)
+            akf[r] = CC(i,gin[r],k);
+          auto res = static_cast<Tcd *>(subplan->exec(ti, akf, akf2, subbuf, fwd, nthreads));
+          auto X0 = x0+res[0];  // X[0] = x[0] + sum of the others
+          for (size_t m=0; m<n; ++m)
+            res[m] = res[m].template special_mul<!fwd>(cf[m]);
+          res = static_cast<Tcd *>(subplan->exec(ti, res, (res==akf) ? akf2 : akf, subbuf, !fwd, nthreads));
+          auto out = [&](size_t m) -> Tcd& { return (l1>1) ? CH(i,k,m) : CC(i,m,0); };
+          out(0) = X0;
+          if (i==0)
+            for (size_t q=0; q<n; ++q)
+              out(gout[q]) = x0+res[q];
+          else
+            for (size_t q=0; q<n; ++q)
+              out(gout[q]) = (x0+res[q]).template special_mul<fwd>(WA(gout[q]-1,i));
+          }
+      return (l1>1) ? ch : cc;
+      }
+
+  public:
+    cfftprader(size_t l1_, size_t ido_, size_t ip_, const Troots<Tfs> &roots,
+      bool vectorize=false)
+      : l1(l1_), ido(ido_), ip(ip_),
+        subplan(cfftpass<Tfs>::make_pass(ip-1, vectorize)), wa((ip-1)*(ido-1)),
+        cf(ip-1), gin(ip-1), gout(ip-1)
+      {
+      const size_t N=ip*l1*ido, n=ip-1;
+      auto rfct = roots->size()/N;
+      MR_assert(roots->size()==N*rfct, "mismatch");
+      for (size_t j=1; j<ip; ++j)
+        for (size_t i=1; i<ido; ++i)
+          wa[(j-1)*(ido-1)+i-1] = (*roots)[rfct*j*l1*i];
+
+      size_t g=2;  // primitive root: smallest g whose powers run through all of 1..ip-1
+      for (;; ++g)
+        {
+        size_t x=g, cnt=1;
+        while (x!=1) { x=x*g%ip; ++cnt; }
+        if (cnt==n) break;
+        }
+      gin[0]=1;
+      for (size_t r=1; r<n; ++r) gin[r] = gin[r-1]*g%ip;
+      for (size_t r=0; r<n; ++r) gout[(n-r)%n] = gin[r];
+
+      /* kernel c[m] = exp(-2 pi i g^-m/ip); store its forward FFT divided by n */
+      auto rootsp = ((roots->size()%ip)==0) ?
+                    roots : make_shared<const UnityRoots<Tfs,Tcs>>(ip);
+      size_t rfctp = rootsp->size()/ip;
+      aligned_array<Tcs> c(n), c2(n), sbuf(subplan->bufsize());
+      for (size_t m=0; m<n; ++m)
+        c[m] = (*rootsp)[gout[m]*rfctp].conj()*(Tfs(1)/Tfs(n));
+      static const auto tics=tidx<Tcs *>();
+      auto res = static_cast<Tcs *>(subplan->exec(tics, c.data(), c2.data(), sbuf.data(), true));
+      for (size_t m=0; m<n; ++m) cf[m] = res[m];
+
+      bufsz = n*(1+subplan->needs_copy()) + subplan->bufsize();
+      }
+
+    virtual size_t bufsize() const { return bufsz; }
+    virtual bool needs_copy() const { return l1>1; }
+    virtual size_t footprint() const
+      { return subplan->footprint() + (wa.size()+cf.size())*sizeof(Tcs) + 2*gin.size()*sizeof(size_t); }
+
+    POCKETFFT_EXEC_DISPATCH
+  };
+
 template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
   {
   private:
@@ -803,7 +1054,7 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
     size_t ip;
     vector<Tcpass<Tfs>> passes;
     size_t bufsz;
-    bool need_cpy;
+    bool need_cpy, planar;  // planar: all passes can work on re/im planes
     size_t rfct;
     Troots<Tfs> myroots;
 
@@ -812,15 +1063,32 @@ template <typename Tfs> class cfft_multipass: public cfftpass<Tfs>
       Cmplx<T> *buf, size_t nthreads) const
       {
       using Tc = Cmplx<T>;
-      if ((l1==1) && (ido==1)) // no chance at vectorizing
+      if ((l1==1) && (ido==1)) // a single transform
         {
+        if constexpr (is_same_v<T,Tfs>)
+          if (planar)  // scalar data: run the passes on real and imaginary planes
+            {
+            // (the first pass reads interleaved input, the last writes interleaved output)
+            Tfs *pin=reinterpret_cast<Tfs *>(cc), *pout=reinterpret_cast<Tfs *>(ch);
+            for (size_t n=0; n<passes.size(); ++n)
+              {
+              passes[n]->exec_planar(pin, pout, fwd, n==0, n+1==passes.size());
+              swap(pin, pout);
+              }
+            return reinterpret_cast<Tc *>(pin);
+            }
         static const auto tic=tidx<Tc *>();
         Tc *p1=cc, *p2=ch;
+        // With an odd number of codelet passes the result would end up in ch;
+        // the first pass can run in place on SIMD data (requested by cc==ch),
+        // which is faster and leaves the result in cc.
+        bool first_inplace = planar && (passes.size()&1) && (passes.size()>1) && (!is_same_v<T,Tfs>);
         for(const auto &pass: passes)
           {
-          auto res = static_cast<Tc *>(pass->exec(tic, p1, p2, buf,
+          auto res = static_cast<Tc *>(pass->exec(tic, p1, first_inplace ? p1 : p2, buf,
             fwd, nthreads));
           if (res==p2) swap (p1,p2);
+          first_inplace = false;
           }
         return p1;
         }
@@ -1174,9 +1442,11 @@ MR_fail("must not get here");
       rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
 
-      // FIXME TBD
-// do we need the vectorize flag at all?
-      size_t lim = 10000; //vectorize ? 10000 : 10000;
+      // up to 8 MB of data all passes run over the whole array; beyond that
+      // the transform is split into two nested ones that fit the caches
+      // better (measured on a 16 MB L3: splitting smaller arrays was up to 3x
+      // slower, not splitting 13 MB and more up to 1.7x slower)
+      size_t lim = (size_t(1)<<23)/sizeof(Cmplx<Tfs>);
       if (ip<=lim)
         {
         auto factors = cfftpass<Tfs>::factorize(ip);
@@ -1201,10 +1471,12 @@ MR_fail("must not get here");
           l1l*=pkt;
           }
         }
+      planar = true;
       for (const auto &pass: passes)
         {
         bufsz = max(bufsz, pass->bufsize());
         need_cpy |= pass->needs_copy();
+        planar &= pass->planar();
         }
       if ((l1!=1)||(ido!=1))
         {
@@ -1268,10 +1540,17 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
       case 11:
         return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
       default:
-        if (ip<110)
+        /* Primes up to about 100 inside a composite length: the generic
+           O(ip^2) pass is fastest (it vectorizes along ido). A prime as the
+           whole transform, or a larger prime factor: convolution algorithms.
+           Rader needs FFTs of length ip-1; it wins when these need only
+           codelet passes and can use SIMD lanes (ip-1 divisible by 4),
+           otherwise Bluestein's padded power-of-two-like length is faster. */
+        if ((ip<110) && (l1*ido>1))
           return make_shared<cfftpg<Tfs>>(l1, ido, ip, roots);
-        else
-          return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
+        if (((ip-1)%4==0) && (util1d::prime_factors(ip-1).back()<=13))
+          return make_shared<cfftprader<Tfs>>(l1, ido, ip, roots, vectorize);
+        return make_shared<cfftpblue<Tfs>>(l1, ido, ip, roots, vectorize);
       }
     }
   else // more than one factor, need a multipass
@@ -2044,15 +2323,27 @@ template <typename Tfs> class rfft_multipass: public rfftpass<Tfs>
     POCKETFFT_EXEC_DISPATCH
   };
 
+/* Real transform of even length N via a complex transform of length N/2
+   and a pass that combines the outputs k and N/2-k with the twiddles
+   tw[k]=exp(-2*pi*i*k/N), k<=N/4. */
 template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
   {
   private:
+    using Tcs = Cmplx<Tfs>;
+    static constexpr size_t vl = fft1d_simdlen<Tfs>;
+    static constexpr bool havesimd = (vl>1) && simd_exists<Tfs,vl>;
     size_t N;
-    Troots<Tfs> roots;
-    size_t rfct;
     Tcpass<Tfs> pass;
-    size_t l1, ido;
-    static constexpr size_t ip=2;
+    aligned_array<Tcs> tw;
+
+    // vl complex values at p, optionally in reversed order
+    template<typename V> static Cmplx<V> ldv(const Tcs *p, bool rev)
+      {
+      auto x = vload<V>(p);
+      return rev ? Cmplx<V>(shuf<sh_rev<vl>>(x.r,x.r), shuf<sh_rev<vl>>(x.i,x.i)) : x;
+      }
+    template<typename V> static void stv(const Cmplx<V> &x, Tcs *p, bool rev)
+      { vstore(rev ? Cmplx<V>(shuf<sh_rev<vl>>(x.r,x.r), shuf<sh_rev<vl>>(x.i,x.i)) : x, p); }
 
     template<bool fwd, typename Tfd> Tfd *exec_ (Tfd * DUCC0_RESTRICT cc,
       Tfd * DUCC0_RESTRICT ch, Tfd * buf, size_t nthreads) const
@@ -2068,16 +2359,28 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
           ccc, cch, cbuf, true, nthreads));
         auto rres = (res==ccc) ? ch : cc;
         rres[0] = res[0].r+res[0].i;
-//FIXME: parallelize?
-        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+        size_t i=1, xi=N/2-1;
+        if constexpr (is_same_v<Tfd,Tfs> && havesimd)  // vl pairs (i, N/2-i) at a time
           {
-          auto xe = res[i]+res[xi].conj();
-          auto xo = Tcd(res[i].i+res[xi].i, res[xi].r-res[i].r)
-                  * (*roots)[rfct*i].conj();
-          rres[2*i-1] = Tfs(0.5)*(xe.r+xo.r);
-          rres[2*i] = Tfs(0.5)*(xe.i+xo.i);
-          rres[2*xi-1] = Tfs(0.5)*(xe.r-xo.r);
-          rres[2*xi] = Tfs(0.5)*(xo.i-xe.i);
+          using V = typename simd_select<Tfs,vl>::type;
+          for (; i+2*vl<=xi+2; i+=vl, xi-=vl)
+            {
+            auto a=ldv<V>(res+i, false), b=ldv<V>(res+xi+1-vl, true), t=ldv<V>(tw.data()+i, false);
+            V er=a.r+b.r, ei=a.i-b.i, dr=a.i+b.i, di=b.r-a.r;
+            V xr=dr*t.r-di*t.i, xi_=dr*t.i+di*t.r;
+            stv(Cmplx<V>(Tfs(0.5)*(er+xr), Tfs(0.5)*(ei+xi_)), reinterpret_cast<Tcs *>(rres+2*i-1), false);
+            stv(Cmplx<V>(Tfs(0.5)*(er-xr), Tfs(0.5)*(xi_-ei)), reinterpret_cast<Tcs *>(rres+2*(xi+1-vl)-1), true);
+            }
+          }
+        for (; i<=xi; ++i, --xi)
+          {
+          auto a=res[i], b=res[xi];
+          Tfd er=a.r+b.r, ei=a.i-b.i, dr=a.i+b.i, di=b.r-a.r;
+          Tfd xr=dr*tw[i].r-di*tw[i].i, xi_=dr*tw[i].i+di*tw[i].r;
+          rres[2*i-1] = Tfs(0.5)*(er+xr);
+          rres[2*i] = Tfs(0.5)*(ei+xi_);
+          rres[2*xi-1] = Tfs(0.5)*(er-xr);
+          rres[2*xi] = Tfs(0.5)*(xi_-ei);
           }
         rres[N-1] = res[0].r-res[0].i;
         return rres;
@@ -2085,15 +2388,27 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       else
         {
         cch[0] = Tcd(cc[0]+cc[N-1], cc[0]-cc[N-1]);
-//FIXME: parallelize?
-        for (size_t i=1, xi=N/2-1; i<=xi; ++i, --xi)
+        size_t i=1, xi=N/2-1;
+        if constexpr (is_same_v<Tfd,Tfs> && havesimd)
           {
-          Tcd t1 (cc[2*i-1], cc[2*i]);
-          Tcd t2 (cc[2*xi-1], -cc[2*xi]);
-          auto xe = t1+t2;
-          auto xo = (t1-t2)*(*roots)[rfct*i];
-          cch[i] = (xe + Tcd(-xo.i, xo.r));
-          cch[xi] = (xe.conj() + Tcd(xo.i, xo.r));
+          using V = typename simd_select<Tfs,vl>::type;
+          for (; i+2*vl<=xi+2; i+=vl, xi-=vl)
+            {
+            auto t1=ldv<V>(reinterpret_cast<const Tcs *>(cc+2*i-1), false),
+                 t2=ldv<V>(reinterpret_cast<const Tcs *>(cc+2*(xi+1-vl)-1), true), t=ldv<V>(tw.data()+i, false);
+            V er=t1.r+t2.r, ei=t1.i-t2.i, dr=t1.r-t2.r, di=t1.i+t2.i;
+            V xr=dr*t.r+di*t.i, xi_=di*t.r-dr*t.i;
+            stv(Cmplx<V>(er-xi_, ei+xr), cch+i, false);
+            stv(Cmplx<V>(er+xi_, xr-ei), cch+xi+1-vl, true);
+            }
+          }
+        for (; i<=xi; ++i, --xi)
+          {
+          Tfd t1r=cc[2*i-1], t1i=cc[2*i], t2r=cc[2*xi-1], t2i=-cc[2*xi];
+          Tfd er=t1r+t2r, ei=t1i+t2i, dr=t1r-t2r, di=t1i-t2i;
+          Tfd xr=dr*tw[i].r+di*tw[i].i, xi_=di*tw[i].r-dr*tw[i].i;  // (t1-t2)*conj(tw)
+          cch[i] = Tcd(er-xi_, ei+xr);
+          cch[xi] = Tcd(er+xi_, xr-ei);
           }
         auto res = static_cast<Tcd *>(pass->exec(ticd,
           cch, ccc, cbuf, false, nthreads));
@@ -2102,18 +2417,20 @@ template <typename Tfs> class rfftp_complexify: public rfftpass<Tfs>
       }
 
   public:
-    rfftp_complexify(size_t N_, const Troots<Tfs> &roots_, bool vectorize=false)
-      : N(N_), roots(roots_), pass(cfftpass<Tfs>::make_pass(N/2, vectorize))
+    rfftp_complexify(size_t N_, const Troots<Tfs> &roots, bool vectorize=false)
+      : N(N_), pass(cfftpass<Tfs>::make_pass(N/2, vectorize)), tw(N/4+1)
       {
-      rfct = roots->size()/N;
+      size_t rfct = roots->size()/N;
       MR_assert(roots->size()==N*rfct, "mismatch");
       MR_assert((N&1)==0, "N must be even");
+      for (size_t i=0; i<tw.size(); ++i)
+        tw[i] = (*roots)[rfct*i].conj();
       }
 
     virtual size_t bufsize() const { return 2*pass->bufsize(); }
     virtual bool needs_copy() const { return true; }
     virtual size_t footprint() const
-      { return pass->footprint() + roots->footprint(); }
+      { return pass->footprint() + tw.size()*sizeof(Tcs); }
 
     POCKETFFT_EXEC_DISPATCH
   };
@@ -2126,6 +2443,10 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   {
   MR_assert(ip>=1, "no zero-sized FFTs");
   if (ip==1) return make_shared<rfftp1<Tfs>>();
+  // a single transform of even length is fastest via the SIMD complex plan of
+  // half the length (measured: from 4 SIMD widths on; slower below)
+  if (vectorize && (l1==1) && (ido==1) && (ip>=4*fft1d_simdlen<Tfs>) && ((ip&1)==0))
+    return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
   if ((ip>1000) && ((ip&1)==0))  // use complex transform
     {
     bool doit = vectorize&&((ip&7)==0);  // vecpass might be beneficial

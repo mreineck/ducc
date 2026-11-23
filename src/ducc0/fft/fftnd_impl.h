@@ -216,8 +216,10 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   if (p) return p;
   }
   auto plan = make_shared<T>(length, vectorize);
-  size_t size_limit = size_t(1)<<20;  // crude limit, can be made more sophisticated
-  if (plan->footprint() > size_limit)  // too large for caching
+  // building a plan costs up to half a transform at every length (SIMD
+  // driver), so cache plans up to a total size
+  constexpr size_t budget = size_t(1)<<28;
+  if (plan->footprint() > budget)
     return plan;
   {
   LockGuard lock(mut);
@@ -225,13 +227,23 @@ template<typename T> shared_ptr<T> get_plan(size_t length, bool vectorize=false)
   auto p = find_in_cache();
   if (p) return p;
 
-  size_t lru = 0;
-  for (size_t i=1; i<nmax; ++i)
-    if (last_access[i] < last_access[lru])
-      lru = i;
-
-  cache[lru] = {length,vectorize, plan};
-  last_access[lru] = ++access_counter;
+  // evict least recently used plans until the new one fits
+  size_t total = plan->footprint(), nused = 0;
+  for (const auto &e: cache)
+    if (e.ptr) { total += e.ptr->footprint(); ++nused; }
+  while ((total>budget) || (nused==nmax))
+    {
+    size_t lru = nmax;
+    for (size_t i=0; i<nmax; ++i)
+      if (cache[i].ptr && ((lru==nmax) || (last_access[i]<last_access[lru])))
+        lru = i;
+    total -= cache[lru].ptr->footprint(); --nused;
+    cache[lru] = {0, 0, nullptr};
+    }
+  size_t slot = 0;
+  while (cache[slot].ptr) ++slot;
+  cache[slot] = {length, vectorize, plan};
+  last_access[slot] = ++access_counter;
   }
   return plan;
 #endif
