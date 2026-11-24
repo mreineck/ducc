@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.30.3)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -31,20 +31,10 @@ list(APPEND DEFS ${Python_DEFINITIONS})
 
 set(CXX_SOURCES
     src/ducc0/fft/fft_inst1.cc src/ducc0/fft/fft_inst2.cc
-    src/ducc0/nufft/spreadinterp_inst1.cc src/ducc0/nufft/spreadinterp_inst2.cc
-    src/ducc0/healpix/healpix_base.cc
-    src/ducc0/math/gl_integrator.cc
-    src/ducc0/math/gridding_kernel.cc
-    src/ducc0/math/wigner3j.cc src/ducc0/math/space_filling.cc
-    src/ducc0/wgridder/wgridder_inst1.cc
-    src/ducc0/wgridder/wgridder_inst2.cc src/ducc0/wgridder/wgridder_inst3.cc
     src/ducc0/infra/string_utils.cc
-    src/ducc0/infra/threading.cc src/ducc0/infra/mav.cc src/ducc0/sht/sht.cc)
+    src/ducc0/infra/threading.cc src/ducc0/infra/mav.cc)
 set(PYMOD_SOURCES
-    python/nufft_pymod.cc python/fft_pymod.cc python/sht_pymod.cc
-    python/misc_pymod.cc python/totalconvolve_pymod.cc python/wgridder_pymod.cc
-    python/misc_pymod.cc python/healpix_pymod.cc
-    python/pointingprovider_pymod.cc python/ducc.cc)
+    python/fft_pymod.cc python/ducc.cc)
 
 if (MULTIARCH)
     # If IPO is on, we risk leaking unknown instruction into lower ABI levels

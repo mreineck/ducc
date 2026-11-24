@@ -120,26 +120,38 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
         str[j].push_back(info[j].stride(i));
       }
   opt_shp_str(shp, str);
-  return make_tuple(std::move(shp), std::move(str));
+  return make_tuple(shp, str);
   }
 
 DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, size_t>
   multiprep(const vector<fmav_info> &info, const vector<size_t> &tsizes)
   {
   auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
   MR_assert(tsizes.size()==narr, "tsizes has wrong length");
-  auto [shp, str] = multiprep(info);
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    if (info[0].shape(i)!=1) // remove axes of length 1
+      {
+      shp.push_back(info[0].shape(i));
+      for (size_t j=0; j<narr; ++j)
+        str[j].push_back(info[j].stride(i));
+      }
+  opt_shp_str(shp, str);
 
   bool transpose=false;
   size_t ndim=shp.size();
-  if (ndim<2) return make_tuple(std::move(shp), std::move(str), 0, 0);
+  if (ndim<2) return make_tuple(shp, str, 0, 0);
 
   for (size_t j=0; j<narr; ++j)
     // No blocking necessary for zero strides on one of the two last axes
     if ((str[j][ndim-2]!=0) && (str[j][ndim-1]!=0)
      && (abs(str[j][ndim-2])<abs(str[j][ndim-1])))
       transpose=true;
-  if (!transpose) return make_tuple(std::move(shp), std::move(str), 0, 0);
+  if (!transpose) return make_tuple(shp, str, 0, 0);
   bool crit0=false, crit1=false;
   for (size_t j=0; j<narr; ++j)
     {
@@ -148,17 +160,35 @@ DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>, size_t, si
     if ((str0!=0) && (((tsizes[j]*str0)%4096)==0)) crit0=true;
     if ((str1!=0) && (((tsizes[j]*str1)%4096)==0)) crit1=true;
     }
-  if (crit0 && crit1) return make_tuple(std::move(shp), std::move(str), 4, 4);
+  if (crit0 && crit1) return make_tuple(shp, str, 4, 4);
   size_t load=0;
   for (size_t i=0; i<narr; ++i)
     {
     auto tmp = tsizes[i]*min<size_t>(abs(str[i][ndim-2]), abs(str[i][ndim-1]));
     load += min<size_t>(tmp, 64);
     }
-  if (crit0) return make_tuple(std::move(shp), std::move(str), 4, max<size_t>(8, 16384/(4*load)));
-  if (crit1) return make_tuple(std::move(shp), std::move(str), max<size_t>(8, 16384/(4*load)), 4);
+  if (crit0) return make_tuple(shp, str, 4, max<size_t>(8, 16384/(4*load)));
+  if (crit1) return make_tuple(shp, str, max<size_t>(8, 16384/(4*load)), 4);
   size_t blk = max<size_t>(8, size_t(sqrt(16384./load)));
-  return make_tuple(std::move(shp), std::move(str), blk, blk);
+  return make_tuple(shp, str, blk, blk);
+  }
+
+DUCC0_NOINLINE tuple<fmav_info::shape_t, vector<fmav_info::stride_t>>
+  multiprep_noopt(const vector<fmav_info> &info)
+  {
+  auto narr = info.size();
+  MR_assert(narr>=1, "need at least one array");
+  for (size_t i=1; i<narr; ++i)
+    MR_assert(info[i].shape()==info[0].shape(), "shape mismatch");
+  fmav_info::shape_t shp;
+  vector<fmav_info::stride_t> str(narr);
+  for (size_t i=0; i<info[0].ndim(); ++i)
+    {
+    shp.push_back(info[0].shape(i));
+    for (size_t j=0; j<narr; ++j)
+      str[j].push_back(info[j].stride(i));
+    }
+  return make_tuple(shp, str);
   }
 
 }}

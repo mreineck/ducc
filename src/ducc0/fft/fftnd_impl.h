@@ -452,7 +452,7 @@ template<typename T2, typename T, typename T0> class TmpStorage2
    back. Three cases: lines adjacent in memory (plain vector loads/stores),
    contiguous lines (vlen x vlen register transposes), general strides
    (lane by lane). */
-template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<Cmplx<typename Tsimd::value_type>> &src, Cmplx<Tsimd> * DUCC0_RESTRICT dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -483,7 +483,7 @@ template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const 
         dst[j0*vstr+i].i[j1] = ptr[it.iofs(j0*vlen+j1,i)].i;
         }
   }
-template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
+template <typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const Titer &it,
   const cfmav<typename Tsimd::value_type> &src, Tsimd * DUCC0_RESTRICT dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -529,7 +529,7 @@ template <typename Tbuf, typename Titer, typename T> DUCC0_NOINLINE void copy_in
   const cfmav<T> &src, Tbuf * DUCC0_RESTRICT dst)
   { copy_input(it, src, dst, 1, 0); }
 
-template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Cmplx<Tsimd> * DUCC0_RESTRICT src, const vfmav<Cmplx<typename Tsimd::value_type>> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();
@@ -557,7 +557,7 @@ template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const 
       for (size_t j1=0; j1<vlen; ++j1)
         ptr[it.oofs(j0*vlen+j1,i)].Set(src[j0*vstr+i].r[j1],src[j0*vstr+i].i[j1]);
   }
-template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
+template<typename Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const Titer &it,
   const Tsimd * DUCC0_RESTRICT src, const vfmav<typename Tsimd::value_type> &dst, size_t nvec, size_t vstr)
   {
   constexpr auto vlen=Tsimd::size();

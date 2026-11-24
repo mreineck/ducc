@@ -56,7 +56,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <exception>
 #include <utility>
-#include <latch>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -89,7 +88,31 @@ namespace DUCC0_NAMESPACE {
 
 namespace detail_threading {
 
-using std::latch;
+class latch
+  {
+    std::atomic<size_t> num_left_;
+    Mutex mut_;
+    CondVar completed_;
+    using lock_t = UniqueLock;
+
+  public:
+    explicit latch(size_t n): num_left_(n) {}
+
+    void count_down()
+      {
+      lock_t lock(mut_);
+      if (--num_left_)
+        return;
+      completed_.notify_all();
+      }
+
+    void wait()
+      {
+      lock_t lock(mut_);
+      completed_.wait(lock, [this]{ return is_ready(); });
+      }
+    bool is_ready() { return num_left_ == 0; }
+  };
 
 const CacheInfo &cache_info()
   {

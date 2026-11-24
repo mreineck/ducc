@@ -89,6 +89,36 @@ using namespace std;
 
 namespace {
 
+template<typename I> constexpr int trailing_zeros(I arg)
+  {
+  if (arg==0) return sizeof(I)<<3;
+  int res=0;
+  while ((arg&0xFFFF)==0) { res+=16; arg>>=16; }
+  if ((arg&0x00FF)==0) { res|=8; arg>>=8; }
+  if ((arg&0x000F)==0) { res|=4; arg>>=4; }
+  if ((arg&0x0003)==0) { res|=2; arg>>=2; }
+  if ((arg&0x0001)==0) { res|=1; }
+  return res;
+  }
+
+template<class To, class From>
+std::enable_if_t<
+    sizeof(To) == sizeof(From) &&
+    std::is_trivially_copyable_v<From> &&
+    std::is_trivially_copyable_v<To>,
+    To>
+// constexpr support needs compiler magic
+bit_cast(const From& src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v<To>,
+        "This implementation additionally requires "
+        "destination type to be trivially constructible");
+
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+}
+
 // Check for gcc versions affected by
 // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=124138
 // which breaks double precision real-valued transforms with AVX512.
@@ -217,6 +247,8 @@ template<typename D, typename Tfs, typename Base, template<typename> class W> cl
       }
   };
 template<typename D, typename Tfs> using cfftpass_impl = pass_impl<D, Tfs, cfftpass<Tfs>, Cmplx>;
+template<class T> struct type_identity { using type = T; };
+template< class T> using type_identity_t = typename type_identity<T>::type;
 template<typename D, typename Tfs> using rfftpass_impl = pass_impl<D, Tfs, rfftpass<Tfs>, type_identity_t>;
 
 struct ct_cs { long double c, s; };
@@ -224,7 +256,7 @@ struct ct_cs { long double c, s; };
    just double (e.g. on arm64 macOS), so the angle is reduced exactly, in
    integers, to the nearest quarter turn q, and the Taylor series of the rest
    (|x|<=pi/4) is summed from the smallest term: at most 1.6 ulp in double. */
-consteval ct_cs ct_sincos(size_t num, size_t den)
+constexpr ct_cs ct_sincos(size_t num, size_t den)
   {
   num %= den;
   size_t q = (8*num+den)/(2*den);
@@ -237,13 +269,13 @@ consteval ct_cs ct_sincos(size_t num, size_t den)
   const ct_cs res[4] = {{c,s}, {-s,c}, {-c,-s}, {s,-c}};
   return res[q&3];
   }
-consteval bool ct_isprime(size_t n)
+constexpr bool ct_isprime(size_t n)
   {
   for (size_t d=2; d*d<=n; ++d) if (n%d==0) return false;
   return n>1;
   }
 // first factor R1 of the split R=R1*R2 used by the codelet
-consteval size_t ct_split(size_t n)
+constexpr size_t ct_split(size_t n)
   {
   size_t res=1;  // largest divisor d>1 with d*d<=n
   for (size_t d=2; d*d<=n; ++d) if (n%d==0) res=d;
@@ -251,7 +283,7 @@ consteval size_t ct_split(size_t n)
   }
 template<size_t R, typename Tfs> struct SingletonTab
   { Tfs c[(R-1)/2][(R-1)/2], s[(R-1)/2][(R-1)/2]; };
-template<size_t R, typename Tfs> consteval SingletonTab<R,Tfs> ct_singleton()
+template<size_t R, typename Tfs> constexpr SingletonTab<R,Tfs> ct_singleton()
   {
   SingletonTab<R,Tfs> res{};
   for (size_t j=0; j<(R-1)/2; ++j)
@@ -462,7 +494,7 @@ template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE voi
 // transpose a vlen x vlen block of numbers held in vlen SIMD values (real or complex)
 template<size_t vlen, typename Tfv> DUCC0_ALWAYS_INLINE void transpose(array<Tfv,vlen> &v)
   {
-  static_for<countr_zero(vlen)>([&](auto sc) DUCC0_LAMBDA_INLINE
+  static_for<trailing_zeros(vlen)>([&](auto sc) DUCC0_LAMBDA_INLINE
     {
     constexpr size_t b = size_t(1)<<decltype(sc)::value;
     static_for<vlen>([&](auto ic) DUCC0_LAMBDA_INLINE

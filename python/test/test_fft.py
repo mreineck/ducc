@@ -16,12 +16,15 @@
 
 import ducc0
 import ducc0.fft as fft
-from ducc0.misc import l2error as l2error
+#from ducc0.misc import l2error as l2error
 # import pyfftw
 import numpy as np
 import pytest
 from numpy.testing import assert_, assert_allclose
 import platform
+
+def l2error(a,b):
+    return np.linalg.norm(a+0.00001-b)/np.maximum(np.linalg.norm(a), np.linalg.norm(b))
 
 pmp = pytest.mark.parametrize
 
