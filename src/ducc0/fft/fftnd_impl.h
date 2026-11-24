@@ -1,10 +1,11 @@
 /*
 This file is part of the ducc FFT library.
 
-Copyright (C) 2010-2025 Max-Planck-Society
+Copyright (C) 2010-2026 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
+Copyright (C) 2026 Philipp Arras
 
-Authors: Martin Reinecke, Peter Bell
+Authors: Martin Reinecke, Philipp Arras, Peter Bell
 */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
@@ -492,7 +493,7 @@ template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const 
     {
     for (size_t i=0; i<len; ++i)
       for (size_t j0=0; j0<nvec; ++j0)
-        dst[j0*vstr+i] = Tsimd(ptr+it.iofs_uni(j0*vlen,i), element_aligned_tag());
+        dst[j0*vstr+i] = loadu<Tsimd>(ptr+it.iofs_uni(j0*vlen,i));
     return;
     }
   size_t i=0;
@@ -501,7 +502,7 @@ template <simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_input(const 
       for (size_t j0=0; j0<nvec; ++j0)
         {
         array<Tsimd,vlen> v;
-        for (size_t j1=0; j1<vlen; ++j1) v[j1] = Tsimd(ptr+it.iofs(j0*vlen+j1,i), element_aligned_tag());
+        for (size_t j1=0; j1<vlen; ++j1) v[j1] = loadu<Tsimd>(ptr+it.iofs(j0*vlen+j1,i));
         transpose(v);
         for (size_t k=0; k<vlen; ++k) dst[j0*vstr+i+k] = v[k];
         }
@@ -566,7 +567,7 @@ template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const 
     {
     for (size_t i=0; i<len; ++i)
       for (size_t j0=0; j0<nvec; ++j0)
-        src[j0*vstr+i].copy_to(ptr+it.oofs_uni(j0*vlen,i), element_aligned_tag());
+        storeu(src[j0*vstr+i], ptr+it.oofs_uni(j0*vlen,i));
     return;
     }
   size_t i=0;
@@ -577,7 +578,7 @@ template<simd_like Tsimd, typename Titer> DUCC0_NOINLINE void copy_output(const 
         array<Tsimd,vlen> v;
         for (size_t k=0; k<vlen; ++k) v[k] = src[j0*vstr+i+k];
         transpose(v);
-        for (size_t j1=0; j1<vlen; ++j1) v[j1].copy_to(ptr+it.oofs(j0*vlen+j1,i), element_aligned_tag());
+        for (size_t j1=0; j1<vlen; ++j1) storeu(v[j1], ptr+it.oofs(j0*vlen+j1,i));
         }
   for (; i<len; ++i)
     for (size_t j0=0; j0<nvec; ++j0)

@@ -3,8 +3,9 @@ This file is part of the ducc FFT library
 
 Copyright (C) 2010-2026 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
+Copyright (C) 2026 Philipp Arras
 
-Authors: Martin Reinecke, Peter Bell
+Authors: Martin Reinecke, Philipp Arras, Peter Bell
 */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */

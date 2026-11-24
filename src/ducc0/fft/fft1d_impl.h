@@ -1,14 +1,15 @@
 /*
 This file is part of the ducc FFT library
 
-Copyright (C) 2010-2023 Max-Planck-Society
+Copyright (C) 2010-2026 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
+Copyright (C) 2026 Philipp Arras
 
 For the odd-sized DCT-IV transforms:
   Copyright (C) 2003, 2007-14 Matteo Frigo
   Copyright (C) 2003, 2007-14 Massachusetts Institute of Technology
 
-Authors: Martin Reinecke, Peter Bell
+Authors: Martin Reinecke, Philipp Arras, Peter Bell
 */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
@@ -387,15 +388,15 @@ template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE Cmplx<Tfv> vload(const 
   {
   constexpr size_t vlen = Tfv::size();
   auto q = reinterpret_cast<const Tfs *>(p);
-  Tfv a(q, element_aligned_tag()), b(q+vlen, element_aligned_tag());
+  Tfv a=loadu<Tfv>(q), b=loadu<Tfv>(q+vlen);
   return {shuf<sh_even>(a,b), shuf<sh_odd>(a,b)};
   }
 template<typename Tfv, typename Tfs> DUCC0_ALWAYS_INLINE void vstore(const Cmplx<Tfv> &x, Cmplx<Tfs> *p)
   {
   constexpr size_t vlen = Tfv::size();
   auto q = reinterpret_cast<Tfs *>(p);
-  shuf<sh_zip_lo<vlen>>(x.r, x.i).copy_to(q, element_aligned_tag());
-  shuf<sh_zip_hi<vlen>>(x.r, x.i).copy_to(q+vlen, element_aligned_tag());
+  storeu(shuf<sh_zip_lo<vlen>>(x.r, x.i), q);
+  storeu(shuf<sh_zip_hi<vlen>>(x.r, x.i), q+vlen);
   }
 /* the R x vl block of reals at p, transposed: x[j] lane t = p[j+R*t]; for
    R==0 the runtime size n, through a buffer */
@@ -406,11 +407,11 @@ template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE voi
     {
     array<Tfs,L*vl> b;
     for (size_t t=0; t<vl; ++t) for (size_t j=0; j<n; ++j) b[j*vl+t] = p[j+n*t];
-    for (size_t j=0; j<n; ++j) x[j] = Tfv(&b[j*vl], element_aligned_tag());
+    for (size_t j=0; j<n; ++j) x[j] = loadu<Tfv>(&b[j*vl]);
     return;
     }
   array<Tfv,R> v;
-  static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE{ v[m] = Tfv(p+m*vl, element_aligned_tag()); });
+  static_for<R>([&](auto m) DUCC0_LAMBDA_INLINE{ v[m] = loadu<Tfv>(p+m*vl); });
   static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE
     {
     constexpr size_t J = decltype(j)::value;
@@ -430,7 +431,7 @@ template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE voi
   if constexpr (R==0)
     {
     array<Tfs,L*vl> b;
-    for (size_t j=0; j<n; ++j) x[j].copy_to(&b[j*vl], element_aligned_tag());
+    for (size_t j=0; j<n; ++j) storeu(x[j], &b[j*vl]);
     for (size_t t=0; t<vl; ++t) for (size_t j=0; j<n; ++j) p[j+n*t] = b[j*vl+t];
     return;
     }
@@ -440,7 +441,7 @@ template<size_t R, typename Tfv, typename Tfs, size_t L> DUCC0_ALWAYS_INLINE voi
     Tfv v = x[0];
     static_for<R>([&](auto j) DUCC0_LAMBDA_INLINE  // collect the lanes going to memory vector m
       { v = shuf<sh_scatter<decltype(j)::value,M,R,vl>>(v, x[j]); });
-    v.copy_to(p+M*vl, element_aligned_tag());
+    storeu(v, p+M*vl);
     });
   }
 // transpose a vlen x vlen block of numbers held in vlen SIMD values (real or complex)
@@ -564,7 +565,7 @@ template <size_t R0, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R0,
         if constexpr (is_same_v<V,Tfs>) return c[idx]; else return vload<V>(c+idx);
         }
       else if constexpr (is_same_v<V,Tfs>) return Cmplx<V>(p[idx], p[N+idx]);
-      else return Cmplx<V>(V(p+idx, element_aligned_tag()), V(p+N+idx, element_aligned_tag()));
+      else return Cmplx<V>(loadu<V>(p+idx), loadu<V>(p+N+idx));
       }
     template<typename V, bool il> DUCC0_ALWAYS_INLINE static void st(const Cmplx<V> &x, Tfs *p, size_t N, size_t idx)
       {
@@ -574,7 +575,7 @@ template <size_t R0, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R0,
         if constexpr (is_same_v<V,Tfs>) c[idx]=x; else vstore(x, c+idx);
         }
       else if constexpr (is_same_v<V,Tfs>) { p[idx]=x.r; p[N+idx]=x.i; }
-      else { x.r.copy_to(p+idx, element_aligned_tag()); x.i.copy_to(p+N+idx, element_aligned_tag()); }
+      else { storeu(x.r, p+idx); storeu(x.i, p+N+idx); }
       }
     // one butterfly (V=Tfs) or vl consecutive ones (V=SIMD) at index i of transform k
     template<bool fwd, typename V, bool iin, bool iout> DUCC0_ALWAYS_INLINE void pstep(size_t i, size_t k,
@@ -952,6 +953,7 @@ template <typename Tfs> class cfftprader: public cfftpass_impl<cfftprader<Tfs>,T
 
       size_t g=2;  // primitive root: smallest g whose powers run through all of 1..ip-1
 // MR FIXME: this looks slow! Perhaps there is a more efficient way to achieve this.
+// See, e.g., https://cp-algorithms.com/algebra/primitive-root.html
       for (;; ++g)
         {
         size_t x=g, cnt=1;
@@ -1481,24 +1483,15 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
     {
     switch(ip)
       {
-      case 2:
-        return make_shared<cfftpR<2,Tfs>>(l1, ido, roots);
-      case 3:
-        return make_shared<cfftpR<3,Tfs>>(l1, ido, roots);
-      case 4:
-        return make_shared<cfftpR<4,Tfs>>(l1, ido, roots);
-      case 5:
-        return make_shared<cfftpR<5,Tfs>>(l1, ido, roots);
-      case 7:
-        return make_shared<cfftpR<7,Tfs>>(l1, ido, roots);
-      case 8:
-        return make_shared<cfftpR<8,Tfs>>(l1, ido, roots);
-      case 9:
-        return make_shared<cfftpR<9,Tfs>>(l1, ido, roots);
-      case 11:
-        return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
-      case 13:
-        return make_shared<cfftpR<13,Tfs>>(l1, ido, roots);
+      case  2: return make_shared<cfftpR< 2,Tfs>>(l1, ido, roots);
+      case  3: return make_shared<cfftpR< 3,Tfs>>(l1, ido, roots);
+      case  4: return make_shared<cfftpR< 4,Tfs>>(l1, ido, roots);
+      case  5: return make_shared<cfftpR< 5,Tfs>>(l1, ido, roots);
+      case  7: return make_shared<cfftpR< 7,Tfs>>(l1, ido, roots);
+      case  8: return make_shared<cfftpR< 8,Tfs>>(l1, ido, roots);
+      case  9: return make_shared<cfftpR< 9,Tfs>>(l1, ido, roots);
+      case 11: return make_shared<cfftpR<11,Tfs>>(l1, ido, roots);
+      case 13: return make_shared<cfftpR<13,Tfs>>(l1, ido, roots);
       default:
         /* Primes up to about 100 inside a composite length: the generic
            O(ip^2) pass is fastest (it vectorizes along ido). A prime as the
@@ -1583,7 +1576,7 @@ template <size_t R0, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R0,
       {
       const Tfs *p = wa.data()+wi(q,j);
       if constexpr (is_same_v<V,Tfd>) return Tcs(p[0], p[vl]);
-      else return Cmplx<V>(V(p, element_aligned_tag()), V(p+vl, element_aligned_tag()));
+      else return Cmplx<V>(loadu<V>(p), loadu<V>(p+vl));
       }
     /* the butterfly at i (V==Tfd), or the V::size() ones starting there (scalar
        data); complex values at (i-1,i), partners mirrored at (ido-i-1,ido-i);
@@ -1679,11 +1672,11 @@ template <size_t R0, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R0,
                 using V = typename simd_select<Tfs,v>::type;
                 array<V,L> y;
                 if constexpr (fwd)
-                  xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j]=V(cc+k0+l1*j, element_aligned_tag()); });
+                  xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j]=loadu<V>(cc+k0+l1*j); });
                 else vgather<R0>(cc+R*k0, y, R);
                 redge<fwd>(y);
                 if constexpr (fwd) vscatter<R0>(y, ch+R*k0, R);
-                else xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ y[j].copy_to(ch+k0+l1*j, element_aligned_tag()); });
+                else xfor<R0>(R, [&](auto j) DUCC0_LAMBDA_INLINE{ storeu(y[j], ch+k0+l1*j); });
                 }
             });
       // offset of halfcomplex value p of a transform: 0, ido-1, ido, 3*ido-1, 3*ido, ...
@@ -2138,22 +2131,14 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
     {
     switch(ip)
       {
-      case 2:
-        return make_shared<rfftpR<2,Tfs>>(l1, ido, roots);
-      case 3:
-        return make_shared<rfftpR<3,Tfs>>(l1, ido, roots);
-      case 4:
-        return make_shared<rfftpR<4,Tfs>>(l1, ido, roots);
-      case 5:
-        return make_shared<rfftpR<5,Tfs>>(l1, ido, roots);
-      case 7:
-        return make_shared<rfftpR<7,Tfs>>(l1, ido, roots);
-      case 9:
-        return make_shared<rfftpR<9,Tfs>>(l1, ido, roots);
-      case 11:
-        return make_shared<rfftpR<11,Tfs>>(l1, ido, roots);
-      case 13:
-        return make_shared<rfftpR<13,Tfs>>(l1, ido, roots);
+      case  2: return make_shared<rfftpR< 2,Tfs>>(l1, ido, roots);
+      case  3: return make_shared<rfftpR< 3,Tfs>>(l1, ido, roots);
+      case  4: return make_shared<rfftpR< 4,Tfs>>(l1, ido, roots);
+      case  5: return make_shared<rfftpR< 5,Tfs>>(l1, ido, roots);
+      case  7: return make_shared<rfftpR< 7,Tfs>>(l1, ido, roots);
+      case  9: return make_shared<rfftpR< 9,Tfs>>(l1, ido, roots);
+      case 11: return make_shared<rfftpR<11,Tfs>>(l1, ido, roots);
+      case 13: return make_shared<rfftpR<13,Tfs>>(l1, ido, roots);
       default:
         if (ip<135)
           return make_shared<rfftpR<0,Tfs>>(l1, ido, roots, ip);
