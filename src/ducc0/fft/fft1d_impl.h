@@ -98,7 +98,6 @@ namespace {
    ((__GNUC__==13) && (__GNUC_MINOR__<5)) || \
    ((__GNUC__==14) && (__GNUC_MINOR__<4)) || \
    ((__GNUC__==15) && (__GNUC_MINOR__<3)))
-#define DUCC0_GCC_BUG_124138
 template<typename T> constexpr inline size_t fft1d_max_simdlen
   = (sizeof(T)<8) ? native_simd<T>::size() : ((native_simd<T>::size()<=4) ? native_simd<T>::size() : 4);
 #else
@@ -140,6 +139,8 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
 #else
 #define DUCC0_GCC142_ICE 0
 #endif
+// if the second version works reliably, I'd like to switch to that one,
+// but it's purely aesthetic ...
 #if 0
 template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f, index_sequence<I...>)
   { (f(integral_constant<size_t,I>()), ...); }
@@ -1049,9 +1050,9 @@ template <typename Tfs> class cfft_multipass: public cfftpass_impl<cfft_multipas
         }
       else
         {
-        if constexpr(is_same<T,Tfs>::value && simd_exists<Tfs, native_simd<Tfs>::size()>) // we can vectorize!
+        if constexpr(is_same<T,Tfs>::value && simd_exists<Tfs, fft1d_max_simdlen<Tfs>>) // we can vectorize!
           {
-          using Tfv = native_simd<Tfs>;
+          using Tfv = typename simd_select<Tfs, fft1d_max_simdlen<Tfs>>::type;
           using Tcv = Cmplx<Tfv>;
           constexpr size_t vlen = Tfv::size();
           size_t nvtrans = (l1*ido + vlen-1)/vlen;
