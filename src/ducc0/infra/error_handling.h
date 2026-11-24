@@ -100,7 +100,7 @@ template<typename ...Args>
 /// passed arguments.
 #define MR_fail(...) \
   do { \
-    ::DUCC0_NAMESPACE::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n", ##__VA_ARGS__, "\n"); \
+    ::DUCC0_NAMESPACE::detail_error_handling::fail__(DUCC0_ERROR_HANDLING_LOC_, "\n" __VA_OPT__(,) __VA_ARGS__, "\n"); \
     } while(0)
 
 /// If \a cond is false, throws a std::runtime_error containing the code
@@ -108,7 +108,7 @@ template<typename ...Args>
 #define MR_assert(cond,...) \
   do { \
     if (cond); \
-    else { MR_fail("Assertion failure\n", ##__VA_ARGS__); } \
+    else { MR_fail("Assertion failure\n" __VA_OPT__(,) __VA_ARGS__); } \
     } while(0)
 
 }}

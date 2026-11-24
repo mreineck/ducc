@@ -46,6 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* Copyright (C) 2026 Max-Planck-Society, Albert M. W. Yau
    Authors: Martin Reinecke, Albert M. W. Yau */
 
+// IMPORTANT: always include binding-related headers first, even before standard headers
 #ifdef DUCC0_USE_NANOBIND
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -83,11 +84,8 @@ int configured_psabi_limit()
     ++end;
 
   if (end == value || *end != '\0' || errno == ERANGE)
-    throw std::runtime_error(
-      "invalid DUCC0_MAX_PSABI_LEVEL: expected an integer");
-  if (parsed < 1) return 1;
-  if (parsed > 4) return 4;
-  return static_cast<int>(parsed);
+    throw std::runtime_error("invalid DUCC0_MAX_PSABI_LEVEL: expected an integer");
+  return std::max(1, std::min(4, static_cast<int>(parsed)));
   }
 
 namespace {
@@ -183,7 +181,7 @@ void add_psabi_level(py::module_ &m, size_t psabi_level)
   {
   m.attr("misc").attr("psabi_level") = py::cpp_function(
     [psabi_level]() { return psabi_level; },
-    R"doc(Return the active PSABI level for the current process.
+    R"""(Return the active PSABI level for the current process.
 
 For non-multiarch builds, this is always 0.
 On multiarch x86_64 builds, this can be 1 (up to SSE2), 3 (up to AVX2),
@@ -192,7 +190,7 @@ or 4 (up to AVX512).
 Returns
 -------
 int
-    the PSABI level)doc");
+    the PSABI level)""");
   }
 
 }

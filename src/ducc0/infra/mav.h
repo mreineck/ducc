@@ -221,7 +221,13 @@ template<size_t N> inline void shape2stride(const array<size_t, N> &shp,
 
 // Number of entries of an array with shape \a shp
 inline size_t shape_size(span<const size_t> shp)
+// It would be nice to use fold_left here, but this would be the only
+// line in the code that requires C++23 at the moment.
+#if 1
+  { return reduce(shp.begin(), shp.end(), size_t(1), multiplies<>()); }
+#else
   { return ranges::fold_left(shp, size_t(1), multiplies<>()); }
+#endif
 template<size_t N> inline size_t shape_size(const array<size_t, N> &shp)
   {
   return [&]<size_t... Is>(index_sequence<Is...>)
