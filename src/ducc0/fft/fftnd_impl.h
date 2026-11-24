@@ -413,7 +413,7 @@ template<typename T, typename T0> class TmpStorage
         d.realloc(bufsize_trafo);
         return;
         }
-      constexpr auto vlen = native_simd<T0>::size();
+      constexpr auto vlen = fft1d_max_simdlen<T0>;
       size_t buffct = std::min(vlen, n_trafo);
       size_t datafct = std::min(vlen, n_trafo);
       if (n_trafo>=n_simultaneous*vlen) datafct = n_simultaneous*vlen;
@@ -634,7 +634,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
 
     auto work = [&](Scheduler &sched)
       {
-      constexpr auto vlen = native_simd<T0>::size();
+      constexpr auto vlen = fft1d_max_simdlen<T0>;
       constexpr size_t nmax = 64;
       const auto &tin(iax==0? in : out);
       multi_iter<nmax> it(tin, out, axes[iax], sched.num_threads(), sched.thread_num());
@@ -694,7 +694,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
       // Contiguous complex lines that have a SIMD single-transform plan (length a
       // multiple of the SIMD width, >=128) are transformed in place one at a time:
       // faster than SIMD over lines, which needs register transposes here.
-      constexpr size_t vl1 = fft1d_simdlen<T0>;
+      constexpr size_t vl1 = fft1d_max_simdlen<T0>;
       if (nostride && is_same_v<T,Cmplx<T0>> && (len%vl1==0) && (len>=max<size_t>(128,vl1*vl1)))
         n_simul = n_bunch = 1;
       bool inplace = (in.stride(axes[iax])==1) && (out.stride(axes[iax])==1) && (n_bunch==1);
@@ -809,7 +809,7 @@ DUCC0_NOINLINE void general_nd(const cfmav<T> &in, const vfmav<T> &out,
         }
       };
     // passed by reference: the closure is too big for std::function's inline storage
-    execParallel(util::thread_count(nthreads, in, axes[iax], native_simd<T0>::size()), std::ref(work));
+    execParallel(util::thread_count(nthreads, in, axes[iax], fft1d_max_simdlen<T0>), std::ref(work));
     fct = T0(1); // factor has been applied, use 1 for remaining axes
     }
   }
@@ -1103,7 +1103,7 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
   size_t len = r2c ? in.shape(axis) : out.shape(axis), lenc=len/2+1;
   auto plan = get_plan<pocketfft_r<T>>(len, in.ndim()==1);
   auto work = [&](Scheduler &sched) {
-    constexpr auto vlen = native_simd<T>::size();
+    constexpr auto vlen = fft1d_max_simdlen<T>;
     constexpr size_t nmax = 64, cacheline = 64;
     size_t blen = len+(len&1)+2*lenc;  // even, so that the complex part has an integral stride
     bool critstride = (((in.stride(axis)*sizeof(Tin))&4095)==0)
@@ -1186,7 +1186,7 @@ template<bool r2c, typename T, typename Tin, typename Tout> DUCC0_NOINLINE void 
       lines(integral_constant<size_t,1>());
       }
     };
-  execParallel(util::thread_count(nthreads, in, axis, native_simd<T>::size()), std::ref(work));
+  execParallel(util::thread_count(nthreads, in, axis, fft1d_max_simdlen<T>), std::ref(work));
   }
 template<typename T> DUCC0_NOINLINE void general_r2c(
   const cfmav<T> &in, const vfmav<Cmplx<T>> &out, size_t axis, bool forward, T fct,
@@ -1297,7 +1297,7 @@ template<typename T> size_t fourstep_n1(const fmav_info &in, const fmav_info &ou
   {
   size_t n = in.shape(axis);
   if ((in.ndim()<2) || (n<4096)) return 0;
-  if (util::thread_count(nthreads, in, axis, native_simd<T>::size())<2) return 0;
+  if (util::thread_count(nthreads, in, axis, fft1d_max_simdlen<T>)<2) return 0;
   auto crit = [](ptrdiff_t str) { return ((str*ptrdiff_t(sizeof(Cmplx<T>)))&4095)==0; };
   if (!(crit(in.stride(axis)) || crit(out.stride(axis)))) return 0;
   for (size_t d=size_t(std::sqrt(double(n))); d>=16; --d)  // the most balanced split
@@ -1701,7 +1701,7 @@ template<typename Tplan, typename T0, typename T, typename Exec>
   plan1->exec(fkernel.data(), T0(1)/T0(l_in), true, nthreads);
 
   auto work = [&](Scheduler &sched) {
-      constexpr auto vlen = native_simd<T0>::size();
+      constexpr auto vlen = fft1d_max_simdlen<T0>;
       TmpStorage<T,T0> storage(in.size()/l_in, l_in+l_out, bufsz, 1, false);
       multi_iter<vlen> it(in, out, axis, sched.num_threads(), sched.thread_num());
 #ifndef DUCC0_NO_SIMD
@@ -1740,7 +1740,7 @@ template<typename Tplan, typename T0, typename T, typename Exec>
         }
       }
     };
-  execParallel(util::thread_count(nthreads, in, axis, native_simd<T0>::size()), std::ref(work));
+  execParallel(util::thread_count(nthreads, in, axis, fft1d_max_simdlen<T0>), std::ref(work));
   }
 
 struct [[maybe_unused]] ExecConv1R

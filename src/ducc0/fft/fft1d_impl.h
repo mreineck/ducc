@@ -89,8 +89,22 @@ using namespace std;
 
 namespace {
 
-template<typename T> constexpr inline size_t fft1d_simdlen
+// Check for gcc versions affected by
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=124138
+// which breaks double precision real-valued transforms with AVX512.
+// If detected, switch maximum double precision FFT vector length to 4.
+#if defined(__GNUC__) && !defined(__clang__) && \
+  ((__GNUC__<13) || \
+   ((__GNUC__==13) && (__GNUC_MINOR__<5)) || \
+   ((__GNUC__==14) && (__GNUC_MINOR__<4)) || \
+   ((__GNUC__==15) && (__GNUC_MINOR__<3)))
+#define DUCC0_GCC_BUG_124138
+template<typename T> constexpr inline size_t fft1d_max_simdlen
+  = (sizeof(T)<8) ? native_simd<T>::size() : ((native_simd<T>::size()<=4) ? native_simd<T>::size() : 4);
+#else
+template<typename T> constexpr inline size_t fft1d_max_simdlen
   = native_simd<T>::size();
+#endif
 
 template <typename Tfs> class cfftp1: public cfftpass<Tfs>
   {
@@ -144,7 +158,7 @@ template<size_t N, typename F> DUCC0_ALWAYS_INLINE void xfor(size_t n, F &&f)
 
 /* The virtual exec() of a pass class D (CRTP): calls D::exec_<fwd>() with the
    pointers cast to the data type that ti names, the scalar type or the SIMD
-   type of one of the widths fft1d_simdlen<Tfs>>>s (W wraps them: Cmplx for
+   type of one of the widths fft1d_max_simdlen<Tfs>>>s (W wraps them: Cmplx for
    the complex passes). D declares this class a friend. */
 template<typename D, typename Tfs, typename Base, template<typename> class W> class pass_impl: public Base
   {
@@ -160,7 +174,7 @@ template<typename D, typename Tfs, typename Base, template<typename> class W> cl
     template<size_t s> void *exec_simd(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads) const
       {
-      constexpr size_t v = fft1d_simdlen<Tfs> >> s;
+      constexpr size_t v = fft1d_max_simdlen<Tfs> >> s;
       if constexpr (v>1)
         {
         if constexpr (simd_exists<Tfs,v>)
@@ -188,7 +202,7 @@ template<typename D, typename Tfs, typename Base, template<typename> class W> cl
       void *res = nullptr;
       static_for<4>([&](auto s) DUCC0_LAMBDA_INLINE
         {
-        constexpr size_t v = fft1d_simdlen<Tfs> >> decltype(s)::value;
+        constexpr size_t v = fft1d_max_simdlen<Tfs> >> decltype(s)::value;
         if constexpr ((v>1) && simd_exists<Tfs,v>)
           {
           using T = W<typename simd_select<Tfs,v>::type>;
@@ -483,7 +497,7 @@ template <size_t R0, typename Tfs> class cfftpR: public cfftpass_impl<cfftpR<R0,
   {
   private:
     using typename cfftpass<Tfs>::Tcs;
-    static constexpr size_t vl = fft1d_simdlen<Tfs>, L = R0 ? R0 : 109;  // L: capacity of the butterfly
+    static constexpr size_t vl = fft1d_max_simdlen<Tfs>, L = R0 ? R0 : 109;  // L: capacity of the butterfly
     // compile-time loop count n, or 0 (a runtime loop) if the radix is not known at compile time
     static constexpr size_t ct(size_t n) { return R0 ? n : 0; }
     size_t l1, ido, ip;  // ip: the runtime radix (R0==0)
@@ -1460,7 +1474,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
   if (vectorize && (l1==1) && (ido==1))
     {
 #if DUCC0_GCC142_ICE  // the lambda below crashes GCC 14.2
-    constexpr size_t vl = fft1d_simdlen<Tfs>;  // try the full SIMD width first
+    constexpr size_t vl = fft1d_max_simdlen<Tfs>;  // try the full SIMD width first
     if (auto res = make_soa<vl,Tfs>(ip, roots)) return res;
     if (auto res = make_soa<vl/2,Tfs>(ip, roots)) return res;
     if (auto res = make_soa<vl/4,Tfs>(ip, roots)) return res;
@@ -1468,7 +1482,7 @@ template<typename Tfs> Tcpass<Tfs> cfftpass<Tfs>::make_pass(size_t l1,
     Tcpass<Tfs> res;
     static_for<3>([&](auto s) DUCC0_LAMBDA_INLINE  // try the full SIMD width first
       {
-      constexpr size_t vl = fft1d_simdlen<Tfs> >> decltype(s)::value;
+      constexpr size_t vl = fft1d_max_simdlen<Tfs> >> decltype(s)::value;
       if constexpr ((vl>=2) && simd_exists<Tfs,vl>)
         if ((!res) && (ip%vl==0) && (ip>=max<size_t>(vl*vl,16)))  // below 16 the plain codelet is faster
           res = make_shared<cfftp_soa<vl,Tfs>>(ip, roots);
@@ -1540,7 +1554,7 @@ template <size_t R0, typename Tfs> class rfftpR: public rfftpass_impl<rfftpR<R0,
   {
   private:
     using Tcs = Cmplx<Tfs>;
-    static constexpr size_t vl = fft1d_simdlen<Tfs>, L = R0 ? R0 : 134;  // L: capacity of the butterfly
+    static constexpr size_t vl = fft1d_max_simdlen<Tfs>, L = R0 ? R0 : 134;  // L: capacity of the butterfly
     static constexpr bool even = (R0>0) && ((R0&1)==0);
     // compile-time loop count n, or 0 (a runtime loop) if the radix is not known at compile time
     static constexpr size_t ct(size_t n) { return R0 ? n : 0; }
@@ -1996,7 +2010,7 @@ template <typename Tfs> class rfftp_complexify: public rfftpass_impl<rfftp_compl
   {
   private:
     using Tcs = Cmplx<Tfs>;
-    static constexpr size_t vl = fft1d_simdlen<Tfs>;
+    static constexpr size_t vl = fft1d_max_simdlen<Tfs>;
     static constexpr bool havesimd = (vl>1) && simd_exists<Tfs,vl>;
     size_t N;
     Tcpass<Tfs> pass;
@@ -2110,7 +2124,7 @@ template<typename Tfs> Trpass<Tfs> rfftpass<Tfs>::make_pass(size_t l1,
   if (ip==1) return make_shared<rfftp1<Tfs>>();
   // a single transform of even length is fastest via the SIMD complex plan of
   // half the length (measured: from 4 SIMD widths on; slower below)
-  if (vectorize && (l1==1) && (ido==1) && (ip>=4*fft1d_simdlen<Tfs>) && ((ip&1)==0))
+  if (vectorize && (l1==1) && (ido==1) && (ip>=4*fft1d_max_simdlen<Tfs>) && ((ip&1)==0))
     return make_shared<rfftp_complexify<Tfs>>(ip, roots, vectorize);
   if ((ip>1000) && ((ip&1)==0))  // use complex transform
     {
