@@ -6,7 +6,7 @@ including Fast Fourier Transforms, Spherical Harmonic Transforms, non-equispaced
 Fourier transforms, as well as some concrete applications like 4pi convolution
 on the sphere and gridding/degridding of radio interferometry data.
 
-The code is written in C++23, but provides a simple and comprehensive Python
+The code is written in C++20, but provides a simple and comprehensive Python
 interface.
 
 ### Requirements
@@ -14,7 +14,7 @@ interface.
 - [Python >= 3.8](https://www.python.org/)
 - only when compiling from source: [pybind11](https://github.com/pybind/pybind11)
 - only when compiling from source: [nanobind](https://github.com/wjakob/nanobind)
-- only when compiling from source: a C++23-capable compiler, e.g.
+- only when compiling from source: a C++20-capable compiler, e.g.
   - `g++` (verified with gcc 12.4.0, earlier versions might also work)
   - `clang++` (verified with clang++ 18.1.3, earlier versions might also work)
   - MSVC (verified with Visual Studio Enterprise 2022, earlier versions might also work)
