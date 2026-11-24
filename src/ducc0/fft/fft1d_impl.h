@@ -64,6 +64,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <array>
 #include <bit>
 #include <cstddef>
+#include <cstring>
 #include <algorithm>
 #include <functional>
 #include <type_traits>
