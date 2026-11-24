@@ -24,7 +24,7 @@ from numpy.testing import assert_, assert_allclose
 import platform
 
 def l2error(a,b):
-    return np.linalg.norm(a+0.00001-b)/np.maximum(np.linalg.norm(a), np.linalg.norm(b))
+    return np.linalg.norm(a-b)/np.maximum(np.linalg.norm(a), np.linalg.norm(b))
 
 pmp = pytest.mark.parametrize
 
