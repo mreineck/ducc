@@ -3,8 +3,9 @@ This file is part of the ducc FFT library
 
 Copyright (C) 2010-2026 Max-Planck-Society
 Copyright (C) 2019 Peter Bell
+Copyright (C) 2026 Philipp Arras
 
-Authors: Martin Reinecke, Peter Bell
+Authors: Martin Reinecke, Philipp Arras, Peter Bell
 */
 
 /* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-or-later */
@@ -58,6 +59,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstddef>
 #include <typeindex>
 #include <memory>
+#include <cstdint>
 #include <vector>
 #include <complex>
 #include <algorithm>
@@ -186,23 +188,31 @@ template <typename Tfs> class cfftpass
     virtual bool needs_copy() const = 0;
     virtual void *exec(const type_index &ti, void *in, void *copy, void *buf,
       bool fwd, size_t nthreads=1) const = 0;
+    // passes that can also work on data split into real and imaginary
+    // planes (Tfs values, imaginary parts at in+N resp. out+N); the input or
+    // the output may instead be interleaved complex numbers (iin, iout)
+    virtual bool planar() const { return false; }
+    virtual void exec_planar(const Tfs * /*in*/, Tfs * /*out*/, bool /*fwd*/,
+      bool /*iin*/, bool /*iout*/) const
+      { MR_fail("pass cannot work on planar data"); }
 
     static vector<size_t> factorize(size_t N)
       {
       MR_assert(N>0, "need a positive number");
       vector<size_t> factors;
       factors.reserve(15);
+      const bool odd = N&1;
       while ((N&7)==0)
         { factors.push_back(8); N>>=3; }
       while ((N&3)==0)
         { factors.push_back(4); N>>=2; }
       if ((N&1)==0)
-        {
-        N>>=1;
-        // factor 2 should be at the front of the factor list
-        factors.push_back(2);
-        std::swap(factors[0], factors.back());
-        }
+        { factors.push_back(2); N>>=1; }
+      // radix 9 only for odd lengths: together with power-of-two factors it
+      // was slower than two radix-3 passes
+      if (odd)
+        while ((N%9)==0)
+          { factors.push_back(9); N/=9; }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
         {
@@ -210,6 +220,10 @@ template <typename Tfs> class cfftpass
         N/=divisor;
         }
       if (N>1) factors.push_back(N);
+      // small radices first: the last pass then saves the most twiddle
+      // multiplications, and the pass before it (ido = last radix) keeps
+      // enough consecutive butterflies for SIMD
+      sort(factors.begin(), factors.end());
       return factors;
       }
 
@@ -249,6 +263,8 @@ template <typename Tfs> class rfftpass
         factors.push_back(2);
         std::swap(factors[0], factors.back());
         }
+      while ((N%9)==0)
+        { factors.push_back(9); N/=9; }
       for (size_t divisor=3; divisor*divisor<=N; divisor+=2)
       while ((N%divisor)==0)
         {
@@ -271,26 +287,57 @@ template <typename Tfs> class rfftpass
 template<typename T> using Tcpass = shared_ptr<cfftpass<T>>;
 template<typename T> using Trpass = shared_ptr<rfftpass<T>>;
 
+// Scratch space for the convenience exec() overloads of the plan classes:
+// one buffer per thread is kept and grown as needed, so repeated transforms
+// do not pay for allocation and page faults; very large requests get a
+// temporary buffer instead.
+template<typename T> class scratch_space
+  {
+  private:
+    static constexpr size_t maxkeep = (size_t(1)<<28)/sizeof(T);
+    aligned_array<T> tmp;
+    T *ptr;
+
+  public:
+    scratch_space(size_t n)
+      {
+      static thread_local aligned_array<T> kept;
+      if (n>maxkeep) { tmp = aligned_array<T>(n); ptr = tmp.data(); return; }
+      if (kept.size()<n) kept = aligned_array<T>(n);
+      ptr = kept.data();
+      }
+    T *data() { return ptr; }
+  };
+
+/* Buffers that the passes ping-pong between must not lie at a multiple of
+   4 KB from each other: the loads of one butterfly then alias the stores of
+   the previous one in the low address bits (measured on Zen 4: the twiddled
+   radix-8 pass takes 3x longer). skew() picks the offset into a scratch
+   buffer that puts it half a page away; bufsize() reserves the page. */
+template<typename T> size_t skew(const void *data, const T *buf)
+  {
+  auto d = (reinterpret_cast<uintptr_t>(buf) - reinterpret_cast<uintptr_t>(data)) & 4095;
+  return ((2048+4096-d) & 4095) / sizeof(T);
+  }
 template<typename Tfs> class pocketfft_c
   {
   private:
     size_t N;
-    size_t critbuf;
     Tcpass<Tfs> plan;
 
   public:
     explicit pocketfft_c(size_t n, bool vectorize=false)
-      : N(n), critbuf(((N&1023)==0) ? 16 : 0),
-        plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
+      : N(n), plan(cfftpass<Tfs>::make_pass(n,vectorize)) {}
     size_t length() const { return N; }
-    size_t bufsize() const { return N*plan->needs_copy()+2*critbuf+plan->bufsize(); }
+    size_t bufsize() const { return N*plan->needs_copy()+plan->bufsize()+4096/sizeof(Cmplx<Tfs>); }
     size_t footprint() const { return plan->footprint(); }
     template<typename Tfd> DUCC0_NOINLINE Cmplx<Tfd> *exec(Cmplx<Tfd> *in, Cmplx<Tfd> *buf,
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
       static const auto tic = tidx<Cmplx<Tfd> *>();
+      auto ch = buf+skew(in, buf);
       auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tic,
-        in, buf+critbuf+plan->bufsize(), buf+critbuf, fwd, nthreads));
+        in, ch, ch+N*plan->needs_copy(), fwd, nthreads));
       if (fct!=Tfs(1))
         for (size_t i=0; i<N; ++i) res[i]*=fct;
       return res;
@@ -299,8 +346,9 @@ template<typename Tfs> class pocketfft_c
       Tfs fct, bool fwd, size_t nthreads=1) const
       {
       static const auto tic = tidx<Cmplx<Tfd> *>();
+      auto ch = buf+skew(in, buf);
       auto res = static_cast<Cmplx<Tfd> *>(plan->exec(tic,
-        in, buf, buf+N*plan->needs_copy(), fwd, nthreads));
+        in, ch, ch+N*plan->needs_copy(), fwd, nthreads));
       if (res==in)
         {
         if (fct!=Tfs(1))
@@ -316,7 +364,7 @@ template<typename Tfs> class pocketfft_c
       }
     template<typename Tfd> DUCC0_NOINLINE void exec(Cmplx<Tfd> *in, Tfs fct, bool fwd, size_t nthreads=1) const
       {
-      aligned_array<Cmplx<Tfd>> buf(N*plan->needs_copy()+plan->bufsize());
+      scratch_space<Cmplx<Tfd>> buf(bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -365,7 +413,7 @@ template<typename Tfs> class pocketfft_r
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N*plan->needs_copy()+plan->bufsize());
+      scratch_space<Tfd> buf(N*plan->needs_copy()+plan->bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -411,7 +459,7 @@ template<typename Tfs> class pocketfft_hartley
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, nthreads);
       }
   };
@@ -457,7 +505,7 @@ template<typename Tfs> class pocketfft_fht
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, nthreads);
       }
   };
@@ -522,7 +570,7 @@ template<typename Tfs> class pocketfft_fftw
     template<typename Tfd> DUCC0_NOINLINE void exec(Tfd *in, Tfs fct, bool fwd,
       size_t nthreads=1) const
       {
-      aligned_array<Tfd> buf(N+plan->bufsize());
+      scratch_space<Tfd> buf(N+plan->bufsize());
       exec_copyback(in, buf.data(), fct, fwd, nthreads);
       }
   };
@@ -537,8 +585,8 @@ template<typename T0> class T_dct1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE explicit T_dct1(size_t length, bool /*vectorize*/=false)
-      : fftplan(2*(length-1)) {}
+    DUCC0_NOINLINE explicit T_dct1(size_t length, bool vectorize=false)
+      : fftplan(2*(length-1), vectorize) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
@@ -567,7 +615,7 @@ template<typename T0> class T_dct1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int /*type*/, bool /*cosine*/, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, ortho, 1, true, nthreads);
       }
 
@@ -582,8 +630,8 @@ template<typename T0> class T_dst1
     pocketfft_r<T0> fftplan;
 
   public:
-    DUCC0_NOINLINE explicit T_dst1(size_t length, bool /*vectorize*/=false)
-      : fftplan(2*(length+1)) {}
+    DUCC0_NOINLINE explicit T_dst1(size_t length, bool vectorize=false)
+      : fftplan(2*(length+1), vectorize) {}
 
     template<typename T> DUCC0_NOINLINE T *exec(T c[], T buf[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads=1) const
@@ -606,7 +654,7 @@ template<typename T0> class T_dst1
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool /*cosine*/, size_t nthreads) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec_copyback(c, buf.data(), fct, true, 1, false, nthreads);
       }
 
@@ -622,8 +670,8 @@ template<typename T0> class T_dcst23
     vector<T0> twiddle;
 
   public:
-    DUCC0_NOINLINE explicit T_dcst23(size_t length, bool /*vectorize*/=false)
-      : fftplan(length), twiddle(length)
+    DUCC0_NOINLINE explicit T_dcst23(size_t length, bool vectorize=false)
+      : fftplan(length, vectorize), twiddle(length)
       {
       UnityRoots<T0,Cmplx<T0>> tw(4*length);
       for (size_t i=0; i<length; ++i)
@@ -701,7 +749,7 @@ template<typename T0> class T_dcst23
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct, bool ortho,
       int type, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec(c, buf.data(), fct, ortho, type, cosine, nthreads);
       }
 
@@ -721,10 +769,10 @@ template<typename T0> class T_dcst4
     size_t bufsz;
 
   public:
-    DUCC0_NOINLINE explicit T_dcst4(size_t length, bool /*vectorize*/=false)
+    DUCC0_NOINLINE explicit T_dcst4(size_t length, bool vectorize=false)
       : N(length),
-        fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2)),
-        rfft((N&1)? make_unique<pocketfft_r<T0>>(N) : nullptr),
+        fft((N&1) ? nullptr : make_unique<pocketfft_c<T0>>(N/2, vectorize)),
+        rfft((N&1)? make_unique<pocketfft_r<T0>>(N, vectorize) : nullptr),
         C2((N&1) ? 0 : N/2),
         bufsz((N&1) ? (N+rfft->bufsize()) : (N+2*fft->bufsize()))
       {
@@ -820,7 +868,7 @@ template<typename T0> class T_dcst4
     template<typename T> DUCC0_NOINLINE void exec(T c[], T0 fct,
       bool /*ortho*/, int /*type*/, bool cosine, size_t nthreads=1) const
       {
-      aligned_array<T> buf(bufsize());
+      scratch_space<T> buf(bufsize());
       exec(c, buf.data(), fct, true, 4, cosine, nthreads);
       }
 

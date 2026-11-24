@@ -202,6 +202,13 @@ class Scheduler
   };
 
 size_t available_hardware_threads();
+/** Data cache sizes in bytes as seen by one core, read once from the OS
+    (Linux: sysfs, else sysconf; macOS: sysctl; elsewhere, and for values the
+    OS does not report, those of a Zen 4 core: 32 KB, 1 MB, 16 MB).
+    \a l2 is the share of one core if several cores share the L2 (Apple M),
+    \a llc the total size of the last level (L3, or the L2 if there is none). */
+struct CacheInfo { size_t l1, l2, llc; };
+const CacheInfo &cache_info();
 /** Returns the maximum number of threads that are supported by currently
     active thread pool. */
 size_t thread_pool_size();
@@ -324,6 +331,8 @@ using detail_threading::CondVar;
 using detail_threading::thread_pool;
 using detail_threading::ScopedUseThreadPool;
 using detail_threading::available_hardware_threads;
+using detail_threading::CacheInfo;
+using detail_threading::cache_info;
 using detail_threading::thread_pool_size;
 using detail_threading::resize_thread_pool;
 using detail_threading::adjust_nthreads;

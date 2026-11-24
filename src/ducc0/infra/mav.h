@@ -395,7 +395,7 @@ template<template<typename, size_t> typename Tcontainer, size_t R> class mav_inf
     /// Constructs an object with the given shape and computes the strides
     /// automatically, assuming a C-contiguous memory layout.
     explicit mav_info_proto(const shape_t &shape_)
-      : mav_info_proto(shape_, shape2stride(shape_)) {}
+      : shp(shape_), str(shape2stride(shp)), sz(shape_size(shp)) {}
     /// Converts between fixed and dynamic rank: implicitly towards dynamic
     /// rank, explicitly (with a runtime check) towards fixed rank.
     template<template<typename, size_t> typename Tc2, size_t R2>

@@ -57,6 +57,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <exception>
 #include <utility>
 #include <latch>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <string>
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(__unix__)
+#include <unistd.h>
+#endif
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 #include <algorithm>
@@ -81,6 +90,70 @@ namespace DUCC0_NAMESPACE {
 namespace detail_threading {
 
 using std::latch;
+
+const CacheInfo &cache_info()
+  {
+  static const CacheInfo info = []
+    {
+    CacheInfo res{0, 0, 0};
+#if defined(__APPLE__)
+    auto get = [](const char *name) -> size_t
+      { size_t v=0, len=sizeof(v); return sysctlbyname(name, &v, &len, nullptr, 0)==0 ? v : 0; };
+    // perflevel0: the performance cores of Apple M; the others for Intel Macs
+    res.l1 = get("hw.perflevel0.l1dcachesize");
+    if (res.l1==0) res.l1 = get("hw.l1dcachesize");
+    res.l2 = get("hw.perflevel0.l2cachesize");
+    if (res.l2==0) res.l2 = get("hw.l2cachesize");
+    res.llc = std::max(get("hw.l3cachesize"), res.l2);  // Apple M: no L3, the L2 is shared
+    res.l2 /= std::max<size_t>(1, get("hw.perflevel0.cpusperl2"));
+#elif defined(__linux__)
+    try
+      {
+      auto rd = [](const std::string &name)
+        { std::ifstream f(name); std::string v; std::getline(f, v); return v; };
+      auto ncpus = [](const std::string &list)  // number of CPUs in e.g. "0-3,8"
+        {
+        size_t n=0;
+        std::istringstream s(list);
+        for (std::string t; std::getline(s, t, ',');)
+          {
+          auto p = t.find('-');
+          n += (p==std::string::npos) ? 1 : std::stoul(t.substr(p+1))-std::stoul(t.substr(0,p))+1;
+          }
+        return n;
+        };
+      const std::string cpu0 = "/sys/devices/system/cpu/cpu0/";
+      size_t smt = std::max<size_t>(1, ncpus(rd(cpu0+"topology/thread_siblings_list")));
+      for (size_t i=0; i<16; ++i)
+        {
+        std::string d = cpu0+"cache/index"+std::to_string(i)+"/", type=rd(d+"type");
+        if (type.empty()) break;
+        if (type=="Instruction") continue;
+        std::string sz = rd(d+"size");  // e.g. "32K"
+        size_t lev = std::stoul(rd(d+"level")),
+               bytes = std::stoul(sz) * ((sz.back()=='K') ? 1024 : (sz.back()=='M') ? 1024*1024 : 1),
+               cores = std::max<size_t>(1, ncpus(rd(d+"shared_cpu_list"))/smt);
+        if (lev==1) res.l1 = bytes;
+        if (lev==2) res.l2 = bytes/cores;
+        if (lev>=2) res.llc = std::max(res.llc, bytes);
+        }
+      }
+    catch (...) { res = {0, 0, 0}; }
+#if defined(_SC_LEVEL1_DCACHE_SIZE)
+    auto sc = [](int name) { return size_t(std::max<long>(0, sysconf(name))); };
+    if (res.l1==0) res.l1 = sc(_SC_LEVEL1_DCACHE_SIZE);
+    if (res.l2==0) res.l2 = sc(_SC_LEVEL2_CACHE_SIZE);
+    if (res.llc==0) res.llc = std::max(sc(_SC_LEVEL3_CACHE_SIZE), res.l2);
+#endif
+#endif
+    // where the OS says nothing: the values of a Zen 4 core
+    if (res.l1==0) res.l1 = size_t(32)<<10;
+    if (res.l2==0) res.l2 = size_t(1)<<20;
+    if (res.llc==0) res.llc = std::max(size_t(16)<<20, res.l2);
+    return res;
+    }();
+  return info;
+  }
 
 #ifdef DUCC0_STDCXX_LOWLEVEL_THREADING
 
