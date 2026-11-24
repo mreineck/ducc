@@ -139,8 +139,6 @@ else ()
         set(DUCC0_ARCH_FLAGS "" CACHE STRING "Compiler flags for specifying target architecture.")
     endif ()
     message(STATUS "CPU supports: ${RUN_OUTPUT}")
-    # We need to add a special flag to make MSVC recognize __VA_OPT__ ... sigh
-    set (DUCC0_ARCH_FLAGS "/Zc:preprocessor" ${DUCC0_ARCH_FLAGS})
     message(STATUS "Using MSVC flags: ${DUCC0_ARCH_FLAGS}")
 endif ()
 
@@ -159,6 +157,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
     set (DUCC0_DEBUG_FLAGS -g)
     set (DUCC0_STRIP_FLAGS -s)
 endif()
+
+# We need to add a special flag to make MSVC recognize __VA_OPT__ ... sigh
+if(MSVC)
+    SET (COMP_OPTS ${COMP_OPTS} "/Zc:preprocessor")
+endif()
+
 SET (COMP_OPTS ${COMP_OPTS} ${DUCC0_WARN_FLAGS})
 
 if (OPTFLAGS MATCHES "^native")
