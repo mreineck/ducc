@@ -139,6 +139,8 @@ else ()
         set(DUCC0_ARCH_FLAGS "" CACHE STRING "Compiler flags for specifying target architecture.")
     endif ()
     message(STATUS "CPU supports: ${RUN_OUTPUT}")
+    # We need to add a special flag to make MSVC recognize __VA_OPT__ ... sigh
+    set (DUCC0_ARCH_FLAGS "/Zc:preprocessor" ${DUCC0_ARCH_FLAGS})
     message(STATUS "Using MSVC flags: ${DUCC0_ARCH_FLAGS}")
 endif ()
 
