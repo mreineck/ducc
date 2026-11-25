@@ -62,7 +62,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <memory>
 #include <array>
-#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <algorithm>
@@ -72,7 +71,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <typeinfo>
 #include <typeindex>
-#include <numbers>
 #include "ducc0/infra/useful_macros.h"
 #include "ducc0/math/cmplx.h"
 #include "ducc0/infra/error_handling.h"

@@ -36,7 +36,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <bit>
 
 #include "ducc0/infra/useful_macros.h"
 

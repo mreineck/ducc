@@ -63,7 +63,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <complex>
 #include <algorithm>
-#include <numbers>
 #include "ducc0/infra/error_handling.h"
 #include "ducc0/infra/aligned_array.h"
 #include "ducc0/infra/mav.h"

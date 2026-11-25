@@ -55,7 +55,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <vector>
 #include <tuple>
-#include <numbers>
 
 namespace DUCC0_NAMESPACE {
 

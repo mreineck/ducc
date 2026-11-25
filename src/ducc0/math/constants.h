@@ -29,8 +29,6 @@
 #ifndef DUCC0_CONSTANTS_H
 #define DUCC0_CONSTANTS_H
 
-#include <numbers>
-
 namespace DUCC0_NAMESPACE {
 
 /*! \defgroup mathconstgroup Mathematical constants */
