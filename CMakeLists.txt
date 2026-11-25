@@ -34,7 +34,7 @@ set(CXX_SOURCES
     src/ducc0/infra/string_utils.cc
     src/ducc0/infra/threading.cc src/ducc0/infra/mav.cc)
 set(PYMOD_SOURCES
-    python/fft_pymod.cc python/ducc.cc)
+    python/fft_pymod.cc python/misc_pymod.cc python/ducc.cc)
 
 if (MULTIARCH)
     # If IPO is on, we risk leaking unknown instruction into lower ABI levels
