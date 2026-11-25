@@ -122,9 +122,9 @@ template<typename T, typename Abi> inline stdx::simd<T,Abi> cos(stdx::simd<T,Abi
 template<typename M, typename T> inline T blend(M mask, T a, T b)
   { T res=b; where(mask, res) = a; return res; }
 
-template<typename Tsimd> inline Tsimd loadu(const typename Tsimd::value_type *ptr)
+template<typename Tsimd> DUCC0_ALWAYS_INLINE Tsimd loadu(const typename Tsimd::value_type *ptr)
   { return Tsimd(ptr, element_aligned_tag()); }
-template<typename Tsimd> inline void storeu(Tsimd v, typename Tsimd::value_type *ptr)
+template<typename Tsimd> DUCC0_ALWAYS_INLINE void storeu(Tsimd v, typename Tsimd::value_type *ptr)
   { v.copy_to(ptr, element_aligned_tag()); }
 
 }

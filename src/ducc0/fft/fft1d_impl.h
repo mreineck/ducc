@@ -86,6 +86,9 @@ namespace detail_fft {
 
 using namespace std;
 
+template<class T> struct type_identity { using type = T; };
+template< class T> using type_identity_t = typename type_identity<T>::type;
+
 namespace {
 
 template<typename I> constexpr int trailing_zeros(I arg)
@@ -170,7 +173,7 @@ template <typename Tfs> class cfftp1: public cfftpass<Tfs>
 #endif
 // if the second version works reliably, I'd like to switch to that one,
 // but it's purely aesthetic ...
-#if 0
+#if 1
 template<typename F, size_t... I> DUCC0_ALWAYS_INLINE void static_for_impl(F &f, index_sequence<I...>)
   { (f(integral_constant<size_t,I>()), ...); }
 template<size_t N, typename F> DUCC0_ALWAYS_INLINE void static_for(F &&f)
@@ -246,8 +249,6 @@ template<typename D, typename Tfs, typename Base, template<typename> class W> cl
       }
   };
 template<typename D, typename Tfs> using cfftpass_impl = pass_impl<D, Tfs, cfftpass<Tfs>, Cmplx>;
-template<class T> struct type_identity { using type = T; };
-template< class T> using type_identity_t = typename type_identity<T>::type;
 template<typename D, typename Tfs> using rfftpass_impl = pass_impl<D, Tfs, rfftpass<Tfs>, type_identity_t>;
 
 struct ct_cs { long double c, s; };
@@ -402,6 +403,11 @@ template<bool fwd, typename Tfs, typename C, size_t M>
     });
   }
 
+template<auto F, typename Tfv, size_t... P> DUCC0_ALWAYS_INLINE auto shuf_impl (const Tfv &a, const Tfv &b, index_sequence<P...>)
+  {
+  typedef typename Tfv::value_type G __attribute__((vector_size(sizeof(Tfv))));
+  return bit_cast<Tfv>(__builtin_shufflevector(bit_cast<G>(a), bit_cast<G>(b), F(P)...));
+  }
 /* Lane shuffles on SIMD types: lane P of the result is lane F(P) of the
    concatenation of a and b. The index patterns are constexpr functions, not
    lambdas, because clang does not accept constants of an enclosing lambda
@@ -410,9 +416,10 @@ template<auto F, typename Tfv> DUCC0_ALWAYS_INLINE Tfv shuf(const Tfv &a, const 
   {
 #if defined(__GNUC__) || defined(__clang__)
   typedef typename Tfv::value_type G __attribute__((vector_size(sizeof(Tfv))));
-  return [&]<size_t... P>(index_sequence<P...>)
-    { return bit_cast<Tfv>(__builtin_shufflevector(bit_cast<G>(a), bit_cast<G>(b), F(P)...)); }
-    (make_index_sequence<Tfv::size()>());
+  return shuf_impl<F>(a, b, make_index_sequence<Tfv::size()>());
+//  return [&]<size_t... P>(index_sequence<P...>)
+//    { return bit_cast<Tfv>(__builtin_shufflevector(bit_cast<G>(a), bit_cast<G>(b), F(P)...)); }
+//    (make_index_sequence<Tfv::size()>());
 #else
   constexpr size_t n = Tfv::size();
   Tfv res;
